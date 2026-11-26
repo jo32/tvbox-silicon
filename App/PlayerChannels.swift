@@ -43,7 +43,7 @@ struct PlayerChannelsSheet: View {
 
     /// A channel picked from a list of several, or one of several lines.
     @MainActor static func offered(for channel: Channel, session: PlaybackSession, in store: Store) -> Bool {
-        store.lineup(for: channel) != nil || session.lines.count > 1 || store.guide(for: channel) != nil
+        store.lineup(for: channel) != nil || session.lines.count > 1 || store.replayLineup(for: channel) != nil
     }
 
     /// The channel playing now.
@@ -80,7 +80,7 @@ struct PlayerChannelsSheet: View {
         let items = groups.count > 1 ? channels.filter { $0.group == shown } : channels
         // The lines and groups stay put above the channels: in the same scroll view, choosing a group scrolled them away.
         return VStack(spacing: 0) {
-            if let live = store.liveChannel(for: playing), store.guide(for: playing) != nil {
+            if let live = store.liveChannel(for: playing), store.guide(for: playing) != nil, ProgramCatchup.supports(live) || playing.replay != nil {
                 HStack {
                     ProgrammeCatchupButton(channel: live, line: playing.replay == nil ? session.line : 0) {
                         picked = true; store.playing = $0

@@ -157,13 +157,15 @@ struct TVPlayerChannelsPanel: View {
     let channel: Channel
     @Environment(Store.self) private var store
     @State private var selectedGroup: String?
+    /// The replay strip, shown in place of the channels while open (#2386).
+    @State private var replay: ProgrammeCatchupModel?
 
     /// The channel playing now, which may have changed while the panel was open.
     private var playing: Channel { store.playing ?? channel }
 
     var body: some View {
         Group {
-            if let lineup = store.lineup(for: playing) ?? (store.guide(for: playing) != nil ? store.liveLineup : nil) { content(lineup) } else { Color.clear }
+            if let lineup = store.lineup(for: playing) ?? store.replayLineup(for: playing) { content(lineup) } else { Color.clear }
         }
         .environment(store.guide(for: playing))
         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -177,14 +179,29 @@ struct TVPlayerChannelsPanel: View {
         let group = selectedGroup.flatMap { groups.contains($0) ? $0 : nil } ?? playing.group
         let items = groups.count > 1 ? lineup.channels.filter { $0.group == group } : lineup.channels
         return VStack(alignment: .leading, spacing: 14) {
-            if let live = store.liveChannel(for: playing) {
-                HStack {
-                    ProgrammeCatchupButton(channel: live) { store.playing = $0 }
-                    if playing.replay != nil { Button(L10n.text("Back to Live")) { store.playing = live } }
+            if let live = store.liveChannel(for: playing), let guide = store.guide(for: playing), ProgramCatchup.supports(live) || playing.replay != nil {
+                HStack(spacing: 14) {
+                    if ProgramCatchup.supports(live) {
+                        Button { replay = replay == nil ? ProgrammeCatchupModel(channel: live, guide: guide, line: 0) : nil } label: {
+                            Label(L10n.text("Replay Programs"), systemImage: "clock.arrow.circlepath").lineLimit(1)
+                        }
+                        .buttonStyle(TVEpisodePlateStyle(selected: replay != nil, capsule: true))
+                        .accessibilityIdentifier("live.programme-replay")
+                    }
+                    if playing.replay != nil {
+                        Button { replay = nil; store.playing = live } label: {
+                            Label(L10n.text("Back to Live"), systemImage: "dot.radiowaves.left.and.right").lineLimit(1)
+                        }
+                        .buttonStyle(TVEpisodePlateStyle(selected: false, capsule: true))
+                    }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 40).padding(.vertical, 8)
+                .focusSection()
             }
-            if groups.count > 1 {
+            if let replay {
+                TVProgrammeCatchupStrip(model: replay) { store.playing = $0 }
+            }
+            if replay == nil, groups.count > 1 {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal) {
                         LazyHStack(spacing: 14) {
@@ -203,36 +220,87 @@ struct TVPlayerChannelsPanel: View {
                     .onAppear { proxy.scrollTo(group, anchor: .center) }
                 }
             }
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 20) {
-                        ForEach(items) { item in
-                            let current = item.id == playing.id
-                            Button { if !current { store.playing = item } } label: {
-                                HStack(spacing: 16) {
-                                    ChannelLogo(channel: item, size: 56)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.name).font(.headline).lineLimit(1)
-                                        NowOnText(channel: item).font(.caption).lineLimit(1).opacity(0.7)
+            if replay == nil {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 20) {
+                            ForEach(items) { item in
+                                let current = item.id == playing.id
+                                Button { if !current { store.playing = item } } label: {
+                                    HStack(spacing: 16) {
+                                        ChannelLogo(channel: item, size: 56)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.name).font(.headline).lineLimit(1)
+                                            NowOnText(channel: item).font(.caption).lineLimit(1).opacity(0.7)
+                                        }
+                                        if current { Image(systemName: "speaker.wave.2.fill").font(.caption) }
                                     }
-                                    if current { Image(systemName: "speaker.wave.2.fill").font(.caption) }
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
                                 }
-                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .buttonStyle(TVEpisodePlateStyle(selected: current, capsule: false))
+                                .id(item.id)
+                                .accessibilityAddTraits(current ? .isSelected : [])
                             }
-                            .buttonStyle(TVEpisodePlateStyle(selected: current, capsule: false))
-                            .id(item.id)
-                            .accessibilityAddTraits(current ? .isSelected : [])
                         }
+                        .padding(.horizontal, 40).padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 40).padding(.vertical, 10)
+                    .scrollClipDisabled()
+                    .focusSection()
+                    .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
+                    .onChange(of: group) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .leading) } }
                 }
-                .scrollClipDisabled()
-                .focusSection()
-                .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
-                .onChange(of: group) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .leading) } }
             }
         }
         .padding(.vertical, 20)
+    }
+}
+
+/// The player's replay strip (#2386): the days, then the day's ended programs, in place of the channels.
+private struct TVProgrammeCatchupStrip: View {
+    let model: ProgrammeCatchupModel
+    let play: (Channel) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 14) {
+                    ForEach(model.days, id: \.self) { day in
+                        Button { model.day = day } label: { Text(model.title(of: day)).lineLimit(1) }
+                            .buttonStyle(TVEpisodePlateStyle(selected: day == model.day, capsule: true))
+                    }
+                }
+                .padding(.horizontal, 40).padding(.vertical, 8)
+            }
+            .scrollClipDisabled()
+            .focusSection()
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 20) {
+                    if model.loading {
+                        ProgressView().padding(.horizontal, 20).padding(.vertical, 18)
+                    } else if model.programmes.isEmpty {
+                        Text(L10n.text("No programs to replay on this date.")).font(.headline).opacity(0.7).padding(.vertical, 18)
+                    }
+                    ForEach(model.programmes, id: \.self) { programme in
+                        Button { if let replay = model.replay(programme) { play(replay) } } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(programme.title).font(.headline).lineLimit(1)
+                                Text(programme.start, format: .dateTime.hour().minute()).font(.caption).opacity(0.7)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                        }
+                        .buttonStyle(TVEpisodePlateStyle(selected: false, capsule: false))
+                        .accessibilityIdentifier("live.programme-replay.item")
+                    }
+                }
+                .padding(.horizontal, 40).padding(.vertical, 10)
+            }
+            .scrollClipDisabled()
+            .focusSection()
+            if model.expired {
+                Text(L10n.text("This program can no longer be replayed.")).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 40)
+            }
+        }
+        .task(id: model.request) { await model.load() }
     }
 }
 #endif

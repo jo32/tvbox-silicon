@@ -293,7 +293,7 @@ struct PlaybackView: View {
 
     /// The list the live channel was picked from, for the info panel's Channel List tab (#1010): nil when there is none.
     private var channelChoices: ChannelChoices? {
-        guard let lineup = store.lineup(for: channel) ?? (store.guide(for: channel) != nil ? store.liveLineup : nil) else { return nil }
+        guard let lineup = store.lineup(for: channel) ?? store.replayLineup(for: channel) else { return nil }
         let store = store, channel = channel
         return ChannelChoices(key: "\(lineup.title):\(lineup.channels.count):\(channel.id)") {
             AnyView(TVPlayerChannelsPanel(channel: channel).environment(store))

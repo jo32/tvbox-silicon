@@ -364,7 +364,7 @@ private struct TVChannelGuide: View {
                             if store.isFavorite(channel) { Image(systemName: "heart.fill") }
                         }.font(.system(size: 24)).foregroundStyle(.secondary)
                         NowAndNext(channel: channel).font(.system(size: 24))
-                        ProgrammeCatchupButton(channel: channel, play: watch)
+                        ProgrammeCatchupButton(channel: channel, play: watch).controlButton()
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     TVGuideLogo(channel: channel, size: 112)
                         .frame(width: 350, height: 198)

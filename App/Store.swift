@@ -83,6 +83,12 @@ import TVCore
     func guide(for channel: Channel) -> LiveGuide? {
         liveLineup?.channels.contains(where: { $0.id == (channel.replay?.channelID ?? channel.id) }) == true ? liveGuide : nil
     }
+    /// The list for the channel panel of a channel that can replay programs (or a replay): even a list of one.
+    func replayLineup(for channel: Channel) -> LiveLineup? {
+        guard guide(for: channel) != nil, let live = liveChannel(for: channel),
+              channel.replay != nil || ProgramCatchup.supports(live) else { return nil }
+        return liveLineup
+    }
     /// Keeps replay out of channel navigation while allowing an explicit return to its source channel.
     func liveChannel(for channel: Channel) -> Channel? {
         guard let id = channel.replay?.channelID else { return channel }

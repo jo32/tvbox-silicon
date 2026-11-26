@@ -68,8 +68,9 @@ private func catchupChannel(_ declaration: String, address: String = "https://tv
     #EXTINF:-1 catchup-source="/two/{utc}",News
     https://same.example/live.m3u8
     """, origin: URL(string: "https://list.example/list.m3u")!)
-    #expect(sameURL[0].lines.count == 2)
-    #expect(ProgramCatchup.replay(sameURL[0], programme: catchupShow, line: 1, now: catchupNow)?.url.path == "/two/1700000000")
+    // Lines are one per address: the first declaration of an address is its line's.
+    #expect(sameURL[0].lines.count == 1)
+    #expect(ProgramCatchup.replay(sameURL[0], programme: catchupShow, now: catchupNow)?.url.path == "/one/1700000000")
     var alternateOnly = try catchupChannel("")
     alternateOnly.alternates = [ChannelLine(url: URL(string: "https://archive.example/live.m3u8")!, catchup: ChannelCatchup(source: "/{utc}"))]
     #expect(ProgramCatchup.supports(alternateOnly) && !ProgramCatchup.supports(alternateOnly, line: 0)
@@ -89,6 +90,31 @@ private func catchupChannel(_ declaration: String, address: String = "https://tv
     #expect(ProgramCatchup.replay(china, programme: overnight, now: overnight.end)?.url.path == "/20261125233000/20261126003000")
     let badZone = try catchupChannel(#"catchup-source="/{utc}" catchup-timezone="not-a-zone""#)
     #expect(!ProgramCatchup.supports(badZone))
+}
+
+/// Without catchup-timezone, a playseek's `(b)`/`(e)` times are the device's local time, as playlists mean them.
+@Test func catchupDatesDefaultToTheDeviceTimeZone() throws {
+    let channel = try catchupChannel(#"catchup="append" catchup-source="?playseek=${(b)yyyyMMddHHmmss}-${(e)yyyyMMddHHmmss}""#)
+    let local = DateFormatter()
+    local.locale = Locale(identifier: "en_US_POSIX"); local.timeZone = .current; local.dateFormat = "yyyyMMddHHmmss"
+    let replay = try #require(ProgramCatchup.replay(channel, programme: catchupShow, now: catchupNow))
+    #expect(replay.url.query?.hasSuffix("playseek=\(local.string(from: catchupShow.start))-\(local.string(from: catchupShow.end))") == true)
+}
+
+/// The same address listed twice is one line, whatever its headers or catchup say.
+@Test func catchupKeepsLinesUniqueByAddress() throws {
+    let text = """
+    #EXTM3U
+    #EXTINF:-1 catchup="append" catchup-source="?a={utc}",News
+    https://tv.example/news.m3u8
+    #EXTINF:-1 catchup="append" catchup-source="?b={utc}",News
+    https://tv.example/news.m3u8
+    #EXTINF:-1,News
+    https://tv.example/news-2.m3u8
+    """
+    let channels = try Playlist.parse(text, origin: URL(string: "https://list.example/tv.m3u")!)
+    #expect(channels.count == 1)
+    #expect(channels.first?.lines.map(\.url.lastPathComponent) == ["news.m3u8", "news-2.m3u8"])
 }
 
 @Test func catchupBoundsTemplatesAndRejectsUnusableAddresses() throws {

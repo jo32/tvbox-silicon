@@ -6,12 +6,13 @@ public struct ChannelCatchup: Codable, Hashable, Sendable {
     public let source: String
     public let days: Int?
     public let replace: String?
-    /// IANA name from catchup-timezone, otherwise UTC; never the device's current zone.
+    /// IANA name from catchup-timezone; without one, `(b)`/`(e)` times are the device's local time, as a playlist's
+    /// `playseek=${(b)yyyyMMddHHmmss}` means.
     public let timeZone: String?
     public init(mode: String = "default", source: String, days: Int? = nil, replace: String? = nil, timeZone: String? = nil) {
         self.mode = mode; self.source = source; self.days = days; self.replace = replace; self.timeZone = timeZone
     }
-    public var zone: TimeZone? { timeZone.flatMap(TimeZone.init(identifier:)) ?? (timeZone == nil ? TimeZone(secondsFromGMT: 0) : nil) }
+    public var zone: TimeZone? { timeZone.flatMap(TimeZone.init(identifier:)) ?? (timeZone == nil ? TimeZone.current : nil) }
 }
 
 /// Marks the generated address as a finite programme, independently of URL extension or playlist/group name.
