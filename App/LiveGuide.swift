@@ -5,11 +5,12 @@ import TVCore
 /// whole playlist; a per-channel address (DIYP) is asked for each channel as it shows on screen.
 @MainActor @Observable final class LiveGuide {
     let address: GuideAddress
+    let context: GuideRequestContext
     private(set) var guide: ProgramGuide?
     private(set) var perChannel: [String: [Programme]] = [:]
-    @ObservationIgnored private var asked = Set<String>()
+    @ObservationIgnored private var asked: [String: Date] = [:]
 
-    init(address: GuideAddress) { self.address = address }
+    init(address: GuideAddress, context: GuideRequestContext = .init()) { self.address = address; self.context = context }
 
     /// The guide a playlist uses: the address the viewer typed in for it, else its subscription entry's `epg`, else
     /// the `x-tvg-url` its M3U header names.
@@ -24,27 +25,30 @@ import TVCore
     func schedule(for channel: Channel) -> [Programme]? {
         switch address {
         case .xmltv: guide?.schedule(for: channel)
-        case .perChannel: perChannel[channel.name]
+        case .perChannel: perChannel[channel.guideID ?? channel.name]
         }
     }
 
     /// Loads an XMLTV guide for the playlist's channels.
     func load(_ channels: [Channel]) async {
         guard case let .xmltv(url) = address else { return }
-        do { guide = try await ProgramGuides.shared.guide(url, for: channels) }
+        do { guide = try await ProgramGuides.shared.guide(url, for: channels, context: context) }
         catch {
             guard !(error is CancellationError) else { return }
             Diagnostics.shared.record(.warning, "live", "guide not loaded host=\(url.host() ?? "-"): \(error.localizedDescription)")
         }
     }
 
-    /// Asks a per-channel guide for the channel's programmes today, once.
+    /// Asks for today's programmes when the channel reappears, with a short UI retry interval.
     func fetch(_ channel: Channel) async {
-        guard case .perChannel = address, asked.insert(channel.name).inserted else { return }
-        if let programmes = await ProgramGuides.shared.schedule(address, name: channel.name) {
-            if !programmes.isEmpty { perChannel[channel.name] = programmes }
+        guard case .perChannel = address else { return }
+        let name = channel.guideID ?? channel.name, now = Date()
+        if let last = asked[name], now.timeIntervalSince(last) < 30 { return }
+        asked[name] = now
+        if let programmes = await ProgramGuides.shared.schedule(address, name: name, context: context) {
+            perChannel[name] = programmes
         } else {
-            asked.remove(channel.name)
+            asked[name] = nil
         }
     }
 }
@@ -72,7 +76,7 @@ struct NowOnText: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.guideID ?? channel.name) { await guide?.fetch(channel) }
     }
 }
 
@@ -98,7 +102,7 @@ struct NowAndNext: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.guideID ?? channel.name) { await guide?.fetch(channel) }
     }
 
     private func line(_ label: String, _ programme: Programme, emphasis: Bool) -> some View {

@@ -34,13 +34,13 @@ public enum GuideAddress: Hashable, Sendable {
     }
 
     /// A per-channel address for `name` on the day of `date`, in China's time zone as those servers keep it.
-    public func address(for name: String, on date: Date) -> URL? {
+    public func address(for name: String, on date: Date, timeZone: TimeZone = ProgramGuide.chinaTime) -> URL? {
         guard case let .perChannel(template) = self else { return nil }
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&+=?#")
         return URL(string: template
             .replacingOccurrences(of: "{name}", with: name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
-            .replacingOccurrences(of: "{date}", with: ProgramGuide.dayString(date)))
+            .replacingOccurrences(of: "{date}", with: ProgramGuide.dayString(date, timeZone: timeZone)))
     }
 }
 
@@ -161,23 +161,23 @@ public struct ProgramGuide: Sendable {
 
     // MARK: DIYP
 
-    static let chinaTime = TimeZone(identifier: "Asia/Shanghai")!
+    public static let chinaTime = TimeZone(identifier: "Asia/Shanghai")!
 
     /// `2026-11-14` in China's time zone.
-    static func dayString(_ date: Date) -> String {
+    static func dayString(_ date: Date, timeZone: TimeZone = chinaTime) -> String {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = chinaTime
+        calendar.timeZone = timeZone
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
     }
 
     /// A DIYP answer, `{"epg_data": [{"start": "19:00", "end": "19:30", "title": "…"}]}`, for the day of `date` in
     /// China's time zone.
-    public static func diyp(_ data: Data, on date: Date) -> [Programme] {
+    public static func diyp(_ data: Data, on date: Date, timeZone: TimeZone = chinaTime) -> [Programme] {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entries = object["epg_data"] as? [[String: Any]] else { return [] }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = chinaTime
+        calendar.timeZone = timeZone
         let midnight = calendar.startOfDay(for: date)
         func time(_ value: Any?) -> TimeInterval? {
             guard let text = value as? String else { return nil }
@@ -189,10 +189,14 @@ public struct ProgramGuide: Sendable {
         for entry in entries {
             guard let title = (entry["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
                   let start = time(entry["start"]) else { continue }
-            let from = midnight.addingTimeInterval(start)
-            var end = time(entry["end"]).map { midnight.addingTimeInterval($0) } ?? .distantFuture
+            let from = start == 86400 ? (calendar.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(start))
+                : (calendar.date(bySettingHour: Int(start) / 3600, minute: Int(start) % 3600 / 60, second: 0, of: midnight) ?? midnight.addingTimeInterval(start))
+            var end = time(entry["end"]).map { value in
+                value == 86400 ? (calendar.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(value))
+                    : (calendar.date(bySettingHour: Int(value) / 3600, minute: Int(value) % 3600 / 60, second: 0, of: midnight) ?? midnight.addingTimeInterval(value))
+            } ?? .distantFuture
             // A programme that runs past midnight ends "the next day" at an earlier time.
-            if end <= from { end = end.addingTimeInterval(86_400) }
+            if end <= from { end = calendar.date(byAdding: .day, value: 1, to: end) ?? end.addingTimeInterval(86_400) }
             list.append(Programme(title: title, start: from, end: end))
         }
         return closingGaps(list.sorted { $0.start < $1.start })
@@ -276,54 +280,76 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
 /// main thread.
 public actor ProgramGuides {
     public static let shared = ProgramGuides()
-    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date }
-    private var guides: [URL: Loaded] = [:]
-    private var loading: [URL: Task<Loaded, Error>] = [:]
-    private var days: [URL: (programmes: [Programme], at: Date)] = [:]
-    private let http = HTTPClient()
-    /// Guides list today and the next days; a few hours on, the programmes kept have moved on.
-    private let lifetime: TimeInterval = 3 * 3600
+    private struct Key: Hashable { let url: URL; let context: GuideRequestContext; let day: Date }
+    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let expires: Date }
+    private struct Day { let programmes: [Programme]; let expires: Date }
+    private var guides: [Key: Loaded] = [:]
+    private var loading: [Key: Task<Loaded, Error>] = [:]
+    private var days: [Key: Day] = [:]
+    private var failures: [Key: Date] = [:]
 
-    /// The XMLTV guide at `url`, for `channels`.
-    public func guide(_ url: URL, for channels: [Channel]) async throws -> ProgramGuide {
-        let wanted = ProgramGuide.wanted(channels)
-        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), Date().timeIntervalSince(loaded.at) < lifetime {
-            return loaded.guide
-        }
-        if let task = loading[url] {
+    /// Request/account and calendar-day namespaces prevent one source or day's guide from serving another.
+    public func guide(_ url: URL, for channels: [Channel], context: GuideRequestContext = .init(), on date: Date = Date()) async throws -> ProgramGuide {
+        let key = Key(url: url, context: context, day: context.day(date))
+        let wanted = ProgramGuide.wanted(channels), now = Date()
+        if let loaded = guides[key], loaded.wanted.isSuperset(of: wanted), now < loaded.expires { return loaded.guide }
+        if let task = loading[key] {
             let loaded = try await task.value
             if loaded.wanted.isSuperset(of: wanted) { return loaded.guide }
         }
-        // Another playlist sharing the guide asks for its channels too.
-        let union = guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.wanted.union(wanted) : wanted } ?? wanted
-        let task = Task { [http] in
-            let (data, _) = try await http.get(url, limit: 60_000_000)
-            let now = Date()
-            let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-3600), to: now.addingTimeInterval(30 * 3600))
-            return Loaded(guide: guide, wanted: union, at: now)
+        if let retry = failures[key], now < retry { throw URLError(.resourceUnavailable) }
+        let union = guides[key].map { now < $0.expires ? $0.wanted.union(wanted) : wanted } ?? wanted
+        let task = Task {
+            let response = try await GuideDownload.fetch(url, context: context)
+            var calendar = Calendar(identifier: .gregorian); calendar.timeZone = context.timeZone
+            let to = calendar.date(byAdding: .day, value: 2, to: key.day) ?? key.day.addingTimeInterval(48 * 3600)
+            let guide = try ProgramGuide.xmltv(response.data, wanted: union, from: key.day, to: to)
+            return Loaded(guide: guide, wanted: union, expires: Date().addingTimeInterval(response.lifetime))
         }
-        loading[url] = task
-        defer { loading[url] = nil }
-        let loaded = try await task.value
-        if guides.count >= 4, let oldest = guides.min(by: { $0.value.at < $1.value.at })?.key { guides[oldest] = nil }
-        guides[url] = loaded
-        return loaded.guide
+        loading[key] = task
+        defer { loading[key] = nil }
+        do {
+            let loaded = try await task.value
+            failures[key] = nil
+            if guides.count >= 4, let oldest = guides.min(by: { $0.value.expires < $1.value.expires })?.key { guides[oldest] = nil }
+            guides[key] = loaded.expires > Date() ? loaded : nil
+            return loaded.guide
+        } catch {
+            if !Self.cancelled(error) { recordFailure(key) }
+            throw error
+        }
     }
 
-    /// Today's programmes of the channel `name` from a per-channel address; nil when the ask was cancelled. A failed
-    /// ask counts as no programmes, so the server isn't asked again for a while.
-    public func schedule(_ address: GuideAddress, name: String) async -> [Programme]? {
+    /// Failures back off briefly; they never replace a successful day's schedule with a three-hour empty entry.
+    public func schedule(_ address: GuideAddress, name: String, context: GuideRequestContext = .init(), on date: Date = Date()) async -> [Programme]? {
         let now = Date()
-        guard let url = address.address(for: name, on: now) else { return [] }
-        if let day = days[url], now.timeIntervalSince(day.at) < lifetime { return day.programmes }
-        let programmes: [Programme]
-        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: now) }
-        catch {
-            if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { return nil }
-            programmes = []
+        guard let url = address.address(for: name, on: date, timeZone: context.timeZone) else { return [] }
+        let key = Key(url: url, context: context, day: context.day(date))
+        if let day = days[key], now < day.expires { return day.programmes }
+        if let retry = failures[key], now < retry { return days[key]?.programmes ?? [] }
+        do {
+            let response = try await GuideDownload.fetch(url, context: context, limit: 20_000_000)
+            let programmes = ProgramGuide.diyp(response.data, on: date, timeZone: context.timeZone)
+            failures[key] = nil
+            if days.count >= 600 { days = days.filter { now < $0.value.expires } }
+            if days.count >= 600, let oldest = days.min(by: { $0.value.expires < $1.value.expires })?.key { days[oldest] = nil }
+            days[key] = response.lifetime > 0 ? Day(programmes: programmes, expires: Date().addingTimeInterval(response.lifetime)) : nil
+            return programmes
+        } catch {
+            if Self.cancelled(error) { return nil }
+            recordFailure(key)
+            return days[key]?.programmes ?? []
         }
-        if days.count > 600 { days = days.filter { now.timeIntervalSince($0.value.at) < lifetime } }
-        days[url] = (programmes, now)
-        return programmes
+    }
+
+    private func recordFailure(_ key: Key) {
+        let now = Date()
+        if failures.count >= 600 { failures = failures.filter { now < $0.value } }
+        if failures.count >= 600, let oldest = failures.min(by: { $0.value < $1.value })?.key { failures[oldest] = nil }
+        failures[key] = now.addingTimeInterval(30)
+    }
+
+    private static func cancelled(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled
     }
 }
