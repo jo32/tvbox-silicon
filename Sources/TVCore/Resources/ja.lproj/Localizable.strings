@@ -2395,3 +2395,4 @@
 "Select episodes to delete" = "削除するエピソードを選択";
 "Delete %lld episodes" = "%lld 話を削除";
 "Search settings" = "設定を検索";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "このリンクは動画ではなくウェブページを開きます。ソースが再生できるアドレスに変換していません。別の回線をお試しください。";

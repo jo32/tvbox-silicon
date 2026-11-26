@@ -2395,3 +2395,4 @@
 "Select episodes to delete" = "Select episodes to delete";
 "Delete %lld episodes" = "Delete %lld episodes";
 "Search settings" = "Search settings";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.";

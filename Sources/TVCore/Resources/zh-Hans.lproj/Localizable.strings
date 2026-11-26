@@ -2395,3 +2395,4 @@
 "Select episodes to delete" = "选择要删除的剧集";
 "Delete %lld episodes" = "删除 %lld 集";
 "Search settings" = "搜索设置";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "这个链接打开的是网页，不是视频：片源没有把它解析成可播放的地址。请换一条线路。";
