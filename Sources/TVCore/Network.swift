@@ -20,10 +20,14 @@ public struct HTTPClient: Sendable {
             request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
             if fresh { request.cachePolicy = .reloadIgnoringLocalCacheData }
             for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
-            guard (200..<300).contains(http.statusCode) else { throw TVError.http(http.statusCode) }
-            guard data.count <= limit else {
+            let data: Data, response: URLResponse
+            do {
+                // The status before the size: a refused request with a large error page reports the refusal.
+                (data, response) = try await BoundedHTTPData.load(request, session: session, maximumBytes: limit) { response in
+                    guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
+                    guard (200..<300).contains(http.statusCode) else { throw TVError.http(http.statusCode) }
+                }
+            } catch let error as URLError where error.code == .dataLengthExceedsMaximum {
                 throw TVError.unsupported(limit == 20_000_000 ? L10n.text("The playlist exceeds 20 MB. Use a smaller subscription.")
                                           : L10n.text("The file is larger than %lld MB.", limit / 1_000_000))
             }
@@ -41,9 +45,29 @@ public struct HTTPClient: Sendable {
     /// A live source's channels, and the XMLTV guide its M3U header names, if any (#802).
     public func playlist(_ source: LiveSource) async throws -> (channels: [Channel], guide: String?) {
         if let platform = source.platform { return (try await LiveCatalog.channels(platform), nil) }
-        let (data, finalURL) = try await get(source.url, headers: source.headers)
-        guard let text = String(data: data, encoding: .utf8) else { throw TVError.unsupported(L10n.text("Live playlists must use UTF-8 encoding.")) }
+        let (data, finalURL) = try await playlistData(source)
+        let text = Playlist.text(data)
         let guide = Playlist.guideAddress(in: text).flatMap { try? WebAddress.resolve($0, relativeTo: finalURL).absoluteString }
         return (try Playlist.parse(text, origin: finalURL, headers: source.headers), guide)
+    }
+
+    /// A live source's playlist, also one that Android TVBox players serve from their own local server
+    /// (`LoopbackPlaylist`), and where its relative addresses resolve: the address it came from, never the
+    /// Android server's 127.0.0.1:9978. A list given inline or answered by a plugin has none (nil).
+    func playlistData(_ source: LiveSource) async throws -> (Data, URL?) {
+        switch LoopbackPlaylist.route(source.url) {
+        case nil: return try await get(source.url, headers: source.headers)
+        case .playlist(let url)?: return try await get(url, headers: source.headers)
+        case .text(let text)?: return (Data(text.utf8), nil)
+        case .deviceFile?: throw LoopbackPlaylist.deviceFileError
+        case .spider(let query)?:
+            guard let spider = source.spider else { throw LoopbackPlaylist.needsPlugin }
+            let answer = try await CatalogClient(site: spider.site, origin: spider.origin, http: self, jarURL: spider.archive).spiderProxy(query)
+            if let location = answer.location, (300..<400).contains(answer.status) || answer.body.isEmpty {
+                return try await get(location, headers: source.headers)
+            }
+            guard (200..<300).contains(answer.status) else { throw TVError.http(answer.status) }
+            return (answer.body, nil)
+        }
     }
 }
