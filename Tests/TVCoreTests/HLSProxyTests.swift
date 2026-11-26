@@ -27,31 +27,29 @@ import Testing
     }
 
     /// An `.m3u8` address that sends an endless MPEG-TS stream: given up on at its first kilobyte, not read on.
-    @Test func endlessStreamIsGivenUpOnAtOnce() async throws {
-        let id = HLSUpstream.add(["/endless/index.m3u8": .endless(Self.ts)])
+    /// The stand-in's stream never ends and never goes quiet, so nothing but giving up on its first bytes returns
+    /// `notPlaylist`: reading on would wait for an end that never comes, and the start's time budget would end it
+    /// as a timeout (30 s, 45 s), not as this. No clock is read; the time limit only keeps a broken proxy from
+    /// hanging the run.
+    @Test(.timeLimit(.minutes(2))) func endlessStreamIsGivenUpOnAtOnce() async throws {
         for patience in [HLSProxy.Patience.retry, .opening] {
+            let id = HLSUpstream.add(["/endless/index.m3u8": .endless(Self.ts)])
             let proxy = HLSProxy(headers: [:])
-            let started = ContinuousClock.now
             await #expect(throws: HLSProxy.Failure.notPlaylist("mpeg-ts")) {
                 _ = try await proxy.start(url: URL(string: "http://hlsproxy.test/\(id)/endless/index.m3u8")!, patience: patience)
             }
-            #expect(ContinuousClock.now - started < .seconds(5))
+            // And the transfer was stopped, not left running into memory.
+            #expect(await HLSUpstream.stopped(id))
         }
-        let sent = HLSUpstream.sent(id)
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(HLSUpstream.sent(id) == sent && sent < 4 << 20)
     }
 
     /// The check for spliced-in ads that iPhone and Apple TV make before playing an .m3u8 doesn't hold an endless
-    /// stream either: it stops at the first kilobyte, and AVPlayer gets the address as it is.
-    @Test func adCheckStopsAtAStream() async throws {
+    /// stream either: it stops at the first kilobyte, and AVPlayer gets the address as it is. The stream never goes
+    /// quiet, so the check's 6 s idle timeout can't be what ends it: reading on would never return.
+    @Test(.timeLimit(.minutes(2))) func adCheckStopsAtAStream() async throws {
         let id = HLSUpstream.add(["/endless/index.m3u8": .endless(Self.ts)])
-        let started = ContinuousClock.now
         #expect(await AdSkip.route(URL(string: "http://hlsproxy.test/\(id)/endless/index.m3u8")!, headers: [:]) == nil)
-        #expect(ContinuousClock.now - started < .seconds(5))
-        let sent = HLSUpstream.sent(id)
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(HLSUpstream.sent(id) == sent && sent < 4 << 20)
+        #expect(await HLSUpstream.stopped(id))
     }
 
     /// A certificate the system refused reaches AVPlayer as 495, not 502, and its code is in the stats.
@@ -119,13 +117,17 @@ import Testing
 /// A stand-in upstream for `URLSession.shared`, for host `hlsproxy.test` only: `/<id>/<path>` answers from the routes
 /// added under `id`.
 final class HLSUpstream: URLProtocol, @unchecked Sendable {
+    /// `endless` sends its data, then one more MPEG-TS packet every 20 ms until the client stops it: it never ends and
+    /// never goes quiet (so no idle timeout fires), and it can't outrun a slow reader into memory.
     enum Reply { case body(Data, String), endless(Data), failure(URLError) }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var routes: [String: [String: Reply]] = [:]
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
+    nonisolated(unsafe) private static var stops: Set<String> = []
     private static let registered: Void = { URLProtocol.registerClass(HLSUpstream.self) }()
     private let stopped = NSLock()
     nonisolated(unsafe) private var running = true
+    nonisolated(unsafe) private var id = ""
 
     static func add(_ replies: [String: Reply]) -> String {
         _ = registered
@@ -135,6 +137,15 @@ final class HLSUpstream: URLProtocol, @unchecked Sendable {
     }
     static func set(_ id: String, _ replies: [String: Reply]) { lock.withLock { routes[id] = replies } }
     static func sent(_ id: String) -> Int { lock.withLock { counts[id] ?? 0 } }
+    /// Whether a client stopped a transfer of `id` (waiting up to 30 s for URLSession to say so; it does it on its
+    /// own queue, after the task was cancelled).
+    static func stopped(_ id: String) async -> Bool {
+        for _ in 0..<600 {
+            if lock.withLock({ stops.contains(id) }) { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "hlsproxy.test" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -142,6 +153,7 @@ final class HLSUpstream: URLProtocol, @unchecked Sendable {
         guard let url = request.url else { return }
         let parts = url.path.split(separator: "/", maxSplits: 1)
         let id = parts.first.map(String.init) ?? ""
+        stopped.withLock { self.id = id }
         let path = "/" + (parts.count > 1 ? String(parts[1]) : "")
         guard let reply = Self.lock.withLock({ Self.routes[id]?[path] }) else {
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: [:])!, cacheStoragePolicy: .notAllowed)
@@ -159,17 +171,21 @@ final class HLSUpstream: URLProtocol, @unchecked Sendable {
         case .endless(let chunk):
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/vnd.apple.mpegurl"])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: chunk)
+            Self.lock.withLock { Self.counts[id, default: 0] += chunk.count }
+            let packet = chunk.prefix(188)
             Thread.detachNewThread { [self] in
-                // Never ends by itself; 256 MB at most, so a broken test can't take the machine with it.
-                var total = 0
-                while stopped.withLock({ running }), total < 256 << 20 {
-                    client?.urlProtocol(self, didLoad: chunk)
-                    total += chunk.count
-                    Self.lock.withLock { Self.counts[id, default: 0] += chunk.count }
-                    usleep(2000)
+                while stopped.withLock({ running }) {
+                    usleep(20_000)
+                    guard stopped.withLock({ running }) else { break }
+                    client?.urlProtocol(self, didLoad: packet)
+                    Self.lock.withLock { Self.counts[id, default: 0] += packet.count }
                 }
             }
         }
     }
-    override func stopLoading() { stopped.withLock { running = false } }
+    override func stopLoading() {
+        let id = stopped.withLock { running = false; return self.id }
+        _ = Self.lock.withLock { Self.stops.insert(id) }
+    }
 }
