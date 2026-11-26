@@ -2401,3 +2401,10 @@
 "The playlist address returned a web page instead of a playlist. Its host may be offline." = "再生リストのアドレスが再生リストではなく Web ページを返しました。ホストがオフラインの可能性があります。";
 "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "この再生リストのチャンネルのアドレスは、配信した Android プレーヤーからの相対アドレスのため、ここでは開けません。";
 "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "このリンクは動画ではなくウェブページを開きます。ソースが再生できるアドレスに変換していません。別の回線をお試しください。";
+
+// Live TV: replaying past programs from a playlist's catchup template.
+"Replay Programs" = "見逃し番組";
+"Back to Live" = "ライブに戻る";
+"Date" = "日付";
+"No programs to replay on this date." = "この日に見逃し再生できる番組はありません。";
+"This program can no longer be replayed." = "この番組は見逃し再生の期間が終わりました。";

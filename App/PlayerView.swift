@@ -293,7 +293,7 @@ struct PlaybackView: View {
 
     /// The list the live channel was picked from, for the info panel's Channel List tab (#1010): nil when there is none.
     private var channelChoices: ChannelChoices? {
-        guard let lineup = store.lineup(for: channel) else { return nil }
+        guard let lineup = store.lineup(for: channel) ?? store.replayLineup(for: channel) else { return nil }
         let store = store, channel = channel
         return ChannelChoices(key: "\(lineup.title):\(lineup.channels.count):\(channel.id)") {
             AnyView(TVPlayerChannelsPanel(channel: channel).environment(store))
@@ -2206,6 +2206,7 @@ struct PlayerStep {
 
 extension Store {
     func step(back: Bool, from channel: Channel, session: PlaybackSession) -> PlayerStep? {
+        guard channel.replay == nil else { return nil }
         if let episode = back ? previousEpisode(before: channel) : nextEpisode(after: channel) {
             return PlayerStep(name: episode.name, busy: resolvingEpisode != nil) { [weak self] in
                 if back || !session.playUpcoming() { self?.selectEpisode(episode, from: channel) }
@@ -2240,12 +2241,12 @@ extension Store {
         || UserDefaults.standard.bool(forKey: DanmakuPreference.key)
     if !resuming { session.start(channel) }
     session.onPlaybackEnded = { [weak store] in
-        guard let store, store.autoPlayNext else { return }
+        guard channel.replay == nil, let store, store.autoPlayNext else { return }
         if let file = store.nextFile(after: channel) { store.playing = file }
         else if let next = store.nextEpisode(after: channel) { store.selectEpisode(next, from: channel) }
     }
     // Near the end the next episode is resolved and queued, so it plays on without stopping to load.
-    session.playsOn = { [weak store] in store?.autoPlayNext == true }
+    session.playsOn = { [weak store] in channel.replay == nil && store?.autoPlayNext == true }
     // A short episode's next one is resolved while it plays (#1021), once its own start is out of the way and its
     // length is known.
     Task { [weak store, weak session] in

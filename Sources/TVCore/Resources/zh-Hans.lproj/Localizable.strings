@@ -2401,3 +2401,10 @@
 "The playlist address returned a web page instead of a playlist. Its host may be offline." = "列表地址返回的是网页而不是直播列表，它的服务器可能已下线。";
 "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "这个直播列表的频道地址是相对于提供它的安卓播放器的，在这里无法打开。";
 "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "这个链接打开的是网页，不是视频：片源没有把它解析成可播放的地址。请换一条线路。";
+
+// Live TV: replaying past programs from a playlist's catchup template.
+"Replay Programs" = "节目回看";
+"Back to Live" = "返回直播";
+"Date" = "日期";
+"No programs to replay on this date." = "这一天没有可以回看的节目。";
+"This program can no longer be replayed." = "这个节目已过了回看期限。";

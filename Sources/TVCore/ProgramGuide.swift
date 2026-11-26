@@ -290,7 +290,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
 /// main thread.
 public actor ProgramGuides {
     public static let shared = ProgramGuides()
-    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date }
+    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date; let lookback: TimeInterval }
     private var guides: [URL: Loaded] = [:]
     private var loading: [URL: Task<Loaded, Error>] = [:]
     private var days: [URL: (programmes: [Programme], at: Date)] = [:]
@@ -301,20 +301,22 @@ public actor ProgramGuides {
     /// The XMLTV guide at `url`, for `channels`.
     public func guide(_ url: URL, for channels: [Channel]) async throws -> ProgramGuide {
         let wanted = ProgramGuide.wanted(channels)
-        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), Date().timeIntervalSince(loaded.at) < lifetime {
+        let lookback = ProgramCatchup.lookback(for: channels)
+        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback, Date().timeIntervalSince(loaded.at) < lifetime {
             return loaded.guide
         }
         if let task = loading[url] {
             let loaded = try await task.value
-            if loaded.wanted.isSuperset(of: wanted) { return loaded.guide }
+            if loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback { return loaded.guide }
         }
         // Another playlist sharing the guide asks for its channels too.
         let union = guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.wanted.union(wanted) : wanted } ?? wanted
+        let history = max(lookback, guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.lookback : 3600 } ?? 3600)
         let task = Task { [http] in
             let (data, _) = try await http.get(url, limit: 60_000_000)
             let now = Date()
-            let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-3600), to: now.addingTimeInterval(30 * 3600))
-            return Loaded(guide: guide, wanted: union, at: now)
+            let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-history), to: now.addingTimeInterval(30 * 3600))
+            return Loaded(guide: guide, wanted: union, at: now, lookback: history)
         }
         loading[url] = task
         defer { loading[url] = nil }
@@ -324,14 +326,16 @@ public actor ProgramGuides {
         return loaded.guide
     }
 
-    /// Today's programmes of the channel `name` from a per-channel address; nil when the ask was cancelled. A failed
+    /// Programmes on `date` (today by default) from a per-channel address; nil when the ask was cancelled. A failed
     /// ask counts as no programmes, so the server isn't asked again for a while.
-    public func schedule(_ address: GuideAddress, name: String) async -> [Programme]? {
+    public func schedule(_ address: GuideAddress, name: String, on date: Date = Date()) async -> [Programme]? {
         let now = Date()
-        guard let url = address.address(for: name, on: now) else { return [] }
+        if case let .perChannel(template) = address, !template.contains("{date}"),
+           ProgramGuide.dayString(date) != ProgramGuide.dayString(now) { return [] }
+        guard let url = address.address(for: name, on: date) else { return [] }
         if let day = days[url], now.timeIntervalSince(day.at) < lifetime { return day.programmes }
         let programmes: [Programme]
-        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: now) }
+        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: date) }
         catch {
             if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { return nil }
             programmes = []

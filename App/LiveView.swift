@@ -323,14 +323,16 @@ private struct TVChannelGuide: View {
     let reload: () -> Void
     let editGuide: () -> Void
     @Environment(Store.self) private var store
+    @Environment(LiveGuide.self) private var guide: LiveGuide?
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedChannel: String?
+    @State private var lastFocusedChannel: String?
     @State private var showingSearch = false
     private var groups: [String] { Array(Set(channels.map(\.group))).sorted() }
     private var filtered: [Channel] {
         channels.filter { (group == nil || $0.group == group) && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)) }
     }
-    private var highlighted: Channel? { filtered.first { $0.id == focusedChannel } ?? filtered.first }
+    private var highlighted: Channel? { filtered.first { $0.id == (focusedChannel ?? lastFocusedChannel) } ?? filtered.first }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
@@ -362,6 +364,7 @@ private struct TVChannelGuide: View {
                             if store.isFavorite(channel) { Image(systemName: "heart.fill") }
                         }.font(.system(size: 24)).foregroundStyle(.secondary)
                         NowAndNext(channel: channel).font(.system(size: 24))
+                        ProgrammeCatchupButton(channel: channel, play: watch).controlButton()
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     TVGuideLogo(channel: channel, size: 112)
                         .frame(width: 350, height: 198)
@@ -411,6 +414,7 @@ private struct TVChannelGuide: View {
         .padding(.horizontal, Layout.gutter).padding(.top, 24).padding(.bottom, 24)
         .screenBackdrop()
         .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: focusedChannel) { _, channel in if let channel { lastFocusedChannel = channel } }
         .fullScreenCover(isPresented: $showingSearch) {
             NavigationStack {
                 ScrollView {
@@ -438,13 +442,13 @@ private struct TVChannelGuide: View {
     }
 
     private func category(_ title: String, value: String?) -> some View {
-        Button { group = value; focusedChannel = nil } label: { Text(title) }
+        Button { group = value; focusedChannel = nil; lastFocusedChannel = nil } label: { Text(title) }
             .buttonStyle(TVGuideCategoryStyle(selected: group == value))
             .accessibilityAddTraits(group == value ? [.isSelected] : [])
     }
 
     /// Plays a channel with the whole playlist to switch through in the player (#1010).
-    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels)) }
+    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels), guide: guide) }
 
     private func channelRow(_ channel: Channel) -> some View {
         Button { watch(channel) } label: {
@@ -866,6 +870,10 @@ struct ChannelCard: View {
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
             }.rowCardButton()
+            ProgrammeCatchupButton(channel: channel) { replay in
+                if let play { play(replay) } else { store.playing = replay }
+            }
+            .labelStyle(.iconOnly).buttonStyle(.plain).frame(width: 44, height: 44)
             Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)

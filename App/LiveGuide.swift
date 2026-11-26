@@ -47,6 +47,17 @@ import TVCore
             asked.remove(channel.name)
         }
     }
+
+    /// A day's programs for replay. An XMLTV guide is the one the playlist loaded, which keeps the history its
+    /// replayable channels declare; a DIYP address is asked for that (China) date.
+    func programmes(for channel: Channel, on date: Date) async -> [Programme] {
+        switch address {
+        case .xmltv:
+            return guide?.schedule(for: channel) ?? []
+        case .perChannel:
+            return await ProgramGuides.shared.schedule(address, name: channel.name, on: date) ?? []
+        }
+    }
 }
 
 /// Redraws a programme line when a programme ends, and at no other time.

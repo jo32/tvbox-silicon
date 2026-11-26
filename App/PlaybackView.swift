@@ -1184,7 +1184,7 @@ import IOKit.pwr_mgt
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
-        let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        let live = channel.replay == nil && (LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live"))
         begin(channel, live: live)
         isLive = live
         // Live: a live room, or a channel of a live playlist (only on-demand episodes have a history context).

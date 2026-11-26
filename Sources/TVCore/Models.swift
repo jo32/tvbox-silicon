@@ -345,7 +345,10 @@ public struct Subscription: Codable, Sendable {
 public struct ChannelLine: Codable, Hashable, Sendable {
     public let url: URL
     public let headers: [String: String]
-    public init(url: URL, headers: [String: String] = [:]) { self.url = url; self.headers = headers }
+    public var catchup: ChannelCatchup?
+    public init(url: URL, headers: [String: String] = [:], catchup: ChannelCatchup? = nil) {
+        self.url = url; self.headers = headers; self.catchup = catchup
+    }
 }
 
 public struct Channel: Identifiable, Codable, Hashable, Sendable {
@@ -369,11 +372,16 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     public var alternates: [ChannelLine] = []
     /// The playlist's `tvg-id` (or `tvg-name`) for the channel, to find it in a program guide (#802). Saved.
     public var guideID: String? = nil
+    /// Provider-declared history support for this address, saved with favorites.
+    public var catchup: ChannelCatchup? = nil
+    /// A finite programme generated from a catchup declaration; never a live-room or automatic next-channel item.
+    public var replay: ProgrammeReplay? = nil
     /// Every address of the channel as a channel of its own, `url` first; just the channel when it has one.
     public var lines: [Channel] {
         [self] + alternates.map {
             var line = Channel(name: name, group: group, url: $0.url, logo: logo, headers: $0.headers)
             line.guideID = guideID
+            line.catchup = $0.catchup
             return line
         }
     }
@@ -386,7 +394,7 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         self.historyContext = historyContext; self.resumePosition = resumePosition; self.subtitles = subtitles
         self.skips = skips; self.bilibiliPart = bilibiliPart
     }
-    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates, guideID }
+    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates, guideID, catchup, replay }
     /// Favorites saved before channels had lines have none.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -400,5 +408,7 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         resumePosition = try values.decodeIfPresent(Double.self, forKey: .resumePosition)
         alternates = try values.decodeIfPresent([ChannelLine].self, forKey: .alternates) ?? []
         guideID = try values.decodeIfPresent(String.self, forKey: .guideID)
+        catchup = try values.decodeIfPresent(ChannelCatchup.self, forKey: .catchup)
+        replay = try values.decodeIfPresent(ProgrammeReplay.self, forKey: .replay)
     }
 }

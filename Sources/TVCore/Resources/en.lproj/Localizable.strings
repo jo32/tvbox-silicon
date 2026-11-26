@@ -2401,3 +2401,10 @@
 "The playlist address returned a web page instead of a playlist. Its host may be offline." = "The playlist address returned a web page instead of a playlist. Its host may be offline.";
 "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here.";
 "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.";
+
+// Live TV: replaying past programs from a playlist's catchup template.
+"Replay Programs" = "Replay Programs";
+"Back to Live" = "Back to Live";
+"Date" = "Date";
+"No programs to replay on this date." = "No programs to replay on this date.";
+"This program can no longer be replayed." = "This program can no longer be replayed.";
