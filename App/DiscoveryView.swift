@@ -189,12 +189,17 @@ struct GlobalSearchView: View {
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
                             if listing.others > 0 {
                                 // The sources have started answering with other titles: their further pages wait with them.
-                                Button { othersShownFor = model.keyword } label: {
-                                    searchActionLabel(L10n.text("Show %lld Other Results", listing.others), symbol: "ellipsis")
+                                // A focus section of its own: the results above are one, and without this the remote
+                                // has nowhere to move to when the results are folded (#2163).
+                                Group {
+                                    Button { othersShownFor = model.keyword } label: {
+                                        searchActionLabel(L10n.text("Show %lld Other Results", listing.others), symbol: "ellipsis")
+                                    }
+                                    .searchAction()
+                                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                    .accessibilityIdentifier("search.showOthers")
                                 }
-                                .searchAction()
-                                .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                .accessibilityIdentifier("search.showOthers")
+                                .tvFocusSection()
                             } else if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
                                     .onScrolledIntoView(threshold: 0.2) { visible in
