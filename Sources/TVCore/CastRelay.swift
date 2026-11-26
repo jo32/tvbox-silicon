@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import CryptoKit
 
 /// Lets a TV play what only this app can fetch: a stream that needs request headers (a Referer, a browser's
 /// User-Agent, cookies), or a plugin's proxy on this device's loopback (#749). The TV fetches from this device on the
@@ -14,18 +15,24 @@ public actor CastRelay {
     struct Route: Sendable {
         let url: URL
         let headers: [String: String]
+        let headerContext: String
         var playlist: Bool
     }
 
-    /// The most routes kept: a live playlist adds its new segments every few seconds.
-    static let capacity = 4096
     private let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
-    private var routes: [String: Route] = [:]
-    private var ids: [String: String] = [:]
-    private var order: [String] = []
-    private var next = 0
+    private var routeKey = SymmetricKey(size: .bits256)
+    /// Derives each ticket's nonce from its contents, so one address keeps one ticket for the whole cast.
+    private var nonceKey = SymmetricKey(size: .bits256)
+    private var headerContexts: [String: [String: String]] = [:]
+    private var headerBytes = 0
+    private static let maximumHeaderContexts = 32
+    private static let maximumRouteCharacters = 8 << 10
+    private struct Ticket: Codable { let url: URL; let headers: String; let playlist: Bool }
     private var listener: NWListener?
     private var port: UInt16?
+    private var connections: [UUID: NWConnection] = [:]
+    private var transfers: [UUID: Task<Void, Never>] = [:]
+    private var headerDeadlines: [UUID: Task<Void, Never>] = [:]
     private let queue = DispatchQueue(label: "tvbox.cast.relay")
     private nonisolated let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -39,21 +46,38 @@ public actor CastRelay {
     public func address(for url: URL, headers: [String: String], playlist: Bool, towards host: String?) async throws -> URL {
         let port = try await start()
         guard let local = DLNA.localInterface(towards: host)?.address else { throw URLError(.notConnectedToInternet) }
-        let path = register(url, headers: headers, playlist: playlist)
+        let path = try register(url, headers: headers, playlist: playlist)
         guard let address = URL(string: "http://\(local):\(port)\(path)") else { throw URLError(.badURL) }
         return address
     }
 
     /// Forgets every route; the next cast starts afresh.
     public func reset() {
-        routes = [:]; ids = [:]; order = []
+        headerContexts = [:]; headerBytes = 0; routeKey = SymmetricKey(size: .bits256); nonceKey = SymmetricKey(size: .bits256)
+    }
+
+    /// Ends an app-dependent cast, including downloads still feeding a disconnected TV.
+    public func stop() {
+        listener?.cancel(); listener = nil; port = nil
+        for connection in connections.values { connection.cancel() }
+        for transfer in transfers.values { transfer.cancel() }
+        for deadline in headerDeadlines.values { deadline.cancel() }
+        connections = [:]; transfers = [:]; headerDeadlines = [:]
+        reset()
     }
 
     private func start() async throws -> UInt16 {
         if let port, listener?.state == .ready { return port }
         listener?.cancel(); listener = nil; port = nil
         let listener = try NWListener(using: .tcp)
-        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        self.listener = listener
+        listener.newConnectionHandler = { [weak self, weak listener] connection in
+            guard let listener else { connection.cancel(); return }
+            Task {
+                guard let self else { connection.cancel(); return }
+                await self.accept(connection, listener: listener)
+            }
+        }
         let ready: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
             listener.stateUpdateHandler = { [weak listener] state in
@@ -66,39 +90,64 @@ public actor CastRelay {
             }
             listener.start(queue: queue)
         }
-        self.listener = listener
+        guard self.listener === listener else { listener.cancel(); throw CancellationError() }
+        try Task.checkCancellation()
         port = ready
         Diagnostics.shared.record(.info, "cast", "relay listening port=\(ready)")
         return ready
     }
 
-    /// The path a route is served at: the token, its id and a name that keeps the extension, which some TVs go by.
+    /// Authenticated route tickets don't expire when a long VOD or live playlist
+    /// registers more segments. Headers stay in a bounded context shared by all
+    /// tickets, so large cookies are neither exposed nor repeated in every URI.
     @discardableResult
-    func register(_ url: URL, headers: [String: String], playlist: Bool) -> String {
-        let key = url.absoluteString
-        let id: String
-        if let known = ids[key] {
-            id = known
-            if playlist { routes[id]?.playlist = true }
-        } else {
-            next += 1
-            id = String(next, radix: 36)
-            ids[key] = id
-            routes[id] = Route(url: url, headers: headers, playlist: playlist)
-            order.append(id)
-            if order.count > Self.capacity {
-                let dropped = order.removeFirst()
-                if let route = routes.removeValue(forKey: dropped) { ids[route.url.absoluteString] = nil }
-            }
+    func register(_ url: URL, headers: [String: String], playlist: Bool) throws -> String {
+        let context: String
+        if let known = headerContexts.first(where: { $0.value == headers })?.key { context = known }
+        else {
+            guard headerContexts.count < Self.maximumHeaderContexts else { throw URLError(.dataLengthExceedsMaximum) }
+            let bytes = try JSONEncoder().encode(headers).count
+            guard bytes <= 64 << 10, bytes <= (256 << 10) - headerBytes else { throw URLError(.dataLengthExceedsMaximum) }
+            context = UUID().uuidString
+            headerContexts[context] = headers
+            headerBytes += bytes
         }
+        guard url.absoluteString.utf8.count <= Self.maximumRouteCharacters else { throw URLError(.dataLengthExceedsMaximum) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(Ticket(url: url, headers: context, playlist: playlist))
+        // A TV refreshing a live playlist matches segments it already has by their address (GStreamer's hlsdemux
+        // does), so the same route must get the same ticket every time: a random nonce would rename every segment.
+        let nonce = try AES.GCM.Nonce(data: Data(HMAC<SHA256>.authenticationCode(for: data, using: nonceKey)).prefix(12))
+        let sealed = try AES.GCM.seal(data, using: routeKey, nonce: nonce)
+        guard let combined = sealed.combined else { throw URLError(.unknown) }
+        let id = combined.base64EncodedString().replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        guard id.count <= Self.maximumRouteCharacters else { throw URLError(.dataLengthExceedsMaximum) }
         return "/\(token)/\(id)/\(Self.name(for: url, playlist: playlist))"
     }
 
-    func route(_ id: String) -> Route? { routes[id] }
+    func route(_ id: String) -> Route? {
+        guard id.count <= Self.maximumRouteCharacters else { return nil }
+        var text = id.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        text += String(repeating: "=", count: (4 - text.count % 4) % 4)
+        guard let data = Data(base64Encoded: text), let box = try? AES.GCM.SealedBox(combined: data),
+              let clear = try? AES.GCM.open(box, using: routeKey),
+              let ticket = try? JSONDecoder().decode(Ticket.self, from: clear),
+              let headers = headerContexts[ticket.headers] else { return nil }
+        return Route(url: ticket.url, headers: headers, headerContext: ticket.headers, playlist: ticket.playlist)
+    }
 
     /// A playlist with every address it names registered here, given as paths on this server.
-    func rewrite(_ text: String, base: URL, headers: [String: String]) -> String {
-        Self.rewrite(text, base: base) { url, playlist in register(url, headers: headers, playlist: playlist) }
+    func rewrite(_ text: String, base: URL, headers: [String: String]) throws -> String {
+        guard text.utf8.count <= 4 << 20 else { throw URLError(.dataLengthExceedsMaximum) }
+        var remaining = (12 << 20) - text.utf8.count
+        return try Self.rewrite(text, base: base) { url, playlist in
+            let path = try register(url, headers: headers, playlist: playlist)
+            guard path.utf8.count <= remaining else { throw URLError(.dataLengthExceedsMaximum) }
+            remaining -= path.utf8.count
+            return path
+        }
     }
 
     static func name(for url: URL, playlist: Bool) -> String {
@@ -111,7 +160,7 @@ public actor CastRelay {
 
     /// Rewrites each URI in an HLS playlist with `register`, which is told whether the address is itself a playlist
     /// (a variant or a rendition) rather than a segment, key or init section.
-    static func rewrite(_ text: String, base: URL, register: (URL, Bool) -> String) -> String {
+    static func rewrite(_ text: String, base: URL, register: (URL, Bool) throws -> String) rethrows -> String {
         let pattern = try! NSRegularExpression(pattern: "URI=\"([^\"]*)\"")
         var variantNext = false
         var lines: [String] = []
@@ -127,13 +176,13 @@ public actor CastRelay {
                     guard let range = Range(match.range(at: 1), in: line), let url = URL(string: String(line[range]), relativeTo: base)?.absoluteURL,
                           url.scheme == "http" || url.scheme == "https",
                           let target = Range(match.range(at: 1), in: rewritten) else { continue }
-                    rewritten.replaceSubrange(target, with: register(url, isPlaylist))
+                    rewritten.replaceSubrange(target, with: try register(url, isPlaylist))
                 }
                 lines.append(rewritten)
                 continue
             }
             if let url = URL(string: trimmed, relativeTo: base)?.absoluteURL, url.scheme == "http" || url.scheme == "https" {
-                lines.append(register(url, variantNext))
+                lines.append(try register(url, variantNext))
             } else {
                 lines.append(line)
             }
@@ -144,24 +193,61 @@ public actor CastRelay {
 
     // MARK: Serving
 
-    private nonisolated func accept(_ connection: NWConnection) {
+    private func accept(_ connection: NWConnection, listener: NWListener) {
+        // The listener may have stopped while its callback was waiting to enter this actor.
+        guard self.listener === listener else { connection.cancel(); return }
+        let id = UUID()
+        connections[id] = connection
+        connection.stateUpdateHandler = { @Sendable [weak self] state in
+            switch state {
+            case .cancelled, .failed: Task { await self?.cancel(id) }
+            default: break
+            }
+        }
+        headerDeadlines[id] = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            await self?.cancel(id)
+        }
         connection.start(queue: queue)
-        readHead(connection, buffer: Data())
+        readHead(id, buffer: Data())
     }
 
-    private nonisolated func readHead(_ connection: NWConnection, buffer: Data) {
+    private func readHead(_ id: UUID, buffer: Data) {
+        guard let connection = connections[id] else { return }
         connection.receive(minimumIncompleteLength: 1, maximumLength: 16 << 10) { [weak self] chunk, _, complete, error in
-            var buffer = buffer
-            if let chunk { buffer.append(chunk) }
-            if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
-                let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
-                Task { await self?.serve(connection, head: head) }
-                return
-            }
-            guard !complete, error == nil, buffer.count < 16 << 10 else { return connection.cancel() }
-            self?.readHead(connection, buffer: buffer)
+            Task { await self?.receivedHead(id, buffer: buffer, chunk: chunk, complete: complete, failed: error != nil) }
         }
     }
+
+    private func receivedHead(_ id: UUID, buffer: Data, chunk: Data?, complete: Bool, failed: Bool) {
+        guard connections[id] != nil else { return }
+        var buffer = buffer
+        if let chunk { buffer.append(chunk) }
+        guard buffer.count <= 16 << 10 else { cancel(id); return }
+        if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
+            let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
+            begin(id, head: head)
+        } else if complete || failed { cancel(id) }
+        else { readHead(id, buffer: buffer) }
+    }
+
+    private func begin(_ id: UUID, head: String) {
+        guard let connection = connections[id] else { return }
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers[id] = Task { [weak self] in
+            await self?.serve(connection, head: head)
+            await self?.finished(id)
+        }
+    }
+
+    private func cancel(_ id: UUID) {
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers.removeValue(forKey: id)?.cancel()
+        connections.removeValue(forKey: id)?.cancel()
+    }
+
+    // Some responses schedule their final send before returning. Retain the socket until its close callback.
+    private func finished(_ id: UUID) { transfers[id] = nil }
 
     private func serve(_ connection: NWConnection, head: String) async {
         let lines = head.components(separatedBy: "\r\n")
@@ -169,7 +255,7 @@ public actor CastRelay {
         guard request.count >= 2 else { return Self.reply(connection, status: "400 Bad Request") }
         let method = String(request[0]), parts = request[1].split(separator: "/", omittingEmptySubsequences: true)
         guard method == "GET" || method == "HEAD" else { return Self.reply(connection, status: "405 Method Not Allowed") }
-        guard parts.count >= 2, parts[0] == token, let route = routes[String(parts[1])] else { return Self.reply(connection, status: "404 Not Found") }
+        guard parts.count >= 2, parts[0] == token, let route = route(String(parts[1])) else { return Self.reply(connection, status: "404 Not Found") }
         let range = lines.dropFirst().first { $0.lowercased().hasPrefix("range:") }
             .map { String($0.dropFirst(6)).trimmingCharacters(in: .whitespaces) }
         var upstream = URLRequest(url: route.url, timeoutInterval: 30)
@@ -189,7 +275,8 @@ public actor CastRelay {
                 Diagnostics.shared.record(.warning, "cast", "relay playlist status=\((response as? HTTPURLResponse)?.statusCode ?? 0) host=\(route.url.host() ?? "-")")
                 return Self.reply(connection, status: "502 Bad Gateway")
             }
-            let text = rewrite(String(decoding: data, as: UTF8.self), base: http.url ?? route.url, headers: route.headers)
+            guard headerContexts[route.headerContext] != nil else { return Self.reply(connection, status: "410 Gone") }
+            let text = try rewrite(String(decoding: data, as: UTF8.self), base: http.url ?? route.url, headers: route.headers)
             let body = Data(text.utf8)
             let header = Self.header(status: "200 OK", fields: [("Content-Type", "application/vnd.apple.mpegurl"),
                                                                ("Content-Length", String(body.count)), ("Cache-Control", "no-cache")])
@@ -204,7 +291,7 @@ public actor CastRelay {
         let upstream = Upstream(session: session, request: request)
         defer { upstream.cancel() }
         do {
-            let response = try await upstream.start()
+            let response = try await withTaskCancellationHandler { try await upstream.start() } onCancel: { upstream.cancel() }
             guard (200..<300).contains(response.statusCode) else {
                 Diagnostics.shared.record(.warning, "cast", "relay media status=\(response.statusCode) host=\(route.url.host() ?? "-")")
                 return Self.reply(connection, status: response.statusCode == 416 ? "416 Range Not Satisfiable" : "502 Bad Gateway")
@@ -215,7 +302,8 @@ public actor CastRelay {
             // An address that turns out to be a playlist (no extension, a plugin's route) is rewritten as one.
             if type.lowercased().contains("mpegurl") || first.starts(with: Data("#EXTM3U".utf8)) {
                 while first.count < 4 << 20, let more = try await iterator.next() { first.append(more) }
-                let text = rewrite(String(decoding: first, as: UTF8.self), base: response.url ?? route.url, headers: route.headers)
+                guard headerContexts[route.headerContext] != nil else { return Self.reply(connection, status: "410 Gone") }
+                let text = try rewrite(String(decoding: first, as: UTF8.self), base: response.url ?? route.url, headers: route.headers)
                 let body = Data(text.utf8)
                 let header = Self.header(status: "200 OK", fields: [("Content-Type", "application/vnd.apple.mpegurl"), ("Content-Length", String(body.count))])
                 try await Self.send(connection, head ? header : header + body)
@@ -232,6 +320,7 @@ public actor CastRelay {
             upstream.consumed(first.count)
             try await Self.send(connection, first)
             while let chunk = try await iterator.next() {
+                try Task.checkCancellation()
                 // Each piece goes out before the next is taken, so a slow TV slows the download instead of filling memory.
                 try await Self.send(connection, chunk)
                 upstream.consumed(chunk.count)
@@ -285,6 +374,7 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
     private var answered = false
     private var pending = 0
     private var paused = false
+    private var cancelled = false
     private static let high = 8 << 20, low = 2 << 20
 
     init(session: URLSession, request: URLRequest) {
@@ -296,8 +386,11 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
 
     func start() async throws -> HTTPURLResponse {
         try await withCheckedThrowingContinuation { continuation in
-            lock.withLock { answer = continuation }
-            task.resume()
+            let stopped = lock.withLock { () -> Bool in
+                guard !cancelled else { return true }
+                answer = continuation; return false
+            }
+            if stopped { continuation.resume(throwing: CancellationError()) } else { task.resume() }
         }
     }
 
@@ -308,7 +401,14 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
         }
     }
 
-    func cancel() { task.cancel(); continuation.finish() }
+    func cancel() {
+        let waiting: CheckedContinuation<HTTPURLResponse, Error>? = lock.withLock {
+            cancelled = true
+            defer { answer = nil; answered = true }
+            return answered ? nil : answer
+        }
+        task.cancel(); waiting?.resume(throwing: CancellationError()); continuation.finish(throwing: CancellationError())
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {

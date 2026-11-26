@@ -26,12 +26,15 @@ public enum CloudStreams {
 
     /// A playable address for `source`. `refresh` resolves the file again when its CDN link expires. `parallel` caps
     /// the connections it reads ahead on; a proxy that downloads each request with its own threads wants one.
-    public static func register(_ source: Source, parallel: Int? = nil, refresh: @escaping @Sendable () async -> Source?) -> URL {
-        register(source, session: CloudByteStream.session, parallel: parallel ?? CloudByteStream.parallel, refresh: refresh)
+    /// `renewal`, when `refresh` gives nothing new (the same expired link, or none), asks the source for the episode
+    /// again (`LinkRenewal`): a plugin that keeps the links it gave answers a fresh one only then.
+    public static func register(_ source: Source, parallel: Int? = nil, renewal: (@Sendable () async -> Source?)? = nil,
+                                refresh: @escaping @Sendable () async -> Source?) -> URL {
+        register(source, session: CloudByteStream.session, parallel: parallel ?? CloudByteStream.parallel, renewal: renewal, refresh: refresh)
     }
     static func register(_ source: Source, session: URLSession, parallel: Int = CloudByteStream.parallel,
-                         refresh: @escaping @Sendable () async -> Source?) -> URL {
-        CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, parallel: parallel, refresh: refresh))
+                         renewal: (@Sendable () async -> Source?)? = nil, refresh: @escaping @Sendable () async -> Source?) -> URL {
+        CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, parallel: parallel, refresh: refresh, renewal: renewal))
     }
 
     /// Whether `url` plays a drive's transcoded copy rather than the file (Quark and UC give free accounts no large
@@ -256,8 +259,20 @@ actor CloudByteStream {
     private var lastReadEnd: Int?
     private var source: CloudStreams.Source
     private let refresh: @Sendable () async -> CloudStreams.Source?
+    /// The episode resolved again, when `refresh` gives no new link (`CloudStreams.register`).
+    private let renewal: (@Sendable () async -> CloudStreams.Source?)?
     /// When the address was last resolved again, and whether that gave a new one.
     private var lastRefresh: (date: Date, renewed: Bool)?
+    /// Refreshes that failed in a row: each waits longer before the next (`refreshWait`).
+    private var refreshFailures = 0
+    /// The refresh under way, which every chunk refused meanwhile waits for.
+    private var renewing: Task<Bool, Never>?
+    /// Downloads that failed in a row on this stream: while it lasts, a new request waits a little first (`holdUntil`), so
+    /// a reader asking again at once (AVPlayer, FFmpeg) doesn't turn a dead link into a storm of requests.
+    private var streak = FailureStreak(threshold: 2, base: CloudByteStream.retryBase * 2, ceiling: 15)
+    private var holdUntil: Date?
+    /// The first wait before a dropped connection or a server's passing error (502, a timeout) is tried again.
+    nonisolated(unsafe) static var retryBase = 0.5
     private var cache: [Int: Data] = [:]
     private var recent: [Int] = []
     private var inflight: [Int: Task<Data, Error>] = [:]
@@ -325,8 +340,9 @@ actor CloudByteStream {
     private var pieceConnections = 0
 
     init(source: CloudStreams.Source, session: URLSession = CloudByteStream.session, parallel: Int = CloudByteStream.parallel,
-         rewritesSampleEntries: Bool = true, refresh: @escaping @Sendable () async -> CloudStreams.Source?) {
-        self.source = source; self.session = session; self.refresh = refresh; host = source.url.host()
+         rewritesSampleEntries: Bool = true, refresh: @escaping @Sendable () async -> CloudStreams.Source?,
+         renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) {
+        self.source = source; self.session = session; self.refresh = refresh; self.renewal = renewal; host = source.url.host()
         connections = max(1, parallel)
         mostConnections = connections
         ceiling = connections > 1 ? max(connections, CloudDevice.maxConnections) : 1
@@ -544,9 +560,36 @@ actor CloudByteStream {
     }
 
     private func start(_ index: Int) -> Task<Data, Error> {
-        let task = Task { try await self.download(index) }
+        let task = Task {
+            do {
+                let data = try await self.download(index)
+                self.succeeded()
+                return data
+            } catch {
+                if !TransientRetry.isCancellation(error) { self.failed(index, error) }
+                throw error
+            }
+        }
         inflight[index] = task
         return task
+    }
+
+    private func succeeded() {
+        holdUntil = nil
+        if let run = streak.succeed() { Diagnostics.shared.record(.info, "cloud.stream", "reads again after \(run) failed host=\(host ?? "-")") }
+    }
+
+    /// A chunk failed for good: reported once per run of failures, and the next request waits a little.
+    private func failed(_ index: Int, _ error: Error) {
+        let (report, wait) = streak.fail()
+        if wait > 0 { holdUntil = Date().addingTimeInterval(wait) }
+        if report { Diagnostics.shared.failure("cloud.stream", "chunk=\(index) failed run=\(streak.count) host=\(host ?? "-")", error) }
+    }
+
+    /// Waits out `holdUntil`, if the stream is in a run of failures.
+    private func holdOff() async throws {
+        guard let until = holdUntil, until > Date() else { return }
+        try await Task.sleep(for: .seconds(until.timeIntervalSinceNow))
     }
 
     /// Chunk `index`, its bytes kept in `partial` as they arrive for reads that want them before the rest.
@@ -562,6 +605,9 @@ actor CloudByteStream {
         }
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
         var attempt = 0, cut = 0, refusals = 0
+        // Dropped connections and a server's passing errors (502, 504...) are tried again, a little later each time.
+        var transient = Backoff(base: Self.retryBase, ceiling: 4, attempts: 4)
+        try await holdOff()
         func received() -> Int { partial[index]?.download == id ? partial[index]?.bytes.count ?? 0 : 0 }
         // In a burst the rest of the chunk comes in pieces on connections of their own while this one reads its start.
         var pieces = split(first...last)
@@ -613,6 +659,13 @@ actor CloudByteStream {
                     try await Task.sleep(for: .milliseconds(250 * refusals))
                     continue
                 }
+                // A gateway's or a busy server's answer (502 with no bytes ended 3,067 reads of one install in a week):
+                // later, the same request usually gets the bytes.
+                if !flowing, TransientRetry.transientStatuses.contains(status), let wait = transient.next() {
+                    Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) status=\(status); again in \(wait) s")
+                    try await Task.sleep(for: .seconds(wait))
+                    continue
+                }
                 var got = received()
                 guard flowing, let end, got > from - first else {
                     // A drive sometimes answers a range with no bytes, or fewer than it says: the next try gets them.
@@ -622,7 +675,7 @@ actor CloudByteStream {
                         try await Task.sleep(for: .milliseconds(300 * cut))
                         continue
                     }
-                    Diagnostics.shared.record(.error, "cloud.stream", "chunk=\(index) status=\(status) bytes=\(got)")
+                    Diagnostics.shared.record(streak.count == 0 ? .error : .debug, "cloud.stream", "chunk=\(index) status=\(status) bytes=\(got)")
                     throw TVError.http(status == 200 ? 416 : status)
                 }
                 rate.bytes += got - (from - first); growth.bytes += got - (from - first)
@@ -639,7 +692,7 @@ actor CloudByteStream {
                     got = received()
                 }
                 // A drive that sends part of the range at a time, or a connection cut short: ask for the rest.
-                if first + got <= last { attempt = 0; continue }
+                if first + got <= last { attempt = 0; transient.reset(); continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
                     let seconds = Date().timeIntervalSince(rate.since)
                     Diagnostics.shared.record(.debug, "cloud.stream", "rate bytesPerSecond=\(Int(Double(rate.bytes) / seconds)) readers=\(readers) inflight=\(inflight.count)")
@@ -658,12 +711,16 @@ actor CloudByteStream {
                 while recent.count > cacheLimit { cache[recent.removeFirst()] = nil }
                 updateBufferedAhead()
                 return playable
-            } catch let error as URLError where error.code != .cancelled && attempt < 3 {
+            } catch let error as URLError where error.code != .cancelled && (attempt < 3 || TransientRetry.isTransient(error)) {
                 // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
-                // listens again on a new port: ask where (#485).
-                if error.code == .cannotConnectToHost, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""), await renew() { continue }
-                Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue) kept=\(received())")
-                try await Task.sleep(for: .milliseconds(400 * attempt))
+                // listens again on a new port: ask where (#485). Only a new address is tried at once, and only in the
+                // first three tries: a refresh shared with other chunks answers its earlier outcome for a while, and
+                // a proxy that refuses on its new port too waits like any other dropped connection.
+                if error.code == .cannotConnectToHost, attempt < 3, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""),
+                   await renew(), source.url != current.url { continue }
+                guard let wait = transient.next() else { throw error }
+                Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue) kept=\(received()) in \(wait) s")
+                try await Task.sleep(for: .seconds(wait))
             }
         }
     }
@@ -715,14 +772,50 @@ actor CloudByteStream {
         Diagnostics.shared.record(.debug, "cloud.stream", "behind playback (\(Int(Double(received) / elapsed)) B/s of \(Int(bytesPerSecond)) needed): connections=\(connections)")
     }
 
+    /// How long after a refresh its outcome stands for every chunk refused meanwhile: 10 s after one that renewed the
+    /// link; after failures, 10 s, 20 s, 40 s... up to 5 minutes, so a link that can't be renewed isn't asked for every
+    /// 10 s while the player keeps reading (149 installs logged "refresh failed" 2,400 times in a week).
+    static func refreshWait(failures: Int) -> TimeInterval {
+        failures == 0 ? 10 : min(300, 10 * pow(2, Double(failures - 1)))
+    }
+
     private func renew() async -> Bool {
-        // Chunks refused together share one refresh, and its outcome: one that failed isn't retried at once.
-        if let lastRefresh, Date().timeIntervalSince(lastRefresh.date) < 10 { return lastRefresh.renewed }
-        lastRefresh = (Date(), false)
-        guard let next = await refresh(), next.length == source.length else {
-            Diagnostics.shared.record(.error, "cloud.stream", "refresh failed")
+        // Chunks refused together share one refresh, and its outcome.
+        if let renewing { return await renewing.value }
+        if let lastRefresh, Date().timeIntervalSince(lastRefresh.date) < Self.refreshWait(failures: refreshFailures) { return lastRefresh.renewed }
+        let task = Task { await self.resolveAgain() }
+        renewing = task
+        let renewed = await task.value
+        renewing = nil
+        return renewed
+    }
+
+    /// A new link for the same file: from `refresh`, else from the episode resolved again (`renewal`). The same link
+    /// again doesn't count: a plugin's proxy that kept the expired one answers it, and the drive refuses it again.
+    private func resolveAgain() async -> Bool {
+        let old = source
+        var reason = "none"
+        func usable(_ next: CloudStreams.Source?) -> CloudStreams.Source? {
+            guard let next else { return nil }
+            if next.url == old.url && next.headers == old.headers { reason = "same link"; return nil }
+            if next.length != old.length { reason = "length \(next.length) not \(old.length)"; return nil }
+            return next
+        }
+        var next = usable(await refresh())
+        if next == nil, let renewal {
+            Diagnostics.shared.record(.info, "cloud.stream", "refresh gave \(reason); asking the source again host=\(host ?? "-")")
+            next = usable(await renewal())
+        }
+        guard let next else {
+            refreshFailures += 1
+            lastRefresh = (Date(), false)
+            // Once per doubling, so a link that stays dead is reported, not counted out request by request.
+            if refreshFailures & (refreshFailures - 1) == 0 {
+                Diagnostics.shared.record(.error, "cloud.stream", "refresh failed reason=\(reason) renewal=\(renewal != nil) failures=\(refreshFailures) host=\(host ?? "-")")
+            }
             return false
         }
+        refreshFailures = 0
         lastRefresh = (Date(), true)
         source = next
         served = false

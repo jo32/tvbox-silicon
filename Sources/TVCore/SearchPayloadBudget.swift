@@ -11,7 +11,9 @@ struct SearchPayloadBudget {
     private(set) var used = Cost()
     let maximumBytes: Int
     let maximumItems: Int
-    init(maximumBytes: Int = 32 << 20, maximumItems: Int = 24_000) {
+    /// What one search keeps: thousands of ordinary cards use a few MB; a source that sends whole episode lists with
+    /// each result uses far more.
+    init(maximumBytes: Int = 64 << 20, maximumItems: Int = 24_000) {
         self.maximumBytes = maximumBytes; self.maximumItems = maximumItems
     }
     mutating func reserve(_ cost: Cost) -> Bool {

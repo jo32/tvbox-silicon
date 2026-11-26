@@ -339,6 +339,17 @@ public struct CatalogClient: Sendable {
             throw error
         }
     }
+    /// The source's JAR spider's answer to a query on Android TVBox's local proxy (`do=live&…`), which a
+    /// subscription's live playlists can point at (`LoopbackPlaylist`). FongMi hands these to the archive's
+    /// `Proxy.proxy`, and to the spider's own `proxy` for `do=jar`; the plugin runtime does the same.
+    func spiderProxy(_ query: String) async throws -> LoopbackPlaylist.Answer {
+        guard site.runtime == .jar, EmbeddedJarHost.available, let archive = try site.pluginURL(origin: origin, fallback: jarURL) else {
+            throw LoopbackPlaylist.needsPlugin
+        }
+        let json = try await EmbeddedJarHost.shared.request(site: site, jarURL: archive, params: ["proxy": query], http: http, configurationOrigin: origin)
+        return try LoopbackPlaylist.Answer(json)
+    }
+
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }
@@ -416,9 +427,8 @@ public struct CatalogClient: Sendable {
                 throw crashed
             }
         }
-        let maximumBytes = params["wd"]?.isEmpty == false ? CatalogResponseParser.searchBytes : 20_000_000
-        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:], limit: maximumBytes)
-        do { return try await CatalogResponseParser.decode(data, maximumBytes: maximumBytes) }
+        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
+        do { return try await CatalogResponseParser.decode(data) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
             let start = String(decoding: data.prefix(512), as: UTF8.self).lowercased()

@@ -2395,5 +2395,18 @@
 "Select episodes to delete" = "選擇要刪除的劇集";
 "Delete %lld episodes" = "刪除 %lld 集";
 "Search settings" = "搜尋設定";
+"This live playlist comes from its subscription's plugin, which this device can't run." = "這個直播清單由訂閱的外掛提供，此裝置無法執行該外掛。";
+"This live playlist is a file on an Android device (127.0.0.1:9978/file), which Yingxia can't open. Add the playlist's web address instead." = "這個直播清單是 Android 裝置上的檔案（127.0.0.1:9978/file），映匣無法開啟。請改為加入該清單的網址。";
+"This playlist only has %@ channels, which Apple's player can't play." = "這個清單只有 %@ 頻道，Apple 的播放器無法播放。";
+"The playlist address returned a web page instead of a playlist. Its host may be offline." = "清單網址回傳的是網頁而不是直播清單，它的伺服器可能已下線。";
+"This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "這個直播清單的頻道網址是相對於提供它的 Android 播放器的，在這裡無法開啟。";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "這個連結開啟的是網頁，不是影片：片源沒有把它解析成可播放的位址。請換一條線路。";
+
+// Live TV: replaying past programs from a playlist's catchup template.
+"Replay Programs" = "節目回看";
+"Back to Live" = "返回直播";
+"Date" = "日期";
+"No programs to replay on this date." = "這一天沒有可以回看的節目。";
+"This program can no longer be replayed." = "這個節目已過了回看期限。";
 
 "Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";

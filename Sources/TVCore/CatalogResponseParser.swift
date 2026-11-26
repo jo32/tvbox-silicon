@@ -3,7 +3,10 @@ import Foundation
 /// Limit allocation-heavy native catalog decoding to one worker. Network limits alone do not bound
 /// nesting or the number of tiny values. Strings and their escaped quotes are opaque to this scan.
 enum CatalogResponseParser {
-    static let searchBytes = 8 * 1024 * 1024
+    /// Arrays, objects and elements in one answer. A category page has hundreds and a home answer with long filter
+    /// lists tens of thousands; only a pathological answer of tiny values within the 20 MB download limit gets here.
+    static let maximumElements = 1_000_000
+    static let maximumDepth = 64
     private static let worker = Worker()
     static func decode(_ data: Data, maximumBytes: Int = 20_000_000) async throws -> [String: JSONValue] {
         try Task.checkCancellation()
@@ -25,8 +28,7 @@ enum CatalogResponseParser {
         else if prefix.count >= 2, prefix[0] == 0 { encoding = .utf16BigEndian; skip = 0 }
         else if prefix.count >= 2, prefix[1] == 0 { encoding = .utf16LittleEndian; skip = 0 }
         else {
-            // Keep JSONDecoder from applying a different byte encoding after the structural scan.
-            guard !data.contains(0), String(data: data, encoding: .utf8) != nil else { throw URLError(.cannotDecodeContentData) }
+            // UTF-8: the scan rejects a raw NUL, so JSONDecoder can't take it for another encoding after the scan.
             return data
         }
         let body = data.dropFirst(skip)
@@ -39,23 +41,30 @@ enum CatalogResponseParser {
 
     private static func validate(_ data: Data, maximumBytes: Int) throws {
         guard data.count <= maximumBytes else { throw URLError(.dataLengthExceedsMaximum) }
-        var depth = 0, elements = 0, quoted = false, escaped = false
-        for (index, byte) in data.enumerated() {
-            if index % 4096 == 0 { try Task.checkCancellation() }
-            if quoted {
-                if escaped { escaped = false }
-                else if byte == 92 { escaped = true }
-                else if byte == 34 { quoted = false }
-                continue
+        try data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
+            var depth = 0, elements = 0, quoted = false, escaped = false
+            for index in bytes.indices {
+                if index & 0xFFFFF == 0 { try Task.checkCancellation() }
+                let byte = bytes[index]
+                if byte == 0 { throw URLError(.cannotDecodeContentData) }
+                if quoted {
+                    if escaped { escaped = false }
+                    else if byte == 92 { escaped = true }
+                    else if byte == 34 { quoted = false }
+                    continue
+                }
+                switch byte {
+                case 34: quoted = true
+                case 91, 123:
+                    depth += 1; elements += 1
+                    guard depth <= maximumDepth, elements <= maximumElements else { throw URLError(.dataLengthExceedsMaximum) }
+                case 93, 125: depth -= 1
+                case 44:
+                    elements += 1
+                    guard elements <= maximumElements else { throw URLError(.dataLengthExceedsMaximum) }
+                default: break
+                }
             }
-            switch byte {
-            case 34: quoted = true
-            case 91, 123: depth += 1; elements += 1
-            case 93, 125: depth -= 1
-            case 44: elements += 1
-            default: break
-            }
-            guard depth <= 64, elements <= 100_000 else { throw URLError(.dataLengthExceedsMaximum) }
         }
         // JSONDecoder still validates syntax: this is a complexity gate, not a second parser.
     }

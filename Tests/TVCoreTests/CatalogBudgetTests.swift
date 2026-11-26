@@ -5,7 +5,7 @@ import Testing
 @Test func catalogComplexityRejectsDepthAndStructuralWidth() async throws {
     let deep = Data(("{\"list\":" + String(repeating: "[", count: 65) + "0" + String(repeating: "]", count: 65) + "}").utf8)
     await #expect(throws: (any Error).self) { _ = try await CatalogResponseParser.decode(deep) }
-    let wide = Data(("{\"list\":[" + Array(repeating: "0", count: 100_001).joined(separator: ",") + "]}").utf8)
+    let wide = Data(("{\"list\":[" + Array(repeating: "0", count: CatalogResponseParser.maximumElements + 1).joined(separator: ",") + "]}").utf8)
     await #expect(throws: (any Error).self) { _ = try await CatalogResponseParser.decode(wide) }
 }
 @Test func catalogComplexityDoesNotCountQuotedBracketsOrEscapedQuotes() async throws {
@@ -43,8 +43,8 @@ import Testing
     let site = Site(key: "one", name: "one", type: 1, api: "https://one.invalid", raw: [:])
     let model = SearchModel()
     let page = CatalogPage(json: ["list": .array([.object(["vod_id": .string("small"), "vod_name": .string("existing")])])], origin: URL(string: "https://one.invalid")!)
-    model.accept(SearchSourceResult(site: site, page: page, error: nil))
-    let huge = CatalogPage(json: ["list": .array([.object(["vod_id": .string("large"), "vod_content": .string(String(repeating: "x", count: 33 << 20))])])], origin: URL(string: "https://one.invalid")!)
+    model.record(SearchSourceResult(site: site, page: page, error: nil))
+    let huge = CatalogPage(json: ["list": .array([.object(["vod_id": .string("large"), "vod_content": .string(String(repeating: "x", count: SearchPayloadBudget().maximumBytes + (1 << 20)))])])], origin: URL(string: "https://one.invalid")!)
     let rejected = try #require(model.retain(SearchSourceResult(site: site, page: huge, error: nil)))
     #expect(rejected.error != nil)
     #expect(rejected.page == nil)
@@ -78,11 +78,11 @@ import Testing
 @MainActor @Test func rejectedSourceMetadataIsNotRetainedOutsideTheBudget() {
     let model = SearchModel()
     let site = Site(key: "large-source", name: "large", type: 1, api: "https://one.invalid",
-                    raw: ["ext": .string(String(repeating: "x", count: 33 << 20))])
+                    raw: ["ext": .string(String(repeating: "x", count: SearchPayloadBudget().maximumBytes + (1 << 20)))])
     let answer = model.retain(SearchSourceResult(site: site, page: nil, error: "failed"))
     let retained = [answer].compactMap { $0 }
     let cost = retained.reduce(SearchPayloadBudget.Cost()) { $0 + SearchPayloadBudget.cost($1) }
-    #expect(cost.bytes <= 32 << 20)
+    #expect(cost.bytes <= SearchPayloadBudget().maximumBytes)
     #expect(answer == nil)
     #expect(model.resultLimitMessage != nil)
 }
@@ -95,8 +95,8 @@ import Testing
         retained.append(contentsOf: [answer].compactMap { $0 })
     }
     let cost = retained.reduce(SearchPayloadBudget.Cost()) { $0 + SearchPayloadBudget.cost($1) }
-    #expect(cost.items <= 24_000)
-    #expect(cost.bytes <= 32 << 20)
+    #expect(cost.items <= SearchPayloadBudget().maximumItems)
+    #expect(cost.bytes <= SearchPayloadBudget().maximumBytes)
 }
 @Test func unicodeJSONEncodingsCannotHideStructuralDepth() async throws {
     // The low byte of U+0122 is 0x22, which must not act as a structural quote in a UTF-16 scan.

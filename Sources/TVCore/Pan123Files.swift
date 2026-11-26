@@ -30,14 +30,14 @@ actor Pan123Files {
 
     /// Files and folders anywhere in the drive whose names hold `keywords`.
     func search(_ keywords: String, page: Int, size: Int) async throws -> (files: [CloudFile], total: Int) {
-        try await listing(folder: "0", search: keywords, page: page, pages: 1)
+        try await listing(folder: "0", search: keywords, page: page, pages: 1, limit: size)
     }
 
-    private func listing(folder: String, search: String, page first: Int = 1, pages: Int = 50) async throws -> (files: [CloudFile], total: Int) {
+    private func listing(folder: String, search: String, page first: Int = 1, pages: Int = 50, limit: Int = Pan123Files.pageSize) async throws -> (files: [CloudFile], total: Int) {
         var files: [CloudFile] = [], total = 0
         for page in first..<(first + pages) {
             let answer = try await call("/file/list/new", query: [
-                ("driveId", "0"), ("limit", "\(Self.pageSize)"), ("next", "0"), ("orderBy", "file_id"), ("orderDirection", "desc"),
+                ("driveId", "0"), ("limit", "\(limit)"), ("next", "0"), ("orderBy", "file_id"), ("orderDirection", "desc"),
                 ("parentFileId", folder), ("trashed", "false"), ("SearchData", search), ("Page", "\(page)"),
                 ("OnlyLookAbnormalFile", "0"), ("event", "homeListFile"), ("operateType", "4"), ("inDirectSpace", "false"),
             ])
