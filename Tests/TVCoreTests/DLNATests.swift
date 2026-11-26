@@ -445,3 +445,37 @@ func castRelayDoesNotIssuePlaylistRoutesAcrossReset(declaredPlaylist: Bool) asyn
     await relay.reset()
     #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false) != first)
 }
+
+@Test func castRelayStopEndsTransfersAndUnfinishedRequests() async throws {
+    let (requests, received) = AsyncStream<Void>.makeStream()
+    let release = DispatchSemaphore(value: 0)
+    // Answers only once released (or after 10 s): a stop that didn't end the transfer would see this full answer.
+    let upstream = try await FixtureServer.start { _, _ in
+        received.yield(())
+        _ = release.wait(timeout: .now() + 10)
+        return (200, "video/mp4", Data(count: 1024))
+    }
+    defer { release.signal(); upstream.stop() }
+    let relay = CastRelay()
+    let address = try await relay.address(for: URL(string: "http://127.0.0.1:\(upstream.port)/movie.mp4")!, headers: [:], playlist: false, towards: nil)
+    let partial = URLSession.shared.streamTask(withHostName: "127.0.0.1", port: try #require(address.port))
+    partial.resume()
+    try await partial.write(Data("GET /".utf8), timeout: 5) // A request head that never ends.
+    let transfer = Task { try await URLSession.shared.data(from: address) }
+    var arrivals = requests.makeAsyncIterator()
+    try #require(await arrivals.next() != nil)
+    await relay.stop()
+    if case .success(let (data, response)) = await transfer.result {
+        Issue.record("the transfer went on after stop: status=\((response as? HTTPURLResponse)?.statusCode ?? 0) bytes=\(data.count)")
+    }
+    do {
+        let (data, atEOF) = try await partial.readData(ofMinLength: 1, maxLength: 64, timeout: 5)
+        #expect(atEOF && (data ?? Data()).isEmpty)
+    } catch {} // Reset by the relay: closed as well.
+    // The next cast starts the relay again.
+    let other = try await FixtureServer.start { _, _ in (200, "video/mp4", Data(count: 16)) }
+    defer { other.stop() }
+    let again = try await relay.address(for: URL(string: "http://127.0.0.1:\(other.port)/next.mp4")!, headers: [:], playlist: false, towards: nil)
+    let (body, response) = try await URLSession.shared.data(from: again)
+    #expect((response as? HTTPURLResponse)?.statusCode == 200 && body.count == 16)
+}
