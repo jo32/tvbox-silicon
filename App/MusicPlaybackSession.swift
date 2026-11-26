@@ -528,6 +528,9 @@ typealias MusicTrack = TVCore.MusicTrack
         observers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.songEnded(run: run) }
         })
+        // The TV's screen saver starting paused the music for a moment (#2397): hold the display
+        // while a song plays, as the video player does.
+        player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
         if let seconds { player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
         position = seconds ?? 0
@@ -911,6 +914,7 @@ typealias MusicTrack = TVCore.MusicTrack
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
         player.pause()
+        player.preventsDisplaySleepDuringVideoPlayback = false
         player.replaceCurrentItem(with: nil)
     }
 
