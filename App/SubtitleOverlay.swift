@@ -369,8 +369,10 @@ extension View {
             descriptions = options.map { option in
                 let title = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first?.stringValue
                 let detail = title.flatMap { details[$0] }
+                // A file that wasn't repackaged has no details: its audio codec comes from the option itself (#2204).
+                let format = detail?.format ?? (detail == nil ? TrackLabel.format(subTypes: option.mediaSubTypes.map(\.uint32Value)) : nil)
                 return TrackLabel.Option(displayName: option.displayName, language: option.extendedLanguageTag ?? option.locale?.identifier,
-                                         title: detail?.title.isEmpty == false ? detail?.title : title, format: detail?.format, rendition: title)
+                                         title: detail?.title.isEmpty == false ? detail?.title : title, format: format, rendition: title)
             }
             names = Dictionary(zip(options, TrackLabel.names(descriptions))) { first, _ in first }
         }
@@ -397,7 +399,7 @@ extension View {
         let subtitles = await Self.subtitleGroup(item)
         guard self.item === item else { return }
         legible = subtitles
-        #if os(iOS)
+        #if !os(tvOS)
         let group = try? await item.asset.loadMediaSelectionGroup(for: .audible)
         guard self.item === item else { return }
         let details = (item.asset as? AVURLAsset).map { Remux.trackDetails($0.url).audio } ?? [:]

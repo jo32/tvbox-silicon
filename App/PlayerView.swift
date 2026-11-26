@@ -1986,6 +1986,9 @@ private struct DesktopOptionsMenu: View, Equatable {
             if session.qualities.count > 1 {
                 Menu(L10n.text("Quality")) { QualityPicker(session: session) }
             }
+            // Audio with full TrackLabel details: AVPlayerView's own menu names tracks by language alone, so several
+            // Chinese tracks all read "中文" (#2204).
+            MediaAudioMenus(session: session)
             Menu(L10n.text("Subtitles")) {
                 MacSubtitleFiles(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
                                  searchOnline: { searchesSubtitles = true })
@@ -2142,6 +2145,32 @@ struct QualityPicker: View {
             ForEach(session.qualities) { Text($0.label).tag($0.id) }
         }
         .pickerStyle(.inline)
+    }
+}
+
+/// The Audio menus for the Mac options menu (#2204): the item's own tracks with `TrackLabel` details, or the choices a
+/// file offers that AVFoundation can't switch between (#428). iPhone and iPad have the same in their own menu.
+struct MediaAudioMenus: View {
+    let session: PlaybackSession
+
+    var body: some View {
+        if let audio = session.mediaTracks.audio, audio.options.count > 1 {
+            Menu(L10n.text("Audio")) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.mediaTracks.selected(in: audio) },
+                                                              set: { session.mediaTracks.select($0, in: audio) })) {
+                    ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
+                }
+                .pickerStyle(.inline)
+            }
+        }
+        if session.audioChoices.count > 1 {
+            Menu(L10n.text("Audio")) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                    ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .pickerStyle(.inline)
+            }
+        }
     }
 }
 #endif

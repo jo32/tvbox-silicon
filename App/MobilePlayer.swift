@@ -884,7 +884,7 @@ struct MobilePlayerView: View {
                 EmbeddedSubtitlePicker(session: session)
                 ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
                                      searchOnline: { searchesSubtitles = true })
-                if session.playsDriveCopy { Text(L10n.text(Self.driveCopyNote)) }
+                if session.playsDriveCopy { Text(L10n.text(ExternalSubtitles.driveCopyNote)) }
             }
             if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
                 // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
@@ -941,7 +941,6 @@ struct MobilePlayerView: View {
     }
 
     private static let speeds: [Float] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
-    static let driveCopyNote = "The drive plays only a compressed copy of this video for this account, without its own subtitles. Use Search Online to add some."
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
     }

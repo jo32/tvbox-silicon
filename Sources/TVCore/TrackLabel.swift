@@ -57,6 +57,25 @@ public enum TrackLabel {
         return parts.isEmpty ? option.displayName : parts.joined(separator: " · ")
     }
 
+    /// An audio format name from an option's `mediaSubTypes` FourCCs, when the file wasn't repackaged
+    /// (`Remux.trackDetails` is empty). Nil for subtitles or unknown codecs.
+    public static func format(subTypes: [UInt32]) -> String? {
+        for code in subTypes {
+            switch code {
+            case 0x6161_6320, 0x6161_6368, 0x6161_6370: return "AAC"     // 'aac ', 'aach', 'aacp'
+            case 0x6163_2d33: return "AC-3"                               // 'ac-3'
+            case 0x6563_2d33: return "E-AC-3"                             // 'ec-3'
+            case 0x616c_6163: return "ALAC"                               // 'alac'
+            case 0x664c_6143: return "FLAC"                               // 'fLaC'
+            case 0x4f70_7573: return "Opus"                               // 'Opus'
+            case 0x6c70_636d: return "LPCM"                               // 'lpcm'
+            case 0x2e6d_7033: return "MP3"                                // '.mp3'
+            default: continue
+            }
+        }
+        return nil
+    }
+
     /// A language's names a title may repeat: in English, in itself, and in this device's language.
     private static func names(of language: String?) -> Set<String> {
         guard let language else { return [] }
