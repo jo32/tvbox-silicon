@@ -393,10 +393,14 @@ class Session:
     def proxy_response(self, path, request_headers=None):
         """Call the spider's localProxy and normalize its [status, mime, body, headers?, base64?] result."""
         params = dict(parse_qsl(urlsplit(path).query, keep_blank_values=True))
-        params['headers'] = dict(request_headers or {})
-        incoming_range = next((value for key, value in params['headers'].items() if key.lower() == 'range'), None)
+        # Query parameters belong to the spider: legacy URLs encode `headers` as JSON.
+        # Publish incoming HTTP separately and only fill aliases absent from that query.
+        params['request_headers'] = dict(request_headers or {})
+        params.setdefault('headers', params['request_headers'])
+        incoming_range = next((value for key, value in params['request_headers'].items() if key.lower() == 'range'), None)
         if incoming_range:
-            params['range'] = params['Range'] = incoming_range
+            params.setdefault('range', incoming_range)
+            params.setdefault('Range', incoming_range)
         result = list(self.spider.localProxy(params) or [])
         status = int(result[0]) if result else 404
         mime = str(result[1]) if len(result) > 1 and result[1] else 'application/octet-stream'

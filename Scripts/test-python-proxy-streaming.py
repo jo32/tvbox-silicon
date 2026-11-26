@@ -4,6 +4,7 @@ import base64
 import http.client
 import importlib.util
 import io
+import json
 import gzip
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,7 +12,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, quote
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('proxy_host', ROOT / 'Runtime/PythonHost/host.py')
@@ -80,6 +81,9 @@ class ProxyStreamingTests(unittest.TestCase):
             def localProxy(self, params):
                 test.calls.append(params)
                 kind = params.get('kind')
+                if kind == 'legacy':
+                    referer = json.loads(params['headers'])['Referer']
+                    return [200, 'text/plain', referer + '|' + params['range'] + '|' + params['Range']]
                 if kind == 'range':
                     response = requests.get(origin + '/range', headers=params.get('headers', {}), stream=True)
                     return [200, 'video/mp4', response]
@@ -155,6 +159,14 @@ class ProxyStreamingTests(unittest.TestCase):
         self.assertEqual(self.calls[0].get('range'), 'bytes=3-7')
         self.assertEqual(self.calls[0].get('Range'), 'bytes=3-7')
         self.assertEqual(self.calls[0].get('headers', {}).get('Range'), 'bytes=3-7')
+
+    def test_existing_query_headers_and_ranges_keep_their_plugin_contract(self):
+        query = 'legacy&headers=' + quote('{"Referer":"https://example.invalid/source"}')
+        query += '&range=legacy-lower&Range=legacy-upper'
+        _, response = self.client(query, headers={'Range': 'bytes=0-'})
+        self.assertEqual(response.status, 206)
+        self.assertEqual(response.read(), b'https://example.invalid/source|legacy-lower|legacy-upper')
+        self.assertEqual(self.calls[0]['request_headers']['Range'], 'bytes=0-')
 
     def test_origin_failure_is_not_misreported_as_success(self):
         _, response = self.client('forbidden')
