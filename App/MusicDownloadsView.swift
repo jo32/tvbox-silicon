@@ -4,7 +4,7 @@ import TVCore
 /// Songs saved for listening without a connection, and those still on their way. Apple TV keeps them
 /// in Caches, as it does episodes, and tvOS may clear them when it runs low on space.
 struct MusicDownloadsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     /// Inside the Downloads page, which has its own title.
     var embedded = false
     @State private var confirmsDeleteAll = false
@@ -42,7 +42,7 @@ struct MusicDownloadsView: View {
         } else {
             page.screenTitle(Self.title)
                 #if os(macOS)
-                .toolbar(removing: .title)
+                .compatToolbarRemovingTitle()
                 #endif
         }
     }
@@ -119,7 +119,7 @@ struct MusicDownloadsView: View {
                         ForEach(collections) { MusicDownloadedTile(entry: $0, size: Self.tile) }
                     }
                 }
-                .scrollClipDisabled()
+                .compatScrollClipDisabled()
             }
             .padding(.top, 24)
             #endif
@@ -162,7 +162,7 @@ struct MusicDownloadsView: View {
 /// the songs still on their way, and Remove Download for all of it.
 struct MusicDownloadedCollectionView: View {
     let id: String
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsRemove = false
     private var library: MusicDownloadLibrary { .shared }
@@ -204,7 +204,7 @@ struct MusicDownloadedCollectionView: View {
             .screenBackdrop()
             .screenTitle(collection.title)
             #if os(macOS)
-            .toolbar(removing: .title)
+            .compatToolbarRemovingTitle()
             #endif
             .musicPlayerInset()
             #if os(tvOS)
@@ -327,7 +327,7 @@ private struct MusicPendingActions: View {
         .controlButton()
         #else
         .font(.subheadline.weight(.semibold))
-        .buttonStyle(.bordered).buttonBorderShape(.capsule).appControlSize(.small)
+        .buttonStyle(.bordered).compatButtonBorderShape(.roundedRectangle).appControlSize(.small)
         #endif
         .fixedSize()
     }

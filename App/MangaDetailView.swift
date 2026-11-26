@@ -13,7 +13,7 @@ struct MangaReading: Identifiable {
 /// A comic's page: cover, details, tags, chapters, and the Read / Continue button.
 struct MangaDetailView: View {
     let comic: MangaComic
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @State private var details: MangaDetails?
     @State private var failure: String?
     @State private var reading: MangaReading?
@@ -39,7 +39,7 @@ struct MangaDetailView: View {
             .modifier(MangaNoticeBanner())
             .task { if details == nil { await load() } }
             #if os(macOS)
-            .onChange(of: reading?.id) { _, _ in
+            .compatOnChange(of: reading?.id) { _, _ in
                 if let reading { openRoute?(Route { AnyView(MangaReaderView(reading: reading)) }); self.reading = nil }
             }
             #else
@@ -221,7 +221,7 @@ struct MangaDetailView: View {
                     // As the episode lists: the heading turns the list around, its arrow showing the order.
                     Button { withAnimation(.smooth) { newestFirst.toggle() } } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: newestFirst ? "arrow.down" : "arrow.up").contentTransition(.symbolEffect(.replace))
+                            Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                             Text(L10n.text("Chapters"))
                             Text("\(chapters.count)").monospacedDigit().foregroundStyle(.secondary)
                         }
@@ -278,7 +278,7 @@ struct MangaDetailView: View {
                     Button { withAnimation(.smooth(duration: 0.4)) { newestFirst.toggle() } } label: {
                         Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                             .font(.subheadline.weight(.bold))
-                            .contentTransition(.symbolEffect(.replace))
+                            
                             .frame(width: 34, height: 34)
                             .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
                             .contentShape(Circle())
@@ -419,7 +419,7 @@ struct MangaDetailView: View {
                 Button { withAnimation(.smooth) { store.toggleFavorite(current) } } label: {
                     Image(systemName: saved ? "heart.fill" : "heart").font(.system(size: 21))
                         .foregroundStyle(saved ? AnyShapeStyle(Brand.rose) : AnyShapeStyle(.white))
-                        .contentTransition(.symbolEffect(.replace))
+                        
                         .frame(width: 54, height: 54).glassSurface(.regular, in: Circle()).contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -562,7 +562,7 @@ struct MangaDetailView: View {
                 .padding(.horizontal, MacHeroMetrics.gutter)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
     }
 

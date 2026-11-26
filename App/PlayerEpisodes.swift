@@ -9,7 +9,7 @@ struct PlayerEpisodesButton<Label: View>: View {
     let channel: Channel
     @Binding var isPresented: Bool
     @ViewBuilder let label: () -> Label
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     var body: some View {
         if PlayerEpisodesSheet.offered(for: channel, in: store) {
@@ -35,10 +35,10 @@ extension View {
 struct PlayerSheetPresentation<Sheet: View>: ViewModifier {
     @Binding var isPresented: Bool
     @ViewBuilder let sheet: () -> Sheet
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented) { sheet().environment(store) }
+        content.sheet(isPresented: $isPresented) { sheet().environmentObject(store) }
     }
 }
 
@@ -47,9 +47,9 @@ struct PlayerSheetPresentation<Sheet: View>: ViewModifier {
 /// Half the screen on a phone, so the picture stays in view; the episode playing is marked and scrolled to.
 struct PlayerEpisodesSheet: View {
     let channel: Channel
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
-    @State private var tmdb = TMDBLookup()
+    @StateObject private var tmdb = TMDBLookup()
     @State private var selectedFlag: String?
     /// The page of a long series shown (#1464); nil for the one with the episode playing.
     @State private var page: Int?
@@ -97,7 +97,7 @@ struct PlayerEpisodesSheet: View {
         .frame(minWidth: 620, idealWidth: 720, minHeight: 460, idealHeight: 560)
         #endif
         // The chosen episode is playing: the sheet has done its job.
-        .onChange(of: store.playing) { _, _ in if picked { dismiss() } }
+        .compatOnChange(of: store.playing) { _, _ in if picked { dismiss() } }
         .task(id: store.catalog(for: playing)?.video.id) { await lookUp() }
     }
 
@@ -124,12 +124,12 @@ struct PlayerEpisodesSheet: View {
                     SourceStrip(items: flags.map { .init(id: $0, name: $0.isEmpty ? L10n.text("Play") : $0) }, selection: flag) {
                         selectedFlag = $0; page = nil
                     }
-                    .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                    .compatContentMargins(.horizontal, 16, for: .scrollContent).compatScrollClipDisabled()
                     .padding(.horizontal, -16)
                 }
                 if let shownPage {
                     EpisodePageTabs(pages: pages, selection: shownPage, reversed: reversesEpisodes) { page = $0 }
-                        .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                        .compatContentMargins(.horizontal, 16, for: .scrollContent).compatScrollClipDisabled()
                         .padding(.horizontal, -16)
                 }
                 if let error = store.episodeError {
@@ -211,7 +211,7 @@ struct PlayerEpisodesSheet: View {
                 .contextMenu { if labels[episode.id] != nil { Text(episode.name) } }
             }
         }
-        .scrollTargetLayout()
+        .compatScrollTargetLayout()
         // Tiles that turn into rows or cards change at once: morphing, each tile shrank or grew across the others.
         .animation(nil, value: showsStills)
     }

@@ -105,7 +105,7 @@ private struct MacChromeButton: ViewModifier {
                 .frame(width: 34, height: 34)
                 .playerBarButton()
         } else {
-            content.controlButton().buttonBorderShape(.circle).appControlSize(.large)
+            content.controlButton().compatButtonBorderShape(.roundedRectangle).appControlSize(.large)
         }
     }
 }
@@ -170,24 +170,15 @@ extension View {
     /// A page whose artwork runs under the window toolbar: the toolbar draws no backing and, on macOS 26, the scroll
     /// edge is soft, so the art fades under the toolbar instead of stopping at a solid band.
     @ViewBuilder func artUnderToolbar() -> some View {
-        if #available(macOS 26, *) {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar).scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        }
+        // 舊系統沒有可隱藏的工具列背景，保留原視圖，不能回傳空分支（@ViewBuilder 會變成 EmptyView）。
+        self
     }
 
     /// A page whose hero runs up to the window's top edge, as in the TV app: while the hero is under the toolbar the
     /// toolbar draws nothing over it, neither a backing nor the scroll edge's blur. Once the page scrolls past the hero
     /// the soft edge comes back, so rows don't run sharp under the toolbar's buttons.
     @ViewBuilder func heroUnderToolbar(_ underHero: Bool) -> some View {
-        if #available(macOS 26, *) {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-                .scrollEdgeEffectStyle(.soft, for: .top)
-                .scrollEdgeEffectHidden(underHero, for: .top)
-        } else {
-            toolbarBackgroundVisibility(underHero ? .hidden : .automatic, for: .windowToolbar)
-        }
+        self
     }
     #endif
 
@@ -204,7 +195,11 @@ extension View {
     /// so a drag on the scroll view stands in.
     @ViewBuilder func onScrollByHand(_ action: @escaping () -> Void) -> some View {
         if #available(iOS 18, tvOS 18, *) {
+            #if os(macOS)
+            self
+            #else
             onScrollPhaseChange { _, phase in if phase == .interacting { action() } }
+            #endif
         } else {
             #if os(tvOS)
             self
@@ -218,7 +213,11 @@ extension View {
     /// against its scroll view's.
     @ViewBuilder func onScrolledIntoView(threshold: Double, _ action: @escaping (Bool) -> Void) -> some View {
         if #available(iOS 18, tvOS 18, *) {
+            #if os(macOS)
+            self
+            #else
             onScrollVisibilityChange(threshold: threshold, action)
+            #endif
         } else {
             onGeometryChange(for: Bool.self) { geometry in
                 let own = CGRect(origin: .zero, size: geometry.size)
@@ -232,7 +231,7 @@ extension View {
     #if !os(tvOS)
     /// `searchFocused`; before iOS 18 a search field can't be focused from code, so it keeps the viewer's focus.
     @ViewBuilder func searchFieldFocused(_ focused: FocusState<Bool>.Binding) -> some View {
-        if #available(iOS 18, *) { searchFocused(focused) } else { self }
+        if #available(iOS 18, macOS 15, *) { searchFocused(focused) } else { self }
     }
     #endif
 
@@ -249,25 +248,45 @@ extension View {
 
     /// The breathing symbol effect; iOS 17 and tvOS 17 have no breathe, so the symbol pulses instead.
     @ViewBuilder func breathingSymbol() -> some View {
+        #if os(macOS)
+        if #available(macOS 14, *) {
+            symbolEffect(.pulse, options: .repeating.speed(0.4))
+        } else {
+            self
+        }
+        #else
         if #available(iOS 18, tvOS 18, *) {
             symbolEffect(.breathe, options: .repeat(.periodic(delay: 2.5)))
         } else {
             symbolEffect(.pulse, options: .repeating.speed(0.4))
         }
+        #endif
     }
 }
 
 extension Color {
     /// `mix(with:by:)`; before iOS 18 and tvOS 18 a plain blend in sRGB.
     func blend(with other: Color, by fraction: Double) -> Color {
-        if #available(iOS 18, tvOS 18, *) { return mix(with: other, by: fraction) }
+        if #available(iOS 18, macOS 15, tvOS 18, *) { return mix(with: other, by: fraction) }
+        #if os(macOS)
+        if #available(macOS 14, *) {
+            let environment = EnvironmentValues()
+            let from = resolve(in: environment), to = other.resolve(in: environment)
+            func encoded(_ linear: Float) -> Double { Double(pow(max(0, linear), 1 / 2.2)) }
+            func mixed(_ a: Float, _ b: Float) -> Double { encoded(a) + (encoded(b) - encoded(a)) * fraction }
+            return Color(.sRGB, red: mixed(from.red, to.red), green: mixed(from.green, to.green), blue: mixed(from.blue, to.blue),
+                         opacity: Double(from.opacity + (to.opacity - from.opacity) * Float(fraction)))
+        }
+        // macOS 13 沒有 Color.resolve(in:)，退回較接近的其中一個顏色。
+        return fraction < 0.5 ? self : other
+        #else
         let environment = EnvironmentValues()
         let from = resolve(in: environment), to = other.resolve(in: environment)
-        // Resolved components are linear; blending gamma-encoded values looks closer to mix's perceptual default.
         func encoded(_ linear: Float) -> Double { Double(pow(max(0, linear), 1 / 2.2)) }
         func mixed(_ a: Float, _ b: Float) -> Double { encoded(a) + (encoded(b) - encoded(a)) * fraction }
         return Color(.sRGB, red: mixed(from.red, to.red), green: mixed(from.green, to.green), blue: mixed(from.blue, to.blue),
                      opacity: Double(from.opacity + (to.opacity - from.opacity) * Float(fraction)))
+        #endif
     }
 }
 
@@ -420,7 +439,7 @@ extension View {
     /// A cover with captions under it. On Apple TV it takes Discover's focus: the cover itself lifts with the
     /// system's Liquid Glass rim and parallax (the first image in the label, rounded by `shape`) while the captions
     /// stay; there is no plate around the card. Covers inside use `posterClip`, as a clip would cut the rim off.
-    @ViewBuilder func cardButton(_ shape: ButtonBorderShape = .roundedRectangle(radius: 12)) -> some View {
+    @ViewBuilder func cardButton(_ shape: ButtonBorderShape = .roundedRectangle) -> some View {
         #if os(tvOS)
         modifier(TVCardButton(shape: shape))
         #else
@@ -513,7 +532,7 @@ private struct TVCardButton: ViewModifier {
     let shape: ButtonBorderShape
     @State private var cover: CGFloat = 0
     func body(content: Content) -> some View {
-        content.buttonStyle(.borderless).buttonBorderShape(shape)
+        content.buttonStyle(.borderless).compatButtonBorderShape(shape)
             .environment(\.inCardButton, true).environment(\.cardCoverHeight, cover)
             .onPreferenceChange(CardCoverHeightKey.self) { cover = $0 }
     }
@@ -628,7 +647,7 @@ struct LiftButtonStyle: ButtonStyle {
                 .onHover { hovering = $0 }
                 #endif
                 #if os(macOS)
-                .pointerStyle(.link)
+                // pointerStyle 需要 macOS 15；舊系統保留原視圖。
                 #endif
         }
     }
@@ -767,7 +786,7 @@ struct ChipRow<Content: View>: View {
     var body: some View {
         #if os(tvOS)
         // Unclipped so a focused chip's lift and glow aren't cut at the row's ends.
-        ScrollView(.horizontal, showsIndicators: false) { content.padding(.vertical, 8) }.scrollClipDisabled()
+        ScrollView(.horizontal, showsIndicators: false) { content.padding(.vertical, 8) }.compatScrollClipDisabled()
         #else
         // Room inside the strip's clip for the glass chips' edges and hover growth, given back
         // outside so the first chip still lines up with the page.
@@ -1401,7 +1420,7 @@ extension View {
         #elseif os(macOS)
         modifier(MacChromeButton())
         #else
-        controlButton().buttonBorderShape(.circle).appControlSize(.large)
+        controlButton().compatButtonBorderShape(.circle).appControlSize(.large)
         #endif
     }
 

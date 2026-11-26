@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 struct FavoriteHeartButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: FavoriteItem
     let name: String
     /// Draws a dark badge so the heart stays readable on poster artwork.
@@ -16,7 +16,7 @@ struct FavoriteHeartButton: View {
             Image(systemName: on ? "heart.fill" : "heart")
                 .font(onArtwork ? .system(size: 13, weight: .semibold) : .title3)
                 .foregroundStyle(on ? Brand.rose : (onArtwork ? Color.white : Color.secondary))
-                .contentTransition(.symbolEffect(.replace))
+
                 .artworkBadge(onArtwork)
         }
         .buttonStyle(.plain)
@@ -53,7 +53,7 @@ extension View {
 }
 
 struct FavoriteMenuButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: FavoriteItem
     let name: String
     var body: some View {

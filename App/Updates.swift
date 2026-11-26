@@ -4,7 +4,7 @@ import TVCore
 
 /// Tells people when a new version is out and, after they update, what it brings.
 /// Reads the release feed the website publishes; the bundled copy covers offline launches.
-@MainActor @Observable final class Updates {
+@MainActor final class Updates: ObservableObject {
     enum Sheet: Identifiable {
         /// Newer releases to install, newest first.
         case available([ReleaseFeed.Release])
@@ -60,18 +60,18 @@ import TVCore
     func link(for release: ReleaseFeed.Release) -> URL? {
         Self.channel == .testFlight ? feed.testflight?[ReleaseFeed.platform]?.link : release.link()
     }
-    var sheet: Sheet?
+    @Published var sheet: Sheet?
     /// Result of a check someone asked for.
-    var message: String?
+    @Published var message: String?
     #if os(macOS)
     /// The window presenting the sheet or message: the one active when it came, until it's dismissed.
-    var presenter: UUID?
+    @Published var presenter: UUID?
     /// Installs Mac updates in place and relaunches; nil where Get the Update opens the download instead.
     let installer = MacUpdater.make()
     #endif
-    private(set) var checking = false
-    private(set) var lastChecked: Date?
-    private var feed: ReleaseFeed
+    @Published private(set) var checking = false
+    @Published private(set) var lastChecked: Date?
+    @Published private var feed: ReleaseFeed
     private let defaults: UserDefaults
     private let address: URL
     private static let interval: TimeInterval = 6 * 3600
@@ -190,7 +190,7 @@ import TVCore
 /// pill buttons, and a shelf of artwork cards, one per feature.
 struct ReleaseNotesView: View {
     let sheet: Updates.Sheet
-    @Environment(Updates.self) private var updates
+    @EnvironmentObject private var updates: Updates
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -334,7 +334,7 @@ struct ReleaseNotesView: View {
         }
         .padding(.horizontal, Size.margin)
         #if os(tvOS)
-        ScrollView { rows.padding(.vertical, 20) }.scrollIndicators(.hidden).scrollClipDisabled()
+        ScrollView { rows.padding(.vertical, 20) }.scrollIndicators(.hidden).compatScrollClipDisabled()
         #else
         // A sheet sizes to its content, so a long list gets a fixed window (about four rows) and scrolls.
         let height = min(CGFloat((features.count + 1) / 2) * 96, 400)
@@ -348,7 +348,7 @@ struct ReleaseNotesView: View {
         #if os(tvOS)
         ScrollView(.horizontal) { cards.padding(.horizontal, Size.margin) }
             .scrollIndicators(.hidden)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         #else
         // A mouse wheel can't scroll sideways, so the strip adds dragging and arrows floating at its ends.
         ScrollStrip(overlayArrows: true, arrowCenter: Size.card * 9 / 32) { cards.padding(.horizontal, Size.margin) }
@@ -532,7 +532,7 @@ private struct ReleaseBackdrop: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !animated)) { context in
             let drift = Float(sin(context.date.timeIntervalSinceReferenceDate * 0.3)) * 0.12
-            if #available(iOS 18, tvOS 18, *) {
+            if #available(iOS 18, macOS 15, tvOS 18, *) {
                 MeshGradient(width: 3, height: 3, points: [
                     [0, 0], [0.5, 0], [1, 0],
                     [0, 0.5], [0.5 + drift, 0.42 - drift / 2], [1, 0.5],
@@ -688,13 +688,13 @@ private struct UpdatePresentation: ViewModifier {
         #endif
         let item = Binding(get: { shown ? updates.sheet : nil }, set: { updates.sheet = $0 })
         #if os(macOS)
-        let presented = content.sheet(item: item) { ReleaseNotesView(sheet: $0).environment(updates) }
-            .onChange(of: active && pending && updates.presenter == nil, initial: true) { _, claim in
+        let presented = content.sheet(item: item) { ReleaseNotesView(sheet: $0).environmentObject(updates) }
+            .compatOnChange(of: active && pending && updates.presenter == nil, initial: true) { _, claim in
                 if claim { updates.presenter = id }
             }
-            .onChange(of: pending) { _, pending in if !pending { updates.presenter = nil } }
+            .compatOnChange(of: pending) { _, pending in if !pending { updates.presenter = nil } }
         #else
-        let presented = content.fullScreenCover(item: item) { ReleaseNotesView(sheet: $0).environment(updates) }
+        let presented = content.fullScreenCover(item: item) { ReleaseNotesView(sheet: $0).environmentObject(updates) }
         #endif
         return presented
         .alert(L10n.text("Software Update"), isPresented: Binding(get: { shown && updates.message != nil }, set: { if !$0 { updates.message = nil } })) {

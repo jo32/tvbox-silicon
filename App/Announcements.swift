@@ -3,17 +3,17 @@ import TVCore
 
 /// Messages the website publishes for the people using the app (`website/public/messages.json`), each
 /// shown once in an alert. Unlike release notes they also reach App Store and TestFlight builds.
-@MainActor @Observable final class Announcements {
+@MainActor final class Announcements: ObservableObject {
     /// The first message this device hasn't shown; it waits while something else is on screen.
     var current: MessageFeed.Message? { pending.first }
     /// Messages not shown yet; they put a New badge on Messages.
     var unread: [MessageFeed.Message] { pending }
     /// Every message for this build that is live now, read or not, in the feed's order: the Messages page.
     var all: [MessageFeed.Message] { feed.messages.filter { $0.applies(to: build) } }
-    private var pending: [MessageFeed.Message] = []
-    private var feed: MessageFeed
-    private var checking = false
-    private var lastChecked: Date?
+    @Published private var pending: [MessageFeed.Message] = []
+    @Published private var feed: MessageFeed
+    @Published private var checking = false
+    @Published private var lastChecked: Date?
     private let build: MessageFeed.Build
     private let defaults: UserDefaults
     private let address: URL
@@ -139,7 +139,7 @@ private struct AnnouncementAlert: ViewModifier {
 
 /// Every message the website has for this device. Opening it counts as reading them, so none pops up later.
 struct MessagesView: View {
-    @Environment(Announcements.self) private var announcements
+    @EnvironmentObject private var announcements: Announcements
     @Environment(\.openURL) private var openURL
     /// The messages that were unread when the page opened; they keep a dot while it is on screen.
     @State private var fresh: Set<String> = []

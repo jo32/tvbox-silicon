@@ -2,20 +2,20 @@ import SwiftUI
 import TVCore
 
 /// The Manga section's state: installed Venera sources, the shelf (favorites, reading history) and reader settings.
-@MainActor @Observable final class MangaStore {
+@MainActor final class MangaStore: ObservableObject {
     static let shared = MangaStore()
 
-    private(set) var sources: [MangaInstalledSource] = MangaSources.shared.installed
-    private(set) var repositories: [URL] = MangaSources.shared.repositories
-    private(set) var favorites: [MangaLibrary.Favorite] = MangaLibrary.load("favorites.json", as: [MangaLibrary.Favorite].self) ?? []
-    private(set) var history: [MangaLibrary.Progress] = MangaLibrary.load("history.json", as: [MangaLibrary.Progress].self) ?? []
+    @Published private(set) var sources: [MangaInstalledSource] = MangaSources.shared.installed
+    @Published private(set) var repositories: [URL] = MangaSources.shared.repositories
+    @Published private(set) var favorites: [MangaLibrary.Favorite] = MangaLibrary.load("favorites.json", as: [MangaLibrary.Favorite].self) ?? []
+    @Published private(set) var history: [MangaLibrary.Progress] = MangaLibrary.load("history.json", as: [MangaLibrary.Progress].self) ?? []
     /// New chapters of the favorites (#1105).
-    private(set) var updates = MangaLibrary.load("updates.json", as: MangaUpdates.self) ?? MangaUpdates()
-    private var checkingUpdates = false
+    @Published private(set) var updates = MangaLibrary.load("updates.json", as: MangaUpdates.self) ?? MangaUpdates()
+    @Published private var checkingUpdates = false
     /// Shown on the page that started it: a message from a source (UI.showMessage).
-    var notice: String?
+    @Published var notice: String?
     /// Until when a site makes requests wait (拷贝漫画's "too many requests").
-    var throttledUntil: Date?
+    @Published var throttledUntil: Date?
     /// The source the Browse page shows.
     var selectedSource: String? {
         didSet { UserDefaults.standard.set(selectedSource, forKey: "manga.source") }
@@ -24,7 +24,7 @@ import TVCore
         didSet { UserDefaults.standard.set(readerMode.rawValue, forKey: "manga.readerMode") }
     }
     /// Comics whose reading direction differs from the default, by comic.
-    private var modes: [String: String] = UserDefaults.standard.dictionary(forKey: "manga.readerModes") as? [String: String] ?? [:]
+    @Published private var modes: [String: String] = UserDefaults.standard.dictionary(forKey: "manga.readerModes") as? [String: String] ?? [:]
 
     private init() {
         selectedSource = UserDefaults.standard.string(forKey: "manga.source")
@@ -356,7 +356,7 @@ struct MangaShelfRow: View {
             .padding(.vertical, 24)
             #endif
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
     }
 }
 
@@ -442,7 +442,7 @@ struct MangaComicGrid: View {
 
 /// A source's message, shown briefly at the bottom of the page.
 struct MangaNoticeBanner: ViewModifier {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
             if let notice = store.notice {
@@ -504,7 +504,7 @@ extension Error {
 
 /// While a site makes requests wait (拷贝漫画's 210), how long is left, under a page's spinner.
 struct MangaWaitNote: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     var body: some View {
         if let until = store.throttledUntil {
             TimelineView(.periodic(from: .now, by: 1)) { context in

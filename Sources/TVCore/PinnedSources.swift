@@ -1,14 +1,13 @@
 import Foundation
-import Observation
 
 /// Subscription-qualified keys survive imports and cannot pin an unrelated site's reused key.
-@MainActor @Observable public final class PinnedSources {
-    private var keys: [String]
+@MainActor public final class PinnedSources: ObservableObject {
+    @Published private var keys: [String]
     /// Bumps when the pin list changes, so a cached source row can be reused until then.
-    public private(set) var revision = 0
+    @Published public private(set) var revision = 0
     private let defaults: UserDefaults
     /// Called after the list changes here (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         keys = defaults.stringArray(forKey: "pinnedSources.v1") ?? []

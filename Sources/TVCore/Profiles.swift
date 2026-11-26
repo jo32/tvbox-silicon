@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// One person's library on a shared device (#1456): their subscriptions, favorites, Continue Watching, followed shows,
 /// search history and source choices. The main profile is the library the app always had; each other one keeps its
@@ -23,18 +22,18 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// The profiles on this device and the one open. The list itself lives in the main defaults; it is not synced.
-@MainActor @Observable public final class Profiles {
+@MainActor public final class Profiles: ObservableObject {
     public static let shared = Profiles()
     nonisolated static let listKey = "profiles.v1"
     nonisolated static let currentKey = "profiles.current"
 
     /// The main profile first, then the others in the order they were added.
-    public private(set) var all: [Profile]
-    public private(set) var currentID: String
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let root: URL
-    @ObservationIgnored private let suitePrefix: String
-    @ObservationIgnored private var suites: [String: UserDefaults] = [:]
+    @Published public private(set) var all: [Profile]
+    @Published public private(set) var currentID: String
+    private let defaults: UserDefaults
+    private let root: URL
+    private let suitePrefix: String
+    private var suites: [String: UserDefaults] = [:]
 
     public init(defaults: UserDefaults = .standard, root: URL? = nil, suitePrefix: String = "com.tvbox.yingxia.profile.") {
         self.defaults = defaults; self.suitePrefix = suitePrefix

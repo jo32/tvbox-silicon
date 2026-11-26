@@ -32,7 +32,7 @@ struct MusicArtwork: View {
 /// It is always the same height; the lyrics and everything else are on the Now Playing screen,
 /// which a tap opens. `inline` is the narrower form beside a minimized tab bar.
 struct MusicMiniPlayer: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     var inline = false
     /// How far the cover and title follow a sideways swipe, which changes the song.
     @State private var swipe: CGFloat = 0

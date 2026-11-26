@@ -119,19 +119,19 @@ struct DiscoverTrailerFraming: Equatable {
     }
 }
 
-@MainActor @Observable private final class DiscoverTrailerPlayback {
+@MainActor private final class DiscoverTrailerPlayback: ObservableObject {
     let player = AVQueuePlayer()
-    var ready = false
+    @Published var ready = false
     /// Nil until a frame has been looked at.
-    var framing: DiscoverTrailerFraming?
+    @Published var framing: DiscoverTrailerFraming?
     /// Bars known, or given up on after a few seconds of frames that couldn't be read: the video may show.
-    var framed = false
-    @ObservationIgnored private var ticks = 0
-    @ObservationIgnored private var output: AVPlayerItemVideoOutput?
-    @ObservationIgnored private var samples = 0
-    private var looper: AVPlayerLooper?
-    private var observer: Any?
-    private var generation = 0
+    @Published var framed = false
+    private var ticks = 0
+    private var output: AVPlayerItemVideoOutput?
+    private var samples = 0
+    @Published private var looper: AVPlayerLooper?
+    @Published private var observer: Any?
+    @Published private var generation = 0
 
     init() {
         player.isMuted = true
@@ -211,14 +211,14 @@ struct DiscoverTrailer: View {
     /// the video, as `backgroundExtensionEffect()` does for SwiftUI content, which can't reach this layer.
     var mirrorWidth: CGFloat = 0
     var readyChanged: (Bool) -> Void = { _ in }
-    @State private var playback = DiscoverTrailerPlayback()
+    @StateObject private var playback = DiscoverTrailerPlayback()
     var body: some View {
         DiscoverTrailerLayer(player: playback.player, mirrorWidth: mirrorWidth, framing: playback.framing)
             // Shown once its bars are known, so a letterboxed trailer doesn't first appear with a black band.
             .opacity(playback.ready && playback.framed ? 1 : 0)
             .animation(.easeOut(duration: 0.4), value: playback.ready && playback.framed)
             .accessibilityHidden(true)
-            .onChange(of: playback.ready && playback.framed) { _, ready in readyChanged(ready) }
+            .compatOnChange(of: playback.ready && playback.framed) { _, ready in readyChanged(ready) }
             .task(id: trailer) { await playback.load(trailer) }
             .onDisappear { playback.stop() }
     }

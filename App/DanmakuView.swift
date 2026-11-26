@@ -83,7 +83,7 @@ struct DanmakuCanvas: View {
             let filter = filter
             engine.load(filter.apply(comments), revision: "\(revision)|\(filter.colors)|\(filter.density.rawValue)|\(DanmakuFilter.stored(filter.words))")
         }
-        .onChange(of: jumps) { engine.jumped(to: clock()) }
+        .compatOnChange(of: jumps) { engine.jumped(to: clock()) }
     }
 }
 
@@ -117,7 +117,7 @@ struct DanmakuDisplaySettings: View {
 #if !os(tvOS)
 /// Display controls beside the area in the player's menu, for whatever comments are playing.
 struct DanmakuStylePickers: View {
-    @Bindable var model: CatalogDanmakuModel
+    @ObservedObject var model: CatalogDanmakuModel
 
     var body: some View {
         DanmakuTextStylePickers(fontSize: $model.fontSize, opacity: $model.opacity)
@@ -585,8 +585,8 @@ struct DanmakuListView: View {
             }
             .animation(.smooth(duration: 0.3), value: following)
             .onAppear { follow(proxy, animated: false) }
-            .onChange(of: now) { _, _ in if following { follow(proxy, animated: true) } }
-            .onChange(of: query) { _, text in if text.isEmpty { follow(proxy, animated: false) } }
+            .compatOnChange(of: now) { _, _ in if following { follow(proxy, animated: true) } }
+            .compatOnChange(of: query) { _, text in if text.isEmpty { follow(proxy, animated: false) } }
         }
     }
 

@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// Where a download came from: enough to resolve the episode again when its links expire.
 public struct DownloadSource: Codable, Hashable, Sendable {
@@ -114,25 +113,25 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 /// Downloaded episodes and the queue that fetches them. A fixed number of downloads run at once
 /// (`simultaneous`); the rest wait in order. Progress survives pausing, quitting and expired links:
 /// each download keeps its finished pieces on disk and resolves the episode again when needed.
-@MainActor @Observable public final class DownloadLibrary {
+@MainActor public final class DownloadLibrary: ObservableObject {
     public static let shared = DownloadLibrary()
     /// Addresses of downloaded episodes for the player: `tvbox-download://<id>`.
     public static let scheme = "tvbox-download"
 
-    public private(set) var items: [DownloadItem] = []
+    @Published public private(set) var items: [DownloadItem] = []
     /// Bytes per second for each running download, smoothed over a few seconds.
-    public private(set) var rates: [String: Double] = [:]
+    @Published public private(set) var rates: [String: Double] = [:]
     /// Disk use, refreshed by `measure()`.
-    public private(set) var usage = Usage()
+    @Published public private(set) var usage = Usage()
     public struct Usage: Sendable, Equatable {
         public var downloads: Int64 = 0
         public var available: Int64?
         public var capacity: Int64?
     }
     /// How many downloads run at once, 1 to 4.
-    public var simultaneous: Int {
+    @Published public var simultaneous: Int {
         didSet {
-            // @Observable runs didSet again for an assignment made inside it, so only assign when clamping.
+            // 只在需要限縮時指派，避免每次 didSet 都寫回使用者設定。
             let clamped = min(max(simultaneous, 1), 4)
             guard clamped == simultaneous else { simultaneous = clamped; return }
             defaults.set(simultaneous, forKey: "downloadsSimultaneous")
@@ -140,17 +139,17 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         }
     }
     /// Resolves an episode to its current media address; set by the app, which knows the sources.
-    @ObservationIgnored public var resolver: (@MainActor @Sendable (DownloadItem) async throws -> Channel)?
+    public var resolver: (@MainActor @Sendable (DownloadItem) async throws -> Channel)?
     /// Called each time a download starts running. The iOS app uses it to keep downloads going in the background.
-    @ObservationIgnored public var onStart: (@MainActor () -> Void)?
+    public var onStart: (@MainActor () -> Void)?
 
     public let root: URL
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let session: URLSession
-    @ObservationIgnored private var running: [String: (run: UUID, task: Task<Void, Never>, meter: DownloadMeter)] = [:]
-    @ObservationIgnored private var samples: [String: (date: Date, bytes: Int64)] = [:]
-    @ObservationIgnored private var ticker: Task<Void, Never>?
-    @ObservationIgnored private var savedAt = Date.distantPast
+    private let defaults: UserDefaults
+    private let session: URLSession
+    private var running: [String: (run: UUID, task: Task<Void, Never>, meter: DownloadMeter)] = [:]
+    private var samples: [String: (date: Date, bytes: Int64)] = [:]
+    private var ticker: Task<Void, Never>?
+    private var savedAt = Date.distantPast
 
     public init(root: URL = DownloadLibrary.defaultRoot, defaults: UserDefaults = .standard) {
         self.root = root; self.defaults = defaults

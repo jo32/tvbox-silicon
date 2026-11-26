@@ -6,15 +6,15 @@ import TVCore
 /// The signed-in Yingxia account (Sources/TVCore/Account.swift), for Settings › Account and for whatever Pro unlocks:
 /// ask `AccountStore.shared.isPro`. The last copy of the account is kept, so Pro holds offline and Settings shows the
 /// name at once.
-@MainActor @Observable final class AccountStore {
+@MainActor final class AccountStore: ObservableObject {
     static let shared = AccountStore()
 
-    private(set) var account: Account?
+    @Published private(set) var account: Account?
     /// A Telegram sign-in waiting for the person to tap Start in the bot.
-    private(set) var telegramLogin: AccountService.TelegramLogin?
-    private(set) var busy = false
-    private var refreshed: Date?
-    private var sandboxAppTransaction: Bool?
+    @Published private(set) var telegramLogin: AccountService.TelegramLogin?
+    @Published private(set) var busy = false
+    @Published private var refreshed: Date?
+    @Published private var sandboxAppTransaction: Bool?
 
     private static let cacheKey = "account.cached"
     private static let ownsKeychainKey = "account.ownsKeychain"

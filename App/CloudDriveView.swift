@@ -4,7 +4,7 @@ import TVCore
 import WebKit
 
 struct CloudDriveView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var accounts = CloudDriveAccounts()
     @State private var login: CloudProvider?
     /// Baidu and Aliyun sign in with a code to scan, as on Apple TV.
@@ -334,7 +334,7 @@ private struct CloudLoginBrowser: NSViewRepresentable {
 /// drive's own sign-in page, with the code for another phone as the alternative. Plugins read the
 /// saved sign-in on their next request.
 struct CloudDriveView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var accounts = CloudDriveAccounts()
     @State private var login: CloudProvider?
     @State private var error: String?

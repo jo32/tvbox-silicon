@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 struct HomeView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     private var openSection = SectionOpener()
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -184,7 +184,7 @@ struct HomeView: View {
             }
         }
         .padding(.horizontal, welcomeInset)
-        .containerRelativeFrame(.vertical, alignment: .center) { height, _ in height * 0.82 }
+
         #if os(tvOS)
         // Moving right out of the sidebar lands on the primary action, not the secondary one.
         .defaultFocus($primaryFocused, true, priority: .userInitiated)
@@ -345,7 +345,7 @@ private struct FavoriteTile<Content: View>: View {
 
 /// One of the 12 newest favorites on Watch Now, in the same panel as a channel card.
 private struct HomeFavoriteCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.stripDrag) private var drag
     let item: FavoriteItem
     #if os(tvOS)

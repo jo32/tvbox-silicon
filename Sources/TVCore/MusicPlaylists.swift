@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 
 /// A playlist the listener made (#1568): a name and songs, in the order they were added.
 public struct MusicPlaylist: Identifiable, Codable, Hashable, Sendable {
@@ -14,8 +14,8 @@ public struct MusicPlaylist: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// The listener's own playlists, newest first, kept in user defaults beside the favorites (and so per profile).
-@MainActor @Observable public final class MusicPlaylists {
-    public private(set) var playlists: [MusicPlaylist] = []
+@MainActor public final class MusicPlaylists: ObservableObject {
+    @Published public private(set) var playlists: [MusicPlaylist] = []
     private let defaults: UserDefaults
     private static let storageKey = "musicPlaylists"
 

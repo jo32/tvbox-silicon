@@ -3,7 +3,7 @@ import TVCore
 
 /// Installed comic sources, the source lists they come from, and adding one by its address.
 struct MangaSourcesView: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @State private var address = ""
     @State private var repository = ""
     @State private var working = false
@@ -42,7 +42,7 @@ struct MangaSourcesView: View {
             SettingsGroup(title: L10n.text("Add by Address"), footer: message) {
                 // A plain field: an alert or sheet on a pushed page hangs tvOS 27 (#272).
                 TextField(L10n.text("Source address (.js)"), text: $address)
-                    .textContentType(.URL).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+.keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .onSubmit(installAddress)
                     .padding(.horizontal, 12)
                 TVSettingsAction(title: L10n.text("Install"), busy: working, action: installAddress)
@@ -113,7 +113,7 @@ struct MangaSourcesView: View {
 
             Section {
                 TextField(L10n.text("Source address (.js)"), text: $address)
-                    .textContentType(.URL)
+
                     #if os(iOS)
                     .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     #endif
@@ -155,7 +155,7 @@ struct MangaSourcesView: View {
 /// The sources one list offers, each with Install, Update or Installed.
 struct MangaRepositoryView: View {
     let url: URL
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var entries: [MangaRepositoryEntry]?
     @State private var failure: String?
@@ -295,7 +295,7 @@ struct MangaRepositoryView: View {
 /// One source: its settings, its account, and removing it.
 struct MangaSourceSettingsView: View {
     let key: String
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @State private var info: MangaSourceInfo?
     @State private var failure: String?
     @State private var signedIn = false

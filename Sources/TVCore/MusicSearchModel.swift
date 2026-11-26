@@ -1,25 +1,24 @@
 import Foundation
-import Observation
 
 /// Music search across the catalogs, for songs, albums or playlists. Typing waits 350 ms before
 /// searching; each catalog answers on its own, and results show as they arrive, merged and
 /// ranked. A newer query cancels the older one, and a late answer never replaces newer results.
-@MainActor @Observable public final class MusicSearchModel {
-    public private(set) var query = ""
-    public private(set) var kind: MusicSearchKind = .songs
+@MainActor public final class MusicSearchModel: ObservableObject {
+    @Published public private(set) var query = ""
+    @Published public private(set) var kind: MusicSearchKind = .songs
     /// Narrows what shows, and stays on for the next query until changed (#649).
-    public private(set) var filter = MusicSearchFilter()
+    @Published public private(set) var filter = MusicSearchFilter()
     /// What shows: the catalogs' answers that pass the filter.
-    public private(set) var results: [MusicTrack] = []
-    public private(set) var collections: [MusicCollection] = []
+    @Published public private(set) var results: [MusicTrack] = []
+    @Published public private(set) var collections: [MusicCollection] = []
     /// Everything the catalogs answered, before the filter.
-    @ObservationIgnored private var allResults: [MusicTrack] = [] { didSet { results = allResults.filter(filter.admits) } }
-    @ObservationIgnored private var allCollections: [MusicCollection] = [] { didSet { collections = allCollections.filter(filter.admits) } }
-    public private(set) var busy = false
+    private var allResults: [MusicTrack] = [] { didSet { results = allResults.filter(filter.admits) } }
+    private var allCollections: [MusicCollection] = [] { didSet { collections = allCollections.filter(filter.admits) } }
+    @Published public private(set) var busy = false
     /// Why a catalog failed this time, by catalog. One failing catalog is not a failed search.
-    public private(set) var failures: [MusicPlatform: MusicProviderError] = [:]
+    @Published public private(set) var failures: [MusicPlatform: MusicProviderError] = [:]
     /// Set once every catalog answered a song search: the one track the query clearly means, if any.
-    public private(set) var directHit: MusicTrack?
+    @Published public private(set) var directHit: MusicTrack?
     private var nothingFound: Bool { allResults.isEmpty && allCollections.isEmpty }
     /// The catalogs found something, and the filter hides all of it.
     public var filteredOut: Bool { !query.isEmpty && !nothingFound && results.isEmpty && collections.isEmpty }
@@ -30,10 +29,10 @@ import Observation
 
     private let catalogs: [any MusicCatalogSource]
     private let health: MusicHealth
-    private var task: Task<Void, Never>?
-    private var generation = UUID()
+    @Published private var task: Task<Void, Never>?
+    @Published private var generation = UUID()
     private struct Cached { var results: [MusicTrack]; var collections: [MusicCollection]; var created: Date }
-    private var cache: [String: Cached] = [:]
+    @Published private var cache: [String: Cached] = [:]
     static let debounce: Duration = .milliseconds(350)
     static let cacheLifetime: TimeInterval = 10 * 60
 

@@ -6,7 +6,7 @@ import TVCore
 /// bright and held a third of the way down, the rest faded. Tapping a line plays from it. Without
 /// lyrics the panel says so in the same space, so nothing around it moves.
 struct MusicNowPlayingLyrics: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var scrolled: Int?
     var showsTranslation = true
     #if os(macOS)
@@ -38,10 +38,10 @@ struct MusicNowPlayingLyrics: View {
                     }
                     Text(L10n.text("Lyrics from %@", lyrics.platform.name)).font(.caption).foregroundStyle(.secondary).padding(.top, 8)
                 }
-                .scrollTargetLayout()
+                .compatScrollTargetLayout()
                 .padding(.vertical, 28)
             }
-            .scrollPosition(id: $scrolled, anchor: UnitPoint(x: 0.5, y: 0.3))
+            .compatScrollPosition(id: $scrolled, anchor: UnitPoint(x: 0.5, y: 0.3))
             // The lines fade in and out at the panel's edges instead of being cut.
             .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.07),
                                          .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
@@ -49,7 +49,7 @@ struct MusicNowPlayingLyrics: View {
             // Once the lines are laid out: set as the panel appeared, the position was dropped, and
             // reopening the player left the lyrics at the top until the next line.
             .task { try? await Task.sleep(for: .milliseconds(60)); scrolled = music.currentLyric }
-            .onChange(of: music.currentLyric) { _, index in
+            .compatOnChange(of: music.currentLyric) { _, index in
                 guard let index else { return }
                 withAnimation(.smooth(duration: 0.5)) { scrolled = index }
             }
@@ -63,7 +63,7 @@ struct MusicNowPlayingLyrics: View {
 
 /// The songs after this one in what is playing; tapping one plays it.
 struct MusicUpNext: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     var body: some View {
         let music = store.music

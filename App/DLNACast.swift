@@ -10,31 +10,31 @@ import UIKit
 /// this covers the TVs most homes have. The TV fetches the video itself: straight from the source when the address
 /// needs nothing else, otherwise through `CastRelay` on this device. While the TV plays, the player here stays paused
 /// and its panel drives the TV.
-@MainActor @Observable final class CastController {
+@MainActor final class CastController: ObservableObject {
     static let shared = CastController()
 
     /// The renderers the last search found.
-    private(set) var devices: [DLNADevice] = []
-    private(set) var searching = false
+    @Published private(set) var devices: [DLNADevice] = []
+    @Published private(set) var searching = false
     /// iOS without Apple's multicast entitlement: only TVs that answer a unicast search show up.
-    private(set) var multicastBlocked = false
-    @ObservationIgnored private var searchedAt: Date?
-    @ObservationIgnored private var search: Task<Void, Never>?
+    @Published private(set) var multicastBlocked = false
+    private var searchedAt: Date?
+    private var search: Task<Void, Never>?
 
     /// The TV playing what was sent, while a player here drives it.
-    private(set) var device: DLNADevice?
-    private(set) var position = 0.0
-    private(set) var duration = 0.0
-    private(set) var paused = false
+    @Published private(set) var device: DLNADevice?
+    @Published private(set) var position = 0.0
+    @Published private(set) var duration = 0.0
+    @Published private(set) var paused = false
     /// The TV fetches through this device, which must stay awake with Yingxia open.
-    private(set) var relayed = false
-    private(set) var volume: Int?
-    var failure: String?
-    @ObservationIgnored private var poll: Task<Void, Never>?
+    @Published private(set) var relayed = false
+    @Published private(set) var volume: Int?
+    @Published var failure: String?
+    private var poll: Task<Void, Never>?
     /// A seek just sent: the TV's old position isn't shown meanwhile, so the bar doesn't jump back.
-    @ObservationIgnored private var heldUntil = Date.distantPast
+    private var heldUntil = Date.distantPast
     #if os(iOS)
-    @ObservationIgnored private var idleBefore: Bool?
+    private var idleBefore: Bool?
     #endif
 
     /// Looks for TVs when the player opens: a few packets, at most every ten minutes unless asked again.

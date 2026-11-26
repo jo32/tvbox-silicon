@@ -5,7 +5,7 @@ import TVCore
 /// found. With no search, the page offers to continue where listening stopped, then shelves of
 /// charts, playlists and new albums as Discover has for video, then what played recently.
 struct MusicView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var query = ""
     /// The query Return was pressed for: its direct hit plays once the search knows it. Typing
     /// something else clears it.
@@ -44,7 +44,7 @@ struct MusicView: View {
         }
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Song, artist, album or playlist"))
-        .onChange(of: query) { _, text in
+        .compatOnChange(of: query) { _, text in
             if text.trimmingCharacters(in: .whitespacesAndNewlines) != autoPlayQuery { autoPlayQuery = nil }
             #if os(tvOS)
             // As in Global Search: typing only edits the query, and results change when it is
@@ -58,7 +58,7 @@ struct MusicView: View {
             autoPlayQuery = search.kind == .songs || search.kind == .top ? query.trimmingCharacters(in: .whitespacesAndNewlines) : nil
             search.search(query, kind: Self.searchKind, immediately: true); playDirectHitIfReady()
         }
-        .onChange(of: search.busy) {
+        .compatOnChange(of: search.busy) {
             playDirectHitIfReady()
             #if DEBUG
             if !search.busy, UserDefaults.standard.bool(forKey: "qaMusicOpen"), qaOpened == nil { qaOpened = search.collections.first }
@@ -72,7 +72,7 @@ struct MusicView: View {
         #if DEBUG && os(tvOS)
         // `-qaNowPlayingTab 1` (with `-qaMusicPlay 1 -qaMusicStayOnPage 1`) moves to the sidebar's
         // Now Playing once the song is loaded, for screenshots.
-        .onChange(of: store.music.track != nil) { _, loaded in
+        .compatOnChange(of: store.music.track != nil) { _, loaded in
             if loaded, UserDefaults.standard.bool(forKey: "qaNowPlayingTab") { store.section = .nowPlaying }
         }
         #endif
@@ -86,7 +86,7 @@ struct MusicView: View {
         }
         #endif
         #if DEBUG
-        .navigationDestination(item: $qaOpened) {
+        .compatNavigationDestination(item: $qaOpened) {
             #if os(macOS)
             MusicCollectionView(collection: $0).musicBar()
             #else
@@ -301,7 +301,7 @@ enum MusicLayout {
 
 /// The Music page with nothing searched: continue listening, shelves to browse, and what played recently.
 private struct MusicHome: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let openSettings: () -> Void
 
     var body: some View {
@@ -375,7 +375,7 @@ private struct MusicHome: View {
 }
 
 private struct MusicContinueCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let point: MusicResumePoint
     let track: MusicTrack
 
@@ -402,7 +402,7 @@ private struct MusicContinueCard: View {
 }
 
 struct MusicTrackRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let track: MusicTrack
     /// Its place in an album or playlist, shown instead of the cover.
     var number: Int?
@@ -512,7 +512,7 @@ struct MusicArtistMenu: View {
 
 /// Likes an album or playlist, or unlikes it: Liked Albums & Playlists on the Music page keeps them (#720).
 struct MusicCollectionLikeButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let collection: MusicCollection
     /// Only the heart, for a row of round buttons, in a square this wide when given.
     var iconOnly = false
@@ -586,7 +586,7 @@ private struct MusicLikedCollectionsLink: View {
 
 /// Albums and playlists liked from their pages, newest first (#720). Unlike one from its menu, or on its page.
 struct MusicLikedCollectionsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     static var title: String { L10n.text("Liked Albums & Playlists") }
 
@@ -612,7 +612,7 @@ struct MusicLikedCollectionsView: View {
         .screenBackdrop()
         .screenTitle(Self.title)
         #if os(macOS)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)
@@ -624,7 +624,7 @@ struct MusicLikedCollectionsView: View {
 /// An artist's songs (#1755): what searching the catalogs by the artist's name finds, the best known first.
 struct MusicArtistView: View {
     let name: String
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     /// Its own search, so the Music page keeps what was searched there. Made when the page first shows.
     @State private var search: MusicSearchModel?
     /// The artist in Apple Music's catalog: picture, notes, and which songs are their best known.
@@ -664,7 +664,7 @@ struct MusicArtistView: View {
         .screenBackdrop()
         .screenTitle(name)
         #if os(macOS)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)
@@ -708,7 +708,7 @@ struct MusicArtistView: View {
 /// An album or playlist: its tracks, Play and Shuffle. Playing a track queues the whole list from it.
 struct MusicCollectionView: View {
     let collection: MusicCollection
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var tracks: [MusicTrack] = []
     @State private var loading = false
     @State private var error: String?
@@ -757,7 +757,7 @@ struct MusicCollectionView: View {
         .screenTitle(collection.title)
         #if os(macOS)
         // The header already names it in large type.
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)
@@ -850,7 +850,7 @@ struct MusicLikedLink: View {
 /// The songs saved with Like, newest first. Play, Shuffle and Add to Up Next treat them as one list,
 /// so liking songs is all it takes to build a playlist.
 struct MusicLikedView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     static var title: String { L10n.text("Liked Songs") }
     /// Narrows the list by title, artist or album (#1854); Play and Shuffle then take what shows.
@@ -893,7 +893,7 @@ struct MusicLikedView: View {
         .screenTitle(Self.title)
         #if os(macOS)
         // The header names it in large type, as on the other Music pages.
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)

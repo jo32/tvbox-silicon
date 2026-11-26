@@ -8,7 +8,7 @@ struct PointsGuideView: View {
     /// Offer Send Feedback (not when opened from it) and, signed out, Sign In (not when opened from the Account page).
     var offersFeedback = true
     var offersSignIn = true
-    @State private var accounts = AccountStore.shared
+    @StateObject private var accounts = AccountStore.shared
     @State private var copied = false
 
     private var rules: Account.Points.Rules { accounts.account?.points?.rules ?? .standard }

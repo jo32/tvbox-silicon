@@ -101,7 +101,7 @@ struct StateMessage<Actions: View, Footer: View>: View {
             if let details, !details.isEmpty { disclosure(details) }
             footer.font(.system(size: text * 0.8)).monospacedDigit().foregroundStyle(.tertiary)
         }
-        .onChange(of: details) { showsDetails = false }
+        .compatOnChange(of: details) { showsDetails = false }
     }
 
     private func disclosure(_ details: String) -> some View {

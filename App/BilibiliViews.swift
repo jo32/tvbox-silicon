@@ -44,13 +44,13 @@ private struct BilibiliNotice: View {
 // MARK: UP主
 
 /// An UP主 as their pages show them, and Follow: the creator row and Apple TV's video page share it.
-@MainActor @Observable final class BilibiliCreatorModel {
-    private(set) var creator: BilibiliAPI.Creator?
-    private(set) var following = false
-    private(set) var busy = false
-    var message: String?
+@MainActor final class BilibiliCreatorModel: ObservableObject {
+    @Published private(set) var creator: BilibiliAPI.Creator?
+    @Published private(set) var following = false
+    @Published private(set) var busy = false
+    @Published var message: String?
     /// Follow needs the account: Apple TV opens the sign-in screen rather than saying so.
-    var needsSignIn = false
+    @Published var needsSignIn = false
 
     func load(_ mid: Int) async {
         guard let found = try? await BilibiliAPI.creator(mid) else { return }
@@ -83,12 +83,12 @@ private struct BilibiliNotice: View {
 /// The UP主: their picture, name and followers, which open their space, then Follow and, while they are live, Live.
 /// `large` is the head of their space itself, with their sign.
 struct BilibiliCreatorRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let mid: Int
     let name: String
     let client: CatalogClient
     var large = false
-    @State private var model = BilibiliCreatorModel()
+    @StateObject private var model = BilibiliCreatorModel()
 
     var body: some View {
         #if os(iOS)
@@ -278,12 +278,12 @@ struct BilibiliSpaceHeader: View {
 
 /// A video's counts and the account's like, coins, favourite and watch later on it: the action bar and Apple TV's video
 /// page share it.
-@MainActor @Observable final class BilibiliVideoActions {
-    private(set) var state: BilibiliAPI.VideoState?
-    private var busy = false
-    var message: String?
+@MainActor final class BilibiliVideoActions: ObservableObject {
+    @Published private(set) var state: BilibiliAPI.VideoState?
+    @Published private var busy = false
+    @Published var message: String?
     /// An action that needs the account: Apple TV opens the sign-in screen rather than saying so.
-    var needsSignIn = false
+    @Published var needsSignIn = false
 
     func load(_ bvid: String) async { state = try? await BilibiliAPI.state(bvid: bvid) }
 
@@ -354,7 +354,7 @@ struct BilibiliSpaceHeader: View {
 /// The account's like, coins, favourite and watch later on a video, with its counts, and its comments.
 struct BilibiliActionBar: View {
     let bvid: String
-    @State private var model = BilibiliVideoActions()
+    @StateObject private var model = BilibiliVideoActions()
     @State private var choosingCoins = false
     @State private var showsComments = false
 
@@ -542,7 +542,7 @@ struct BilibiliCommentsView: View {
             }
             .padding(.horizontal, 110).padding(.top, 36).padding(.bottom, 60)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .background { BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frosted: true) }
         .foregroundStyle(.white).preferredColorScheme(.dark)
     }
@@ -654,7 +654,7 @@ struct BilibiliCommentsView: View {
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
         .frame(minWidth: 520, idealWidth: 680, minHeight: 560, idealHeight: 760)
-        .presentationBackground { BilibiliMacSheetBackdrop(cover: cover, headers: coverHeaders) }
+
     }
 
     @ViewBuilder private func macThread(_ comment: BilibiliAPI.Comment) -> some View {
@@ -839,10 +839,10 @@ struct BilibiliRelatedRow: View {
                 #else
                 ScrollView(.horizontal) { tiles }
                 .scrollIndicators(.never)
-                .scrollClipDisabled()
+                .compatScrollClipDisabled()
                 #if os(iOS)
                 // Edge to edge, as the episodes above: the covers start at the page's margin and run off the screen.
-                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .compatContentMargins(.horizontal, 16, for: .scrollContent)
                 .padding(.horizontal, -16)
                 #endif
                 .tvFocusSection()
@@ -978,7 +978,7 @@ struct SourceCreditsRow: View {
 /// saved for later, and what is popular, above the recommendations. Each row asks the source for the first page of
 /// one of its lists once the recommendations are in, so the page never waits for them; See All opens the list.
 struct BilibiliShelves: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let client: CatalogClient
     /// The recommendations are in: the rows may ask the source now.
     let ready: Bool
@@ -1099,7 +1099,7 @@ struct BilibiliPhoneVideoPage<Parts: View, Status: View>: View {
     /// The page's notices: a playback that failed, details that didn't load.
     @ViewBuilder let status: Status
     @ViewBuilder let parts: Parts
-    @State private var actions = BilibiliVideoActions()
+    @StateObject private var actions = BilibiliVideoActions()
     @State private var hotComments: [BilibiliAPI.Comment] = []
     @State private var choosingCoins = false
     @State private var showsComments = false
@@ -1152,7 +1152,7 @@ struct BilibiliPhoneVideoPage<Parts: View, Status: View>: View {
             }
         }
         // Signed out, Like, Coin and Favorite open the account's sign-in, then the counts load again.
-        .onChange(of: actions.needsSignIn) { _, needed in
+        .compatOnChange(of: actions.needsSignIn) { _, needed in
             guard needed else { return }
             actions.needsSignIn = false
             showsSignIn = true
@@ -1292,7 +1292,7 @@ struct BilibiliPhoneVideoPage<Parts: View, Status: View>: View {
 /// the facts, Play with the account's actions as glass plates, and beside them the UP主 with Follow and three lines of
 /// the description; then the parts, the hot comments and related videos.
 struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let bvid: String
     let title: String
     let cover: URL?
@@ -1312,8 +1312,8 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
     @ViewBuilder let parts: Parts
     /// The page's notices: a playback that failed, details that didn't load.
     @ViewBuilder let status: Status
-    @State private var actions = BilibiliVideoActions()
-    @State private var maker = BilibiliCreatorModel()
+    @StateObject private var actions = BilibiliVideoActions()
+    @StateObject private var maker = BilibiliCreatorModel()
     @State private var hotComments: [BilibiliAPI.Comment] = []
     @State private var showsComments = false
     @State private var showsSignIn = false
@@ -1367,7 +1367,7 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
             }
         }
         // Signed out, Like, Coin, Favorite and Follow open the account's sign-in, then the counts load again.
-        .onChange(of: actions.needsSignIn || maker.needsSignIn) { _, needed in
+        .compatOnChange(of: actions.needsSignIn || maker.needsSignIn) { _, needed in
             guard needed else { return }
             actions.needsSignIn = false; maker.needsSignIn = false
             showsSignIn = true
@@ -1583,7 +1583,7 @@ private enum BilibiliTVMetrics {
 /// in one line; Play with the account's like, coins and favourite (the rest under More) on the leading side, and who
 /// made it and what they wrote on the trailing side. Below: its parts when it has several, hot comments, related videos.
 struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let bvid: String
     let title: String
     let cover: URL?
@@ -1602,8 +1602,8 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     @ViewBuilder let parts: Parts
     /// The page's notices: a playback that failed, episodes queued for download.
     @ViewBuilder let status: Status
-    @State private var actions = BilibiliVideoActions()
-    @State private var maker = BilibiliCreatorModel()
+    @StateObject private var actions = BilibiliVideoActions()
+    @StateObject private var maker = BilibiliCreatorModel()
     @State private var hotComments: [BilibiliAPI.Comment] = []
     @State private var related: [Video] = []
     @State private var scrolled = false
@@ -1618,7 +1618,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
         // Coming back up from the rows, the remote's scroll stops once the focused button shows, which left the title
         // under the top edge (and the system's tab pill hidden): the whole hero comes back instead.
         ScrollViewReader { proxy in
-            page.onChange(of: heroFocus != nil) { _, inHero in
+            page.compatOnChange(of: heroFocus != nil) { _, inHero in
                 if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
             }
         }
@@ -1634,7 +1634,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
             }
             .padding(.bottom, 90)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .modifier(DiscoverTVScrolled(scrolled: $scrolled))
         .background { BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frosted: scrolled) }
         .ignoresSafeArea()
@@ -1657,7 +1657,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
         .overlay(alignment: .top) {
             BilibiliTVToast(message: Binding(get: { actions.message ?? maker.message }, set: { actions.message = $0; maker.message = $0 }))
         }
-        .onChange(of: actions.needsSignIn || maker.needsSignIn) { _, needed in
+        .compatOnChange(of: actions.needsSignIn || maker.needsSignIn) { _, needed in
             guard needed else { return }
             actions.needsSignIn = false; maker.needsSignIn = false; actions.message = nil; maker.message = nil
             showsSignIn = true
@@ -1855,7 +1855,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                     .padding(.horizontal, BilibiliTVMetrics.gutter).padding(.vertical, 24)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
         .focusSection()
     }
@@ -1906,7 +1906,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
 /// they are live, Watch Live; then tabs for their uploads by order or their collections, and those as Bilibili's 16:9
 /// tiles. No search field: the source's search covers all of Bilibili, not this UP主.
 struct BilibiliTVSpacePage<Grid: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let mid: Int
     let name: String
     let tabs: [(id: String, title: String)]
@@ -1916,7 +1916,7 @@ struct BilibiliTVSpacePage<Grid: View>: View {
     let latest: Video?
     let open: (String) -> Void
     @ViewBuilder let grid: Grid
-    @State private var maker = BilibiliCreatorModel()
+    @StateObject private var maker = BilibiliCreatorModel()
     @State private var backdrop: Video?
     @State private var scrolled = false
     @State private var showsSignIn = false
@@ -1928,7 +1928,7 @@ struct BilibiliTVSpacePage<Grid: View>: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            page.onChange(of: heroFocus != nil) { _, inHero in
+            page.compatOnChange(of: heroFocus != nil) { _, inHero in
                 if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
             }
         }
@@ -1944,7 +1944,7 @@ struct BilibiliTVSpacePage<Grid: View>: View {
             }
             .padding(.bottom, 90)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .modifier(DiscoverTVScrolled(scrolled: $scrolled))
         .background {
             ZStack {
@@ -1958,9 +1958,9 @@ struct BilibiliTVSpacePage<Grid: View>: View {
         .ignoresSafeArea()
         .foregroundStyle(.white).preferredColorScheme(.dark)
         .task(id: mid) { await maker.load(mid) }
-        .onChange(of: latest?.id, initial: true) { if backdrop == nil, latest?.poster != nil { backdrop = latest } }
+        .compatOnChange(of: latest?.id, initial: true) { if backdrop == nil, latest?.poster != nil { backdrop = latest } }
         .overlay(alignment: .top) { BilibiliTVToast(message: Binding(get: { maker.message }, set: { maker.message = $0 })) }
-        .onChange(of: maker.needsSignIn) { _, needed in
+        .compatOnChange(of: maker.needsSignIn) { _, needed in
             guard needed else { return }
             maker.needsSignIn = false; maker.message = nil; showsSignIn = true
         }

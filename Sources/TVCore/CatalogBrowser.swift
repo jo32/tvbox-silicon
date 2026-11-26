@@ -1,39 +1,38 @@
 import Foundation
-import Observation
 
 /// Owns the requested catalog location so retries and overlapping requests stay consistent.
-@MainActor @Observable public final class CatalogBrowser {
+@MainActor public final class CatalogBrowser: ObservableObject {
     public enum Request: Equatable, Sendable {
         case home
         /// `filters`: the category's filter choices, key to value (see `CategoryFilter`).
         case list(category: String?, query: String, page: Int, filters: [String: String] = [:])
     }
-    public private(set) var categories: [Category] = []
-    public private(set) var videos: [Video] = []
-    public private(set) var category = ""
+    @Published public private(set) var categories: [Category] = []
+    @Published public private(set) var videos: [Video] = []
+    @Published public private(set) var category = ""
     /// The shown category's filter choices; kept when paging.
-    public private(set) var filters: [String: String] = [:]
-    public private(set) var query = ""
-    public private(set) var page = 1
-    public private(set) var pageCount = 1
+    @Published public private(set) var filters: [String: String] = [:]
+    @Published public private(set) var query = ""
+    @Published public private(set) var page = 1
+    @Published public private(set) var pageCount = 1
     /// Whether the shown list has another page to append. A home page is never appended.
     public var hasMore: Bool {
         guard case .list = request else { return false }
         return page < pageCount
     }
-    public private(set) var busy = false
-    public private(set) var loaded = false
-    public private(set) var error: String?
+    @Published public private(set) var busy = false
+    @Published public private(set) var loaded = false
+    @Published public private(set) var error: String?
     /// Appending a page keeps the shown videos in place, so it has its own state instead of `busy`.
-    public private(set) var loadingMore = false
-    public private(set) var moreError: String?
-    public private(set) var request: Request = .home
-    private var generation = 0
+    @Published public private(set) var loadingMore = false
+    @Published public private(set) var moreError: String?
+    @Published public private(set) var request: Request = .home
+    @Published private var generation = 0
     /// Shown from another page (`seed`) until the first home load answers; that load then refreshes it in place.
-    private var seeded = false
-    private var pending: Task<CatalogPage, Error>?
-    private var pendingCategories: Task<CatalogPage, Error>?
-    private var pendingMore: Task<CatalogPage, Error>?
+    @Published private var seeded = false
+    @Published private var pending: Task<CatalogPage, Error>?
+    @Published private var pendingCategories: Task<CatalogPage, Error>?
+    @Published private var pendingMore: Task<CatalogPage, Error>?
     public init() {}
 
     /// Release this page's work without discarding already displayed content.

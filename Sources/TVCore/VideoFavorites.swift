@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// A show saved to Favorites: its catalog identity and what its card shows. Episodes and their
 /// addresses are left out, since they expire; opening the show loads its details from the source again.
@@ -34,9 +33,9 @@ public struct VideoFavorite: Identifiable, Codable, Hashable, Sendable {
 }
 
 /// Saved shows, newest first, kept on this device beside the favorite channels.
-@MainActor @Observable public final class VideoFavorites {
+@MainActor public final class VideoFavorites: ObservableObject {
     public static let limit = 300
-    public private(set) var items: [VideoFavorite] = []
+    @Published public private(set) var items: [VideoFavorite] = []
     private let defaults: UserDefaults
     private static let key = "videoFavorites"
 

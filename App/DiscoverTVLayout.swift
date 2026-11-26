@@ -119,7 +119,7 @@ struct DiscoverTVHeroPager: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .focusScope(pagesScope)
             .focusSection()
-            .onChange(of: focusedPage) { _, page in
+            .compatOnChange(of: focusedPage) { _, page in
                 guard let page, items.indices.contains(page) else { return }
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { selection = items[page].key }
             }
@@ -490,7 +490,7 @@ struct DiscoverTVChipStyle: ButtonStyle {
 /// chips that open menus, then people and rows of wide title cards, each row opening into a grid.
 struct DiscoverTVSearchView: View {
     private enum Field: Hashable { case query }
-    @State private var model = DiscoverSearchModel()
+    @StateObject private var model = DiscoverSearchModel()
     @State private var query = ""
     @State private var filter: TMDBCatalog.Filter?
     @State private var expanded: TMDBCatalog.SearchKind?
@@ -526,14 +526,14 @@ struct DiscoverTVSearchView: View {
                 if model.failed { EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) { revision += 1 } }
             }.padding(.top, 50).padding(.bottom, 80)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .background { DiscoverSearchAtmosphere().ignoresSafeArea() }
         .foregroundStyle(.white).preferredColorScheme(.dark)
         .toolbar(.hidden, for: .navigationBar)
         .ignoresSafeArea(edges: .horizontal)
         .defaultFocus($focus, .query)
-        .onChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
-        .onChange(of: filter) { _, _ in expanded = nil }
+        .compatOnChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
+        .compatOnChange(of: filter) { _, _ in expanded = nil }
         .task(id: request) { await model.load(request) }
         .sheet(isPresented: $keywordsShown) {
             DiscoverSearchFilters(filter: Binding(get: { current }, set: { filter = $0 }), section: .keywords).frame(width: 900)
@@ -611,7 +611,7 @@ struct DiscoverTVSearchView: View {
                         .accessibilityIdentifier("discover.search.resetFilters")
                 }
             }.padding(.horizontal, gutter).padding(.vertical, 16)
-        }.scrollClipDisabled().focusSection()
+        }.compatScrollClipDisabled().focusSection()
     }
 
     private func menu(_ section: DiscoverFilterSection, @ViewBuilder content: () -> some View) -> some View {
@@ -663,7 +663,7 @@ struct DiscoverTVSearchView: View {
                                 .accessibilityIdentifier("discover.search.person.\(person.id)")
                         }
                     }.padding(.horizontal, gutter).padding(.vertical, 24)
-                }.scrollClipDisabled()
+                }.compatScrollClipDisabled()
             } else if grid {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 40), count: 3), alignment: .leading, spacing: 40) {
                     ForEach(group.items, id: \.key) { item in
@@ -678,7 +678,7 @@ struct DiscoverTVSearchView: View {
                     LazyHStack(spacing: 40) {
                         ForEach(group.items, id: \.key) { item in card(item).frame(width: 590) }
                     }.padding(.horizontal, gutter).padding(.vertical, 24)
-                }.scrollClipDisabled()
+                }.compatScrollClipDisabled()
             }
         }.focusSection()
     }

@@ -5,7 +5,7 @@ import TVCore
 import IOKit.pwr_mgt
 #endif
 
-@MainActor @Observable final class PlaybackSession: SkipTimesEditing {
+@MainActor final class PlaybackSession: ObservableObject, SkipTimesEditing {
     /// A queue, so the next episode can wait behind this one and play straight on.
     let player: AVQueuePlayer
     /// The video player's volume, remembered across launches. Every change goes through the KVO observer below:
@@ -23,48 +23,49 @@ import IOKit.pwr_mgt
     /// Keeps the Mac from dimming, starting the screen saver and locking while a video plays (#565).
     private let displayAwake = DisplayAwake()
     #endif
-    var history = PlaybackHistory.shared
-    var skipDefaults = UserDefaults.standard
-    @ObservationIgnored var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
-    private var historyContext: PlaybackHistoryContext?
-    /// This player's last saved position, independent of history imported from another device. A paused player
-    /// must not write its old episode back just because iCloud replaced the shared history entry meanwhile.
-    @ObservationIgnored private var lastHistoryPosition: Double?
-    private var pendingResume: Double?
+    @Published var history = PlaybackHistory.shared
+    @Published var skipDefaults = UserDefaults.standard
+    /// 已快取播放的回呼，由 Store 帶入。
+    var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
+    @Published private var historyContext: PlaybackHistoryContext?
+    /// 這個播放器自己最後儲存的進度，與其他裝置同步過來的歷史分開：iCloud 更新時暫停中的播放器
+    /// 不會把舊進度寫回去。
+    private var lastHistoryPosition: Double?
+    @Published private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
-    @ObservationIgnored private var soughtAhead: Double?
-    private var restoringPosition = false
-    private(set) var restoredPosition: Double?
-    private(set) var requestedResumePosition: Double?
-    private(set) var skipSettings = EpisodeSkipSettings()
-    private(set) var position: Double = 0
-    private(set) var duration: Double = 0
-    private var skipScope: String?
-    /// The title whose speed the player keeps: another title starts at the speed set in Settings › Playback.
-    @ObservationIgnored private var speedScope: String?
-    private var skipPass = EpisodeSkipPass()
-    private var editingSkip = false
-    private var resumeAfterEditing = false
-    private var seekingSegment = false
+    private var soughtAhead: Double?
+    @Published private var restoringPosition = false
+    @Published private(set) var restoredPosition: Double?
+    @Published private(set) var requestedResumePosition: Double?
+    @Published private(set) var skipSettings = EpisodeSkipSettings()
+    @Published private(set) var position: Double = 0
+    @Published private(set) var duration: Double = 0
+    @Published private var skipScope: String?
+    /// 記住速度的節目：換一部時從設定裡的速度開始。
+    private var speedScope: String?
+    @Published private var skipPass = EpisodeSkipPass()
+    @Published private var editingSkip = false
+    @Published private var resumeAfterEditing = false
+    @Published private var seekingSegment = false
     /// The source's opening and ending credits for this episode (the play result's `skips`), and the one playing now,
     /// which the player offers to skip.
-    private(set) var sourceSkips: [PlaybackSkip] = []
-    private(set) var skipOffer: PlaybackSkip?
-    private var skippedSource = Set<PlaybackSkip>()
+    @Published private(set) var sourceSkips: [PlaybackSkip] = []
+    @Published private(set) var skipOffer: PlaybackSkip?
+    @Published private var skippedSource = Set<PlaybackSkip>()
     /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
     /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
     enum SkipNotice: Equatable {
         case introSkipped(from: Double)
         case outroIn(seconds: Int)
     }
-    private(set) var skipNotice: SkipNotice?
-    private var introNoticeUntil: Date?
+    @Published private(set) var skipNotice: SkipNotice?
+    @Published private var introNoticeUntil: Date?
     /// How long the intro's notice stays.
     private static let introNoticeLength: TimeInterval = 6
     /// The episode's chapters (Bilibili's 分段章节), for the player's Chapters menu and Apple TV's chapter markers.
-    private(set) var chapters: [PlaybackChapter] = []
+    @Published private(set) var chapters: [PlaybackChapter] = []
     /// The Bilibili part playing, whose progress goes back to the signed-in account.
-    private var bilibiliPart: BilibiliAPI.Part?
+    @Published private var bilibiliPart: BilibiliAPI.Part?
 
     /// Skips the source's credits playing now: to their end, or for ending credits that run out the video, to the end.
     func skipSourceSegment() {
@@ -213,32 +214,32 @@ import IOKit.pwr_mgt
         }
     }
 
-    var error: String?
-    var loading = true
-    var looping = false { didSet { if looping { discardUpcoming() } } }
-    var buffering = false
+    @Published var error: String?
+    @Published var loading = true
+    @Published var looping = false { didSet { if looping { discardUpcoming() } } }
+    @Published var buffering = false
     /// Whether the picture has started moving: the waiting screen stays until then, so no black frame shows between.
-    private(set) var showsPicture = false
+    @Published private(set) var showsPicture = false
     /// When this episode (or line) began to open: the waiting screen counts from here until the first frame.
-    private(set) var openedAt = Date()
+    @Published private(set) var openedAt = Date()
     /// The SF Symbol that names the latest failure for the error screen.
-    private(set) var errorSymbol = "play.slash.fill"
+    @Published private(set) var errorSymbol = "play.slash.fill"
     /// Bullet comments for the media, when its source has them.
-    private var sourceDanmaku: [Danmaku] = []
+    @Published private var sourceDanmaku: [Danmaku] = []
     private var usesCatalogDanmaku: Bool { sourceDanmaku.isEmpty || catalogDanmaku.overridesSourceComments }
     var danmaku: [Danmaku] { usesCatalogDanmaku ? catalogDanmaku.renderedComments : sourceDanmaku }
     var danmakuOpacity: Double { catalogDanmaku.opacity }
     var danmakuRevision: String { usesCatalogDanmaku ? catalogDanmaku.renderedRevision : "" }
-    var onPlaybackEnded: (() -> Void)?
+    @Published var onPlaybackEnded: (() -> Void)?
     /// Plays another line of the same episode when this file can't play here (an MKV original);
     /// returns that line's name, or nil when there is none.
-    var onUnplayableFile: (() -> String?)?
+    @Published var onUnplayableFile: (() -> String?)?
     /// The episode after this one, resolved for the queue; nil when there is none.
-    var upcomingEpisode: (@MainActor () async -> Channel?)?
+    @Published var upcomingEpisode: (@MainActor () async -> Channel?)?
     /// Whether playback runs on into the next episode (auto-play can be switched off meanwhile).
     var playsOn: @MainActor () -> Bool = { false }
     /// The queued episode started playing by itself: it is now the episode on screen.
-    var onAdvance: (@MainActor (Channel) -> Void)?
+    @Published var onAdvance: (@MainActor (Channel) -> Void)?
     /// The next episode, prepared near the end of this one and queued behind it, so playback runs
     /// straight on instead of stopping to load it.
     private struct Upcoming {
@@ -246,81 +247,81 @@ import IOKit.pwr_mgt
         let item: AVPlayerItem
         let prepared: Prepared
     }
-    private var upcoming: Upcoming?
-    private var upcomingTask: Task<Void, Never>?
-    private var upcomingObservation: NSKeyValueObservation?
+    @Published private var upcoming: Upcoming?
+    @Published private var upcomingTask: Task<Void, Never>?
+    @Published private var upcomingObservation: NSKeyValueObservation?
     /// Whether this episode has already tried to queue the next one (once each, even when that failed).
-    private var upcomingAttempted = false
+    @Published private var upcomingAttempted = false
     /// The queued episode was moved past its intro before it played: it says so once it does.
-    private var upcomingSkippedIntro = false
+    @Published private var upcomingSkippedIntro = false
     /// The queue moves past this episode because the next one was asked for, not because it ended.
-    private var skipsToUpcoming = false
+    @Published private var skipsToUpcoming = false
     /// The episode the queue moved on to, which `start` then finds already playing.
-    private var advanced: Channel?
+    @Published private var advanced: Channel?
     /// The item of the episode on screen; during a move the queue's current item is already the next one.
-    private var item: AVPlayerItem?
-    private var queueObservation: NSKeyValueObservation?
+    @Published private var item: AVPlayerItem?
+    @Published private var queueObservation: NSKeyValueObservation?
     /// How long before an episode's end (or its skipped outro) the next one starts loading.
     static let upcomingLead: Double = 30
     /// Why the player is switching lines, shown while the other line loads.
-    private var switchNotice: String?
+    @Published private var switchNotice: String?
     /// Qualities the stream can switch between (Bilibili), and the one chosen; nil is automatic.
-    private(set) var qualities: [StreamQuality] = []
+    @Published private(set) var qualities: [StreamQuality] = []
     /// A live channel's lines (#679), the one playing, and those tried since the channel or the line was chosen. Empty
     /// for a channel of one address.
-    private(set) var lines: [Channel] = []
-    private(set) var line = 0
-    private var triedLines: Set<Int> = []
+    @Published private(set) var lines: [Channel] = []
+    @Published private(set) var line = 0
+    @Published private var triedLines: Set<Int> = []
     /// When the line playing became ready. One that isn't ready after `lineWait` gives way to the next, as one that
     /// fails does: a dead IPTV address can keep AVPlayer waiting a minute before it says so.
-    private var lineReadyAt: ContinuousClock.Instant?
-    private var lineWatch: Task<Void, Never>?
+    @Published private var lineReadyAt: ContinuousClock.Instant?
+    @Published private var lineWatch: Task<Void, Never>?
     static let lineWait: Duration = .seconds(15)
     /// The sound tracks of a file that groups none of them (`UngroupedAudio`), for the player's Audio choice, and the
     /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
-    private(set) var audioChoices: [UngroupedAudio.Choice] = []
-    private(set) var audioChoice: CMPersistentTrackID?
+    @Published private(set) var audioChoices: [UngroupedAudio.Choice] = []
+    @Published private(set) var audioChoice: CMPersistentTrackID?
     /// The item has subtitle tracks of its own (shown in AVKit's Subtitles menu, not with the subtitle files).
-    private(set) var hasOwnSubtitles = false
+    @Published private(set) var hasOwnSubtitles = false
     /// A live stream: played at the live edge, without scrubbing.
-    private(set) var isLive = false
+    @Published private(set) var isLive = false
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
     /// isn't a platform room (an IPTV channel, say) only shows itself here, as an indefinite duration.
-    private(set) var hasTimeline = false
-    /// Mirrors the player, for play, mute and volume controls drawn outside AVKit's controls.
-    private(set) var paused = false
-    private(set) var muted = false
-    private(set) var volume: Float = 1
-    private(set) var quality: Int?
-    private var playing: Channel?
+    @Published private(set) var hasTimeline = false
+    /// 鏡像播放器狀態，供 AVKit 控制列以外的播放、靜音與音量控制使用。
+    @Published private(set) var paused = false
+    @Published private(set) var muted = false
+    @Published private(set) var volume: Float = 1
+    @Published private(set) var quality: Int?
+    @Published private var playing: Channel?
     /// What plays now, its live room or plugin address already resolved: what a TV is sent (#749).
     var castChannel: Channel? { playing }
     /// The episode plays from a download on this device, which no server or connection holds up.
-    private var savedDownload = false
-    private var automatic: URL?
+    @Published private var savedDownload = false
+    @Published private var automatic: URL?
     /// The drive plays its transcoded copy, which has none of the file's subtitles (#1343).
     var playsDriveCopy: Bool { automatic.map(CloudStreams.isDriveCopy) ?? false }
     /// The live room playing (at the quality chosen), when it opens again with a fresh address (`LiveReopen`), and
     /// when its stream last became ready.
-    private var liveRoom: Channel?
-    private var liveReopen = LiveReopen()
-    private var liveReadyAt: ContinuousClock.Instant?
-    private var liveRetrying = false
+    @Published private var liveRoom: Channel?
+    @Published private var liveReopen = LiveReopen()
+    @Published private var liveReadyAt: ContinuousClock.Instant?
+    @Published private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
-    private var rangeRetried = false
+    @Published private var rangeRetried = false
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
-    private var loopbackRecovered: ContinuousClock.Instant?
+    @Published private var loopbackRecovered: ContinuousClock.Instant?
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
-    private var dropRecovery = PlaybackDropRecovery()
-    private var reopenedAfterDrop = false
+    @Published private var dropRecovery = PlaybackDropRecovery()
+    @Published private var reopenedAfterDrop = false
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
-    private var checkingPicture = false
+    @Published private var checkingPicture = false
     /// The item whose HLS stream is being watched for sound without a picture (`checkSegmentedPicture`).
-    private var checkingSegments: ObjectIdentifier?
+    @Published private var checkingSegments: ObjectIdentifier?
     /// A live stream is being moved to its live edge (`catchUpLive`).
-    private var catchingUpLive = false
+    @Published private var catchingUpLive = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
-    private var chat: (any LiveChat)?
+    @Published private var chat: (any LiveChat)?
     /// Download state while connecting or buffering, sampled once a second from AVFoundation's logs.
     struct Transfer {
         var received: Int64 = 0
@@ -333,9 +334,9 @@ import IOKit.pwr_mgt
         var failure: String?
         var httpStatus: Int?
     }
-    private(set) var transfer = Transfer()
+    @Published private(set) var transfer = Transfer()
     /// What the player did for this episode so far, newest last: the wait's small print.
-    private(set) var steps: [String] = []
+    @Published private(set) var steps: [String] = []
     /// Adds a step to the wait's small print; once the picture shows there is no wait to tell about.
     private func note(_ step: String) {
         guard loading || !showsPicture, steps.last != step else { return }
@@ -350,11 +351,11 @@ import IOKit.pwr_mgt
         note(step)
         noteKind = kind
     }
-    private var noteKind: String?
-    private var sampler: Task<Void, Never>?
-    private var endObserver: NSObjectProtocol?
-    private var timeObservation: NSKeyValueObservation?
-    private var muteObservation: NSKeyValueObservation?
+    @Published private var noteKind: String?
+    @Published private var sampler: Task<Void, Never>?
+    @Published private var endObserver: NSObjectProtocol?
+    @Published private var timeObservation: NSKeyValueObservation?
+    @Published private var muteObservation: NSKeyValueObservation?
     private var volumeObservation: NSKeyValueObservation?
 
     func togglePlayback() {
@@ -634,9 +635,9 @@ import IOKit.pwr_mgt
     /// Up to 4× even where the item says it can't fast-forward: an HLS stream without I-frame playlists says so, yet
     /// plays at 3× and 4× in full, as the menu's speeds do. A connection too slow for it holds it lower
     /// (`SpeedBoost.Throttle`, issue #364); `boostWanted` is then the rate the hold asked for.
-    private(set) var boost: Float?
-    private(set) var boostWanted: Float?
-    @ObservationIgnored private var throttle: SpeedBoost.Throttle?
+    @Published private(set) var boost: Float?
+    @Published private(set) var boostWanted: Float?
+    private var throttle: SpeedBoost.Throttle?
     func setBoost(_ rate: Float?) {
         guard rate == nil || !paused else { return }
         throttle = rate.map { SpeedBoost.Throttle(wanted: Double($0), after: throttle) }
@@ -675,7 +676,7 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(Int(ahead))s")
         applyBoost()
     }
-    private var generation = UUID()
+    @Published private var generation = UUID()
     init() {
         let player = AVQueuePlayer()
         player.volume = PlaybackSession.storedVolume()
@@ -773,11 +774,11 @@ import IOKit.pwr_mgt
         subtitles.clockChanged = { [weak self] in self?.followSubtitleDelay() }
         followSubtitleDelay()
     }
-    private var styleObserver: NSObjectProtocol?
-    private var sleepObservers: [NSObjectProtocol] = []
-    @ObservationIgnored private var backgroundObservers: [NSObjectProtocol] = []
-    @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Video")
-    @ObservationIgnored private var thermalObserver: NSObjectProtocol?
+    @Published private var styleObserver: NSObjectProtocol?
+    @Published private var sleepObservers: [NSObjectProtocol] = []
+    private var backgroundObservers: [NSObjectProtocol] = []
+    private let backgroundGrace = BackgroundGrace(name: "Video")
+    private var thermalObserver: NSObjectProtocol?
     private func recordThermalState() {
         guard player.currentItem != nil else { return }
         let state = switch ProcessInfo.processInfo.thermalState {
@@ -791,11 +792,11 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.info, "player", "thermal=\(state) at=\(seconds.isFinite ? Int(seconds) : -1)s playing=\(player.timeControlStatus == .playing) "
             + "smoothing=\(enhancer.status.smoothing) upscaling=\(enhancer.status.upscaling) danmaku=\(!danmaku.isEmpty)")
     }
-    @ObservationIgnored private var jumpObserver: NSObjectProtocol?
-    @ObservationIgnored private var jumpResume: Task<Void, Never>?
+    private var jumpObserver: NSObjectProtocol?
+    private var jumpResume: Task<Void, Never>?
     /// Where the clock was at the last jump notice or once-a-second sample: none before the first sample, so the
     /// seek that restores a saved place (which has its own start, `restorePositionIfNeeded`) isn't taken for one.
-    @ObservationIgnored private var clockMark: SeekResume.Clock?
+    private var clockMark: SeekResume.Clock?
     private func markClock() {
         let seconds = player.currentTime().seconds
         clockMark = seconds.isFinite
@@ -827,9 +828,9 @@ import IOKit.pwr_mgt
             }
         }
     }
-    @ObservationIgnored private var delayObserver: NSObjectProtocol?
+    private var delayObserver: NSObjectProtocol?
     /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`), only while a delay is set.
-    @ObservationIgnored private var subtitleTimeObserver: Any?
+    private var subtitleTimeObserver: Any?
     /// Delayed subtitles (#599) reach the screen on a quarter-second clock rather than on the once-a-second sample.
     /// A subtitle file the app shows itself (#576) has a twentieth-of-a-second one, so its lines are on time to a
     /// frame or so. Otherwise the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the
@@ -844,12 +845,12 @@ import IOKit.pwr_mgt
             MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
         }
     }
-    @ObservationIgnored private var subtitleClockInterval: Double?
+    private var subtitleClockInterval: Double?
     /// The subtitle track picked in the player's menu, for the next episodes of the same title (#779) and, kept across
     /// launches, for other videos in its language (#1174).
-    @ObservationIgnored private var subtitleChoice = SubtitleChoice.saved()
+    private var subtitleChoice = SubtitleChoice.saved()
     /// The title the playing item belongs to (`Channel.skipScope`).
-    @ObservationIgnored private var subtitleScope: String?
+    private var subtitleScope: String?
 
     /// The viewer picked one of the item's own subtitle tracks, or Off (nil), in the player's menu.
     func choseSubtitle(_ option: AVMediaSelectionOption?) {
@@ -877,11 +878,11 @@ import IOKit.pwr_mgt
     private static func subtitleRules() -> [AVTextStyleRule] {
         AVTextStyleRule(textMarkupAttributes: SubtitleStyle.load().attributes).map { [$0] } ?? []
     }
-    private var observation: NSKeyValueObservation?
-    private var failureObserver: NSObjectProtocol?
-    private var preparation: Task<Void, Never>?
+    @Published private var observation: NSKeyValueObservation?
+    @Published private var failureObserver: NSObjectProtocol?
+    @Published private var preparation: Task<Void, Never>?
     #if os(macOS)
-    private var proxy: HLSProxy?
+    @Published private var proxy: HLSProxy?
     #endif
     /// The session on screen, which casts from the Bilibili app control.
     static weak var current: PlaybackSession?

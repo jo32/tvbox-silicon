@@ -241,7 +241,7 @@ struct NovelChapterList: View {
                     if query.isEmpty { header(proxy) }
                     let shown = shown
                     if shown.isEmpty, !query.isEmpty {
-                        ContentUnavailableView.search(text: query).padding(.top, 40)
+                        VStack(spacing: 6) { Image(systemName: "magnifyingglass"); Text(query).font(.footnote) }.foregroundStyle(.secondary).padding(.top, 40)
                     }
                     ForEach(shown) { section in
                         if let title = section.title { volume(title) }
@@ -393,11 +393,11 @@ struct NovelChapterList: View {
 }
 
 /// Where a table of contents is (0 at the top, 1 at the bottom) and whether it moves. Read only by the handle (iOS).
-@MainActor @Observable final class NovelScrollState {
-    var progress: Double = 0
-    var moving = false
+@MainActor final class NovelScrollState: ObservableObject {
+    @Published var progress: Double = 0
+    @Published var moving = false
     /// iOS 17: the scroll view's height, for working out `progress` from where the content is.
-    @ObservationIgnored var viewport: CGFloat = 0
+    var viewport: CGFloat = 0
     static let space = "novelChapterList"
 
     /// iOS 17: the content's frame in the scroll view. Off by the bars' insets at most, which the ends clamp away.
@@ -510,7 +510,7 @@ private struct NovelChapterScrubber: View {
         .allowsHitTesting(visible)
         .animation(.easeOut(duration: 0.25), value: visible)
         .sensoryFeedback(.selection, trigger: dragging.flatMap { row(at: $0)?.index })
-        .onChange(of: scroll.moving) { _, now in
+        .compatOnChange(of: scroll.moving) { _, now in
             if now { hide?.cancel(); shown = true } else { scheduleHide() }
         }
         #if DEBUG
@@ -603,7 +603,7 @@ struct NovelChapterGrid: View {
             heading
             let shown = shown
             if shown.isEmpty, !query.isEmpty {
-                ContentUnavailableView.search(text: query).frame(maxWidth: .infinity).padding(.vertical, 30)
+                VStack(spacing: 6) { Image(systemName: "magnifyingglass"); Text(query).font(.footnote) }.foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 30)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 14, alignment: .leading)], alignment: .leading, spacing: 0) {
                 ForEach(shown) { section in
@@ -643,7 +643,7 @@ struct NovelChapterGrid: View {
                 Button { withAnimation(.smooth(duration: 0.4)) { newestFirst.toggle() } } label: {
                     Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .contentTransition(.symbolEffect(.replace))
+                        
                         .frame(width: 30, height: 30)
                         .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
                         .contentShape(Circle())
@@ -760,7 +760,7 @@ struct NovelChapterTVGrid: View {
             HStack {
                 Button { withAnimation(.smooth) { newestFirst.toggle() } } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: newestFirst ? "arrow.down" : "arrow.up").contentTransition(.symbolEffect(.replace))
+                        Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                         Text(L10n.text("Chapters"))
                         Text("\(count)").monospacedDigit().foregroundStyle(.secondary)
                     }

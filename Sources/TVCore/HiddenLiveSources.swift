@@ -1,16 +1,15 @@
 import Foundation
-import Observation
 
 /// Live platforms and playlists the viewer turned off (#601, #783, #837). The built-in platforms come with the app and a
 /// playlist comes with its subscription, so neither can be deleted on its own; hiding takes it out of Live TV, Watch Now
 /// and live search, on every device. Known by address: a platform's `<scheme>://rooms`, a playlist's file.
-@MainActor @Observable public final class HiddenLiveSources {
+@MainActor public final class HiddenLiveSources: ObservableObject {
     /// In the order they were hidden, as saved and synced.
-    private var keys: [String] { didSet { lookup = Set(keys) } }
-    private var lookup: Set<String>
+    @Published private var keys: [String] { didSet { lookup = Set(keys) } }
+    @Published private var lookup: Set<String>
     private let defaults: UserDefaults
     /// Called after the list changes here (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
     private static let storageKey = "hiddenLiveSources.v1"
 
     public init(defaults: UserDefaults = .standard) {

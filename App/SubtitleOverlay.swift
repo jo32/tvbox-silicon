@@ -6,44 +6,44 @@ import TVCore
 /// legible output that stops AVPlayer drawing them (its renderer keeps the system's box behind the letters whatever
 /// the item's text style rules say) and hands over the text of the cues as they come and go. Nothing runs between
 /// cues, and nothing at all while no subtitle is chosen.
-@MainActor @Observable final class SubtitleCues: NSObject, AVPlayerItemLegibleOutputPushDelegate {
-    private(set) var lines: [String] = []
+@MainActor final class SubtitleCues: NSObject, AVPlayerItemLegibleOutputPushDelegate, ObservableObject {
+    @Published private(set) var lines: [String] = []
     /// The picture's size, to place the lines on the picture rather than on the whole view.
-    private(set) var pictureSize: CGSize = .zero
-    private(set) var style = SubtitleStyle.load()
+    @Published private(set) var pictureSize: CGSize = .zero
+    @Published private(set) var style = SubtitleStyle.load()
     /// How late the lines show (#599). 0 keeps AVPlayer's own timing.
-    private(set) var delay = SubtitleDelay.load()
+    @Published private(set) var delay = SubtitleDelay.load()
     /// What AVPlayer handed over, waiting for its turn while `delay` is on.
-    @ObservationIgnored private var schedule = SubtitleSchedule()
+    private var schedule = SubtitleSchedule()
     /// The playback time `advance(to:)` saw last: what is due there when the delay is turned off.
-    @ObservationIgnored private var lastAdvanced: Double?
+    private var lastAdvanced: Double?
     /// A subtitle file the app shows itself (`ExternalSubtitles`, #576), at the player's clock: while there is one,
     /// what AVPlayer hands over is ignored (its own subtitles are off then).
-    private(set) var document: SubtitleDocument?
-    @ObservationIgnored var timing = SubtitleTiming() {
+    @Published private(set) var document: SubtitleDocument?
+    var timing = SubtitleTiming() {
         didSet { if let lastAdvanced, document != nil { advance(to: lastAdvanced) } }
     }
     /// Runs when one of the item's own subtitles is chosen while a file shows: the file makes way.
-    @ObservationIgnored var nativeChosen: () -> Void = {}
+    var nativeChosen: () -> Void = {}
     /// ASS/SSA the app draws itself through libass (#576 M3): a chosen ASS file, or the item's own ASS track of a
     /// repackaged Matroska file. While it shows, `lines` stays empty.
-    @ObservationIgnored let styled = StyledSubtitles()
+    let styled = StyledSubtitles()
     /// Whether the player's clock must tick for the subtitles (`advance`): a file or styled subtitles show.
     var needsClock: Bool { document != nil || styled.isActive }
     /// Runs when `needsClock` may have changed without a file being chosen (an ASS track came or went).
-    @ObservationIgnored var clockChanged: () -> Void = {}
+    var clockChanged: () -> Void = {}
     /// Whether the item's ASS tracks were looked for since it began to play.
-    @ObservationIgnored private var lookedForStyled = false
+    private var lookedForStyled = false
     /// AVPlayer draws the subtitles itself while the picture is somewhere the app's overlay isn't: Picture in Picture.
-    var native = false {
+    @Published var native = false {
         didSet {
             guard native != oldValue else { return }
             for output in outputs.allObjects { output.suppressesPlayerRendering = !native }
         }
     }
-    @ObservationIgnored private let outputs = NSHashTable<AVPlayerItemLegibleOutput>.weakObjects()
-    @ObservationIgnored private weak var item: AVPlayerItem?
-    @ObservationIgnored private var sizeObservation: NSKeyValueObservation?
+    private let outputs = NSHashTable<AVPlayerItemLegibleOutput>.weakObjects()
+    private weak var item: AVPlayerItem?
+    private var sizeObservation: NSKeyValueObservation?
 
     override init() {
         super.init()

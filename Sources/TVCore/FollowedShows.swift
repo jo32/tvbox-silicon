@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// A TMDB series the viewer follows (追剧, #1186): enough to list it and open its Discover page without asking TMDB.
 public struct FollowedShow: Codable, Hashable, Sendable, Identifiable {
@@ -30,12 +29,12 @@ public struct FollowedShow: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// The series the viewer follows, newest first, kept in user defaults and synced through iCloud like favorites.
-@MainActor @Observable public final class FollowedShows {
-    public private(set) var shows: [FollowedShow] = []
+@MainActor public final class FollowedShows: ObservableObject {
+    @Published public private(set) var shows: [FollowedShow] = []
     private let defaults: UserDefaults
     static let storageKey = "followedShows"
     /// Called after the viewer changes the list (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

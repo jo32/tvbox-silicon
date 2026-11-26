@@ -35,38 +35,38 @@ struct NovelPageKey: Equatable {
 }
 
 /// The reader's state: the chapters fetched, where reading is, and the neighbours fetched ahead.
-@MainActor @Observable final class NovelReaderModel {
+@MainActor final class NovelReaderModel: ObservableObject {
     let book: NovelBook
     let chapters: [NovelChapter]
     /// Chapter texts fetched so far, the ones near the reader kept, in the script the reader picked.
-    private(set) var contents: [Int: NovelContent] = [:]
+    @Published private(set) var contents: [Int: NovelContent] = [:]
     /// The same chapters as the source sent them, to convert again when the script changes (#1007).
-    @ObservationIgnored private var fetched: [Int: NovelContent] = [:]
+    private var fetched: [Int: NovelContent] = [:]
     /// Chapter titles in the picked script, made on first use; the chapters themselves keep the source's titles,
     /// which finding a chapter in another source matches on.
-    @ObservationIgnored private var displayTitles: (script: NovelScript, titles: [String])?
-    private(set) var failure: String?
-    private(set) var nextFailure: String?
+    private var displayTitles: (script: NovelScript, titles: [String])?
+    @Published private(set) var failure: String?
+    @Published private(set) var nextFailure: String?
     /// A neighbouring chapter being fetched for a page turn.
-    private(set) var fetching: Int?
+    @Published private(set) var fetching: Int?
     /// Why a chapter the reader stands on couldn't be fetched again.
-    private(set) var missing: [Int: String] = [:]
+    @Published private(set) var missing: [Int: String] = [:]
 
     // Page layout.
-    private(set) var place: NovelPlace?
-    @ObservationIgnored private var paged: [Int: NovelPages] = [:]
-    @ObservationIgnored private var pagedKey: NovelPageKey?
+    @Published private(set) var place: NovelPlace?
+    private var paged: [Int: NovelPages] = [:]
+    private var pagedKey: NovelPageKey?
 
     // Scroll layout: the chapters shown one after another; reading on appends the next one.
-    private(set) var lines: [NovelLine] = []
-    private(set) var loaded: [Int] = []
-    private var counts: [Int: Int] = [:]
-    private(set) var loadingNext = false
+    @Published private(set) var lines: [NovelLine] = []
+    @Published private(set) var loaded: [Int] = []
+    @Published private var counts: [Int: Int] = [:]
+    @Published private(set) var loadingNext = false
     /// The line at the top of the screen.
-    var anchor: String?
+    @Published var anchor: String?
     /// Heights measured as lines draw, for turning a screen at a time; not observed.
-    @ObservationIgnored var heights: [String: CGFloat] = [:]
-    @ObservationIgnored private var saved = Date.distantPast
+    var heights: [String: CGFloat] = [:]
+    private var saved = Date.distantPast
 
     init(_ reading: NovelReading) {
         book = reading.book
@@ -417,9 +417,13 @@ private struct NovelPageFrame {
 /// The reader. In the page layout a swipe, or a tap at either side, turns the page; the middle shows the controls.
 /// The scroll layout is one column of chapters read on downwards.
 struct NovelReaderView: View {
-    @State private var model: NovelReaderModel
-    @State private var store = NovelStore.shared
-    @State private var fonts = NovelFonts.shared
+    @StateObject private var modelHolder = ObservableHolder<NovelReaderModel>()
+    private var model: NovelReaderModel { modelHolder.value! }
+    private var modelAnchor: Binding<String?> {
+        Binding(get: { modelHolder.value?.anchor }, set: { modelHolder.value?.anchor = $0 })
+    }
+    @StateObject private var store = NovelStore.shared
+    @StateObject private var fonts = NovelFonts.shared
     @State private var chrome = true
     @State private var panel: Panel?
     @State private var showContents = false
@@ -449,7 +453,7 @@ struct NovelReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     #if os(macOS)
-    @Environment(Store.self) private var appStore
+    @EnvironmentObject private var appStore: Store
     #endif
     #if os(tvOS)
     @FocusState private var textFocused: Bool
@@ -463,7 +467,7 @@ struct NovelReaderView: View {
 
     init(reading: NovelReading) {
         start = reading
-        _model = State(initialValue: NovelReaderModel(reading))
+        _modelHolder = StateObject(wrappedValue: ObservableHolder(NovelReaderModel(reading)))
     }
 
     private var dark: Bool { store.appearance.isDark(scheme == .dark) }
@@ -507,16 +511,16 @@ struct NovelReaderView: View {
         .onAppear { appStore.hidesSidebar = true }
         .onDisappear { appStore.hidesSidebar = false }
         .focusable()
-        .focusEffectDisabled()
-        .onKeyPress(keys: [.downArrow, .space, .pageDown, .rightArrow]) { _ in turn(forward: true); return .handled }
-        .onKeyPress(keys: [.upArrow, .pageUp, .leftArrow]) { _ in turn(forward: false); return .handled }
-        .onKeyPress(.escape) { close(); return .handled }
+        .compatFocusEffectDisabled()
+        .compatOnKeyPress(keys: [.downArrow, .space, .pageDown, .rightArrow]) { turn(forward: true) }
+        .compatOnKeyPress(keys: [.upArrow, .pageUp, .leftArrow]) { turn(forward: false) }
+        .compatOnKeyPress(.escape) { close() }
         #endif
         #if os(tvOS)
         .onExitCommand {
             if panel != nil { withAnimation(.smooth) { panel = nil } } else if chrome { close() } else { withAnimation(.smooth) { chrome = true } }
         }
-        .onChange(of: chrome, initial: true) { _, shown in
+        .compatOnChange(of: chrome, initial: true) { _, shown in
             guard shown else { return }
             Task { try? await Task.sleep(for: .milliseconds(80)); controlFocus = "contents" }
         }
@@ -538,8 +542,8 @@ struct NovelReaderView: View {
             .frame(minWidth: 460, minHeight: 520)
             #endif
         }
-        .onChange(of: store.pageTurn) { _, turn in model.switchLayout(to: turn) }
-        .onChange(of: store.font) { _, font in fonts.prepare(font) }
+        .compatOnChange(of: store.pageTurn) { _, turn in model.switchLayout(to: turn) }
+        .compatOnChange(of: store.font) { _, font in fonts.prepare(font) }
         .task { await store.loadBackground() }
         .task {
             fonts.prepare(store.font)
@@ -632,14 +636,14 @@ struct NovelReaderView: View {
             #if !os(tvOS)
             .onTapGesture { location in tap(location, size: geometry.size) }
             #endif
-            .onChange(of: key, initial: true) { _, key in pageKey = key }
-            .onChange(of: geometry.size.width, initial: true) { _, width in pageWidth = width }
+            .compatOnChange(of: key, initial: true) { _, key in pageKey = key }
+            .compatOnChange(of: geometry.size.width, initial: true) { _, width in pageWidth = width }
         }
         .ignoresSafeArea()
         #if os(tvOS)
         .focusable(!chrome)
         .focused($textFocused)
-        .focusEffectDisabled()
+        .compatFocusEffectDisabled()
         .onMoveCommand { direction in
             switch direction {
             case .right, .down: turn(forward: true)
@@ -649,7 +653,7 @@ struct NovelReaderView: View {
         }
         .onPlayPauseCommand { withAnimation(.smooth) { chrome.toggle() } }
         .onTapGesture { withAnimation(.smooth) { chrome.toggle() } }
-        .onChange(of: chrome) { _, shown in if !shown { textFocused = true } }
+        .compatOnChange(of: chrome) { _, shown in if !shown { textFocused = true } }
         #endif
     }
 
@@ -826,9 +830,9 @@ struct NovelReaderView: View {
         if store.curl { curlRequest = NovelCurlRequest(id: curlRequest.id + 1, forward: forward); return }
         #endif
         turning = true
-        withAnimation(.smooth(duration: 0.3)) {
+        compatWithAnimation(.smooth(duration: 0.3), {
             drag = forward ? -pageWidth : pageWidth
-        } completion: {
+        }) {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -880,7 +884,7 @@ struct NovelReaderView: View {
                 await next.open(target, position: position)
                 if let failure = next.failure { throw TVError.unsupported(failure) }
                 store.switchSource(of: old, to: filled, chapters: list)
-                model = next
+                modelHolder.value = next
                 next.save(force: true)
             } catch is CancellationError {
             } catch {
@@ -912,7 +916,7 @@ struct NovelReaderView: View {
                     }
                     footer
                 }
-                .scrollTargetLayout()
+                .compatScrollTargetLayout()
                 .frame(maxWidth: maxColumn)
                 .padding(.horizontal, store.margin)
                 .frame(maxWidth: .infinity)
@@ -920,17 +924,17 @@ struct NovelReaderView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
-            .scrollPosition(id: $model.anchor, anchor: .top)
-            .onChange(of: model.anchor) { _, _ in model.moved() }
+            .compatScrollPosition(id: modelAnchor, anchor: .top)
+            .compatOnChange(of: model.anchor) { _, _ in model.moved() }
             .onAppear { viewport = geometry.size.height }
-            .onChange(of: geometry.size.height) { _, height in viewport = height }
+            .compatOnChange(of: geometry.size.height) { _, height in viewport = height }
             #if os(iOS) || os(macOS)
             .simultaneousGesture(SpatialTapGesture().onEnded { tap($0.location, size: geometry.size) })
             #endif
             #if os(tvOS)
             .focusable(!chrome && panel == nil)
             .focused($textFocused)
-            .focusEffectDisabled()
+            .compatFocusEffectDisabled()
             .onMoveCommand { direction in
                 switch direction {
                 case .down, .right: turn(forward: true)
@@ -940,7 +944,7 @@ struct NovelReaderView: View {
             }
             .onPlayPauseCommand { withAnimation(.smooth) { chrome.toggle() } }
             .onTapGesture { withAnimation(.smooth) { chrome.toggle() } }
-            .onChange(of: chrome) { _, shown in if !shown { textFocused = true } }
+            .compatOnChange(of: chrome) { _, shown in if !shown { textFocused = true } }
             #endif
         }
         // Above and below the column, the text stops short of the screen's edges.
@@ -1305,7 +1309,7 @@ struct NovelReaderView: View {
             }
         }
         #if os(iOS)
-        .onChange(of: pickedPhoto) { _, item in
+        .compatOnChange(of: pickedPhoto) { _, item in
             guard let item else { return }
             Task {
                 let data = try? await item.loadTransferable(type: Data.self)
@@ -1453,7 +1457,7 @@ private struct NovelReaderContents: View {
     @Binding var showsBookmarks: Bool
     /// A chapter, and how far into it.
     let open: (Int, Double) -> Void
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @Environment(\.dismiss) private var dismiss
 
     private var bookmarks: [NovelBookmark] { store.bookmarks(model.book) }
@@ -1486,9 +1490,7 @@ private struct NovelReaderContents: View {
             #endif
         }
         .environment(\.colorScheme, dark ? .dark : .light)
-        #if !os(tvOS)
-        .presentationBackground(colors.background)
-        #endif
+
         #if os(macOS)
         .frame(minWidth: 460, minHeight: 560)
         #endif
@@ -1498,10 +1500,13 @@ private struct NovelReaderContents: View {
 extension NovelReaderContents {
     @ViewBuilder fileprivate var bookmarkList: some View {
         if bookmarks.isEmpty {
-            ContentUnavailableView(L10n.text("No Bookmarks"), systemImage: "bookmark",
-                                   description: Text(L10n.text("Use the bookmark button at the top of the page to mark your place.")))
-                .foregroundStyle(colors.text)
-                .frame(maxHeight: .infinity)
+            VStack(spacing: 8) {
+                Image(systemName: "bookmark").font(.title)
+                Text(L10n.text("No Bookmarks")).font(.headline)
+                Text(L10n.text("Use the bookmark button at the top of the page to mark your place.")).font(.footnote)
+            }
+            .foregroundStyle(colors.text)
+            .frame(maxHeight: .infinity)
         } else {
             List {
                 ForEach(bookmarks) { bookmark in

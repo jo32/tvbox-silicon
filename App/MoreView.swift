@@ -139,9 +139,9 @@ struct TabBarPreview: View {
 /// The phone's More tab: the sections that are not in the tab bar, as tiles. The tab bar editor is in Settings
 /// (`EditTabBarRow`): a miniature tab bar here sat right above the real one and was easy to tap by mistake (#326).
 struct MoreView: View {
-    @Environment(Store.self) private var store
-    @Environment(Updates.self) private var updates
-    @Environment(Announcements.self) private var announcements
+    @EnvironmentObject private var store: Store
+    @EnvironmentObject private var updates: Updates
+    @EnvironmentObject private var announcements: Announcements
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -240,7 +240,7 @@ private struct MoreTile: View {
 
 /// Settings' row for the tab bar editor. On an iPad's sidebar, which has no More, the editor is one list.
 struct EditTabBarRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass

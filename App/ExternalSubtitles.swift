@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 ///
 /// They load after the picture starts, never before it. One that fails says why and can be tried again; it never
 /// stops the video. Choosing one turns the item's own subtitles off, and choosing one of those turns this off.
-@MainActor @Observable final class ExternalSubtitles {
+@MainActor final class ExternalSubtitles: ObservableObject {
     struct Entry: Identifiable, Equatable {
         enum State: Equatable { case loading, ready(SubtitleDocument), failed(String) }
         let id: String
@@ -32,46 +32,46 @@ import UniformTypeIdentifiers
         }
     }
 
-    private(set) var entries: [Entry] = []
-    private(set) var selected: String?
-    private(set) var timing = SubtitleTiming()
+    @Published private(set) var entries: [Entry] = []
+    @Published private(set) var selected: String?
+    @Published private(set) var timing = SubtitleTiming()
     /// A file or address the viewer added that couldn't be read, for an alert.
-    var importFailure: String?
+    @Published var importFailure: String?
     var document: SubtitleDocument? { entries.first { $0.id == selected }?.document }
 
     /// Searching the viewer's subtitle sources (#576 M2).
     enum OnlineState: Equatable { case idle, noSources, searching, done }
-    private(set) var online = SubtitleSearchProgress()
-    private(set) var onlineState = OnlineState.idle
+    @Published private(set) var online = SubtitleSearchProgress()
+    @Published private(set) var onlineState = OnlineState.idle
     /// What the search asks for: the playing video, as the catalog names it, until the viewer edits it.
-    private(set) var hint: SubtitleHint?
+    @Published private(set) var hint: SubtitleHint?
     /// Whether any subtitle source is on, for showing the search at all.
-    private(set) var hasSources = false
+    @Published private(set) var hasSources = false
     /// The sources' names by id, in their order, for the search's status lines.
-    private(set) var sourceNames: [(id: String, name: String)] = []
-    @ObservationIgnored private var searching: Task<Void, Never>?
-    @ObservationIgnored private var sources: [SubtitleSearchSource] = []
+    @Published private(set) var sourceNames: [(id: String, name: String)] = []
+    private var searching: Task<Void, Never>?
+    private var sources: [SubtitleSearchSource] = []
     /// The playing file's OpenSubtitles hash, worked out once a subtitle source is on (#576 M2).
-    @ObservationIgnored private var hashing: Task<Void, Never>?
-    @ObservationIgnored private var fileHash: SubtitleFileHash?
-    @ObservationIgnored private var hashTarget: (url: URL, headers: [String: String])?
+    private var hashing: Task<Void, Never>?
+    private var fileHash: SubtitleFileHash?
+    private var hashTarget: (url: URL, headers: [String: String])?
     /// The catalog's TMDB match for a channel, as the video's page keeps it (`TMDBMatchStore`); set by the player.
-    @ObservationIgnored var tmdbKey: ((Channel) -> String?)?
+    var tmdbKey: ((Channel) -> String?)?
     /// The playing video's file name or title, for picking an archive's files and a drive folder's.
-    @ObservationIgnored private var video: String?
+    private var video: String?
 
     /// The player shows what is chosen; set by the session.
-    @ObservationIgnored var cues: SubtitleCues?
-    @ObservationIgnored weak var player: AVPlayer?
+    var cues: SubtitleCues?
+    weak var player: AVPlayer?
     /// Runs when a file is chosen or put away, for the session's clock.
-    @ObservationIgnored var changed: () -> Void = {}
-    @ObservationIgnored private var headers: [String: String] = [:]
-    @ObservationIgnored private var scope: String?
-    @ObservationIgnored private var loading: Task<Void, Never>?
-    @ObservationIgnored private var retries: [String: Task<Void, Never>] = [:]
+    var changed: () -> Void = {}
+    private var headers: [String: String] = [:]
+    private var scope: String?
+    private var loading: Task<Void, Never>?
+    private var retries: [String: Task<Void, Never>] = [:]
     /// The first file that loads comes on by itself, unless the viewer chose (or the video has its own on).
-    @ObservationIgnored private var automatic = true
-    @ObservationIgnored private var generation = UUID()
+    private var automatic = true
+    private var generation = UUID()
     /// At most this many of a source's files, three at a time.
     static let limit = 8, concurrent = 3
 
@@ -177,7 +177,7 @@ import UniformTypeIdentifiers
     }
 
     /// The viewer picked a subtitle file: the track picked in an earlier episode is no longer the wish (#779).
-    @ObservationIgnored var fileChosen: (() -> Void)?
+    var fileChosen: (() -> Void)?
 
     func select(_ id: String?) {
         if id != nil { fileChosen?() }

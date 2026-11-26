@@ -11,7 +11,8 @@ import TVCore
 /// two copies cross-faded instead, so the cover went see-through in flight.
 struct MusicNowPlayingScreen: View {
     enum Panel: Hashable { case lyrics, queue }
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
+    @Environment(\.dismiss) private var dismiss
     @State private var panel: Panel?
     @State private var tint = Color(white: 0.24)
     @State private var showsChannels = false
@@ -63,10 +64,9 @@ struct MusicNowPlayingScreen: View {
                 _ = await PosterPalette.image(next)
             }
         }
-        // Closed through what presents it, not `dismiss`: on iOS 17 the sheet's dismiss action came back changed on
-        // every update, so this page was read again without end, frozen with its memory climbing until the system
-        // stopped the app (#1813, #1215).
-        .onChange(of: music.track == nil) { _, gone in if gone { music.presentsPlayer = false } }
+        // 透過呈現者關閉，而不是 `dismiss`：iOS 17 上 sheet 的 dismiss action 每次更新都會變，
+        // 讓這頁不停重讀、記憶體一直上升直到系統殺掉 App（#1813、#1215）。
+        .compatOnChange(of: music.track == nil) { _, gone in if gone { music.presentsPlayer = false } }
         #if DEBUG
         .onAppear {
             switch UserDefaults.standard.string(forKey: "qaNowPlaying") {

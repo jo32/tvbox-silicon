@@ -1,10 +1,9 @@
 import Foundation
-import Observation
 
 /// How each source has been answering lately. Search leaves a failing source out, and the source
 /// lists mark it, until it answers again or its cooldown ends; it stays listed and opens as usual.
 /// A source is identified by its subscription and original key, so its record survives re-imports and merges.
-@MainActor @Observable public final class SourceHealth {
+@MainActor public final class SourceHealth: ObservableObject {
     public static let shared = SourceHealth(file: URL.cachesDirectory.appending(path: "source-health.json"))
 
     public enum Status: Sendable {
@@ -34,9 +33,9 @@ import Observation
     /// A record nobody updated for a week says nothing about the source today.
     static let expiry: TimeInterval = 7 * 86400
 
-    private(set) var records: [String: Record] = [:]
+    @Published private(set) var records: [String: Record] = [:]
     private let file: URL?
-    private var saveTask: Task<Void, Never>?
+    @Published private var saveTask: Task<Void, Never>?
 
     public init(file: URL?) {
         self.file = file

@@ -5,7 +5,7 @@ import TVCore
 /// Now Playing at the top of a music page, as a small pill like the filter chips beside it: the
 /// remote reaches it in a move from the results, and it opens the full-screen player.
 struct MusicNowPlayingButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     var body: some View {
         let music = store.music
         if let track = music.track {
@@ -15,7 +15,7 @@ struct MusicNowPlayingButton: View {
                         .frame(width: 40, height: 40)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     // Bars in the label's own colour, so they stay visible on the focused white plate.
-                    Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: music.phase == .playing)
+                    Image(systemName: "waveform")
                     Text([track.title, track.artistLine].joined(separator: " · ")).lineLimit(1)
                 }
             }
@@ -29,21 +29,21 @@ struct MusicNowPlayingButton: View {
 /// The sidebar's Now Playing item: the song's title, and bars that move while it plays. The sidebar
 /// draws every icon in one colour (a cover came out as a black disc), so the bars are the motion.
 struct MusicTabLabel: View {
-    @Environment(Store.self) private var store
-    @State private var bars = MusicTabBars()
+    @EnvironmentObject private var store: Store
+    @StateObject private var bars = MusicTabBars()
     var body: some View {
         let music = store.music
         Label { Text(music.track?.title ?? L10n.text("Now Playing")) } icon: { Image(uiImage: bars.image) }
-            .onChange(of: music.phase == .playing, initial: true) { _, playing in bars.animates = playing }
+            .compatOnChange(of: music.phase == .playing, initial: true) { _, playing in bars.animates = playing }
     }
 }
 
 /// Three bars drawn at a few heights, cycled while the song plays; low and still while it is paused.
-@MainActor @Observable final class MusicTabBars {
-    private(set) var image = MusicTabBars.frames[0]
-    var animates = false { didSet { if animates != oldValue { restart() } } }
-    @ObservationIgnored private var frame = 0
-    @ObservationIgnored private var timer: Timer?
+@MainActor final class MusicTabBars: ObservableObject {
+    @Published private(set) var image = MusicTabBars.frames[0]
+    @Published var animates = false { didSet { if animates != oldValue { restart() } } }
+    private var frame = 0
+    private var timer: Timer?
     private static let still = render([0.35, 0.35, 0.35])
     private static let frames = [[0.45, 0.9, 0.6], [0.8, 0.5, 1.0], [0.6, 1.0, 0.4], [1.0, 0.65, 0.8]].map { render($0) }
 
@@ -80,7 +80,7 @@ struct MusicTabLabel: View {
 /// with bars over it while it plays, the title and the artist. Clicking it opens the player.
 /// tvOS 27 and later; before that the sidebar leads with a plain Now Playing item instead.
 struct MusicSidebarNowPlaying: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     static var inSidebarHeader: Bool {
         if #available(tvOS 27, *) { true } else { false }
@@ -100,7 +100,7 @@ struct MusicSidebarNowPlaying: View {
 
 /// The card itself. In focus only the cover is outlined and lifts, like a poster; the words stay put.
 private struct MusicSidebarCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.isFocused) private var focused
     let track: MusicTrack
     private let art: CGFloat = 60
@@ -136,7 +136,7 @@ private struct MusicSidebarCard: View {
                     ProgressView().tint(.white).scaleEffect(0.7)
                 } else {
                     Image(systemName: "waveform").font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
-                        .symbolEffect(.variableColor.iterative, isActive: true)
+                        
                 }
             }
         }

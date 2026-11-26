@@ -8,7 +8,7 @@ import TVCore
 /// fast-forward, Play/Pause), and the transport bar carries previous and next, lyrics, channels,
 /// the queue and lyric timing. The song itself, its cover and its lyrics, fill the content overlay.
 struct MusicPlayerScreen: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     /// Lyrics show by themselves when the song has them; the transport bar turns them off.
     @State private var showsLyrics = true
@@ -21,7 +21,7 @@ struct MusicPlayerScreen: View {
             .joined(separator: "|")
         MusicNativePlayer(store: store, showsLyrics: $showsLyrics, revision: revision)
             .ignoresSafeArea()
-            .onChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
+            .compatOnChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
     }
 }
 
@@ -134,7 +134,7 @@ private struct MusicNativePlayer: UIViewControllerRepresentable {
 /// What fills the screen behind AVKit's controls: the cover's colours, the source at the top, and
 /// the cover with the song, or beside its lyrics.
 private struct MusicTVContent: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let showsLyrics: Bool
 
     var body: some View {

@@ -16,7 +16,7 @@ private struct SearchPoster: Identifiable {
 }
 
 struct GlobalSearchView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @FocusState private var inputFocused: Bool
     @State private var showFailures = false
     /// The sources being searched right now, under the summary; folded away unless asked for.
@@ -82,7 +82,7 @@ struct GlobalSearchView: View {
     }
 
     var body: some View {
-        @Bindable var model = model
+        @ObservedObject var model = model
         #if os(tvOS)
         searchResults
             // A field beside the sidebar button rather than the system keyboard across the top of the page, so the
@@ -100,7 +100,7 @@ struct GlobalSearchView: View {
             #endif
         #else
         searchResults
-            .scrollPosition(id: $model.scrollID)
+            .compatScrollPosition(id: $model.scrollID)
             // A hard edge: the summary, the activity and the source chips are a tall bar, and results showed through it.
             .topBar(hardEdge: true) { if let config = store.subscription, showsHeader { searchHeader(config) } }
             .screenBackdrop()
@@ -113,7 +113,7 @@ struct GlobalSearchView: View {
             .catalogSearchable(text: $model.draft, prompt: L10n.text("Search videos"))
             .searchFieldFocused($inputFocused)
             .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
-            .onChange(of: model.draft) { _, draft in if draft.isEmpty && !model.keyword.isEmpty { model.reset() } }
+            .compatOnChange(of: model.draft) { _, draft in if draft.isEmpty && !model.keyword.isEmpty { model.reset() } }
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
             #endif
@@ -182,7 +182,7 @@ struct GlobalSearchView: View {
                             LazyVGrid(columns: listed ? Self.rowColumns : Layout.posterColumns,
                                       spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(listing.posters, config)
-                            }.scrollTargetLayout()
+                            }.compatScrollTargetLayout()
                             // A single row of results leaves nothing under the right of the rows above; as a section the
                             // remote still moves Down onto it (#481).
                             .tvFocusSection()
@@ -201,7 +201,7 @@ struct GlobalSearchView: View {
                                         endVisible = visible
                                         if visible { model.loadMore(model.selectedSource, config: config) }
                                     }
-                                    .onChange(of: model.loadingMore) { _, loading in
+                                    .compatOnChange(of: model.loadingMore) { _, loading in
                                         if !loading, endVisible { model.loadMore(model.selectedSource, config: config) }
                                     }
                             }
@@ -255,7 +255,7 @@ struct GlobalSearchView: View {
     /// The system search keyboard, full screen: past searches and suggested titles under it, then the button that
     /// runs the search and closes it. Back closes it without searching.
     private var searchEntry: some View {
-        @Bindable var model = model
+        @ObservedObject var model = model
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -287,7 +287,7 @@ struct GlobalSearchView: View {
     #endif
 
     private func searchHeader(_ config: Subscription) -> some View {
-        @Bindable var model = model
+        @ObservedObject var model = model
         let sourceItems = sourceItems
         return VStack(alignment: .leading, spacing: 14) {
             if !model.keyword.isEmpty {
@@ -392,7 +392,7 @@ struct GlobalSearchView: View {
         Button { withAnimation(.smooth(duration: 0.35)) { showsList.toggle() } } label: {
             Image(systemName: showsList ? "square.grid.2x2" : "list.bullet")
                 .font(.footnote.weight(.semibold))
-                .contentTransition(.symbolEffect(.replace))
+
                 .frame(minWidth: 16)
         }
         .searchAction()
@@ -827,7 +827,7 @@ private func uniqueVideos(_ videos: [Video]) -> [Video] {
 }
 
 struct RecommendationsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.openRoute) private var openRoute
     let config: Subscription
     var fixedSite: Site? = nil
@@ -850,7 +850,7 @@ struct RecommendationsView: View {
     @State private var categoryFilters: [String: String] = [:]
     /// The source `category` belongs to. A source change clears it inside the load task, which is the last writer.
     @State private var categorySite: String?
-    @State private var browser = CatalogBrowser()
+    @StateObject private var browser = CatalogBrowser()
     private var model: RecommendationModel { store.recommendationModel }
     private var sites: [Site] { fixedSite.map { [$0] } ?? store.recommendationSites(config) }
     /// Until the user picks a source, default to the first in strategy order, so opening the app
@@ -1128,7 +1128,7 @@ struct RecommendationsView: View {
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
-        .navigationDestination(item: $openedSource) { route in
+        .compatNavigationDestination(item: $openedSource) { route in
             #if os(macOS)
             route.build().musicBar()
             #else
@@ -1379,7 +1379,7 @@ struct SourceStrip: View {
                 }
             }
             .padding(.vertical, 4)
-            .scrollTargetLayout()
+            .compatScrollTargetLayout()
         }
     }
 }
@@ -1400,7 +1400,7 @@ struct ScrollStrip<Content: View>: View {
     var arrowCenter: CGFloat?
     let content: Content
     #if os(macOS)
-    @State private var position = ScrollPosition(idType: String.self)
+    @State private var position = CompatScrollPosition()
     #endif
     @State private var edges = Edges()
     /// Live geometry and drag state. A plain reference, so updating it never invalidates the view.
@@ -1432,9 +1432,7 @@ struct ScrollStrip<Content: View>: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         measuredContent
                     }
-                    #if os(macOS)
-                    .scrollPosition($position)
-                    #endif
+
                 )
                 .mask {
                     HStack(spacing: 0) {
@@ -1477,7 +1475,7 @@ struct ScrollStrip<Content: View>: View {
             #if os(iOS)
             // A choice made away from the strip (swiping the Sources page, #1052) brings its chip into view; one
             // already in view stays put.
-            .onChange(of: scrollTo) { _, id in
+            .compatOnChange(of: scrollTo) { _, id in
                 guard let id else { return }
                 withAnimation(.snappy(duration: 0.3)) { proxy.scrollTo(id) }
             }
@@ -1492,7 +1490,7 @@ struct ScrollStrip<Content: View>: View {
     }
 
     @ViewBuilder private func measured(_ scrollView: some View) -> some View {
-        if #available(iOS 18, *) {
+        if #available(iOS 18, macOS 15, *) {
             scrollView.onScrollGeometryChange(for: Metrics.self) { geometry in
                 Metrics(offset: geometry.contentOffset.x + geometry.contentInsets.leading,
                         viewport: geometry.containerSize.width,

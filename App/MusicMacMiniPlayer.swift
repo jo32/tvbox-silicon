@@ -8,9 +8,13 @@ import TVCore
 /// main window while a song is loaded opens it, and bringing the window back closes it again; the
 /// bar's button and Window ▸ Mini Player open it at any time, and those stay until closed.
 struct MusicMacMiniPlayer: View {
+    private func dismissMiniWindow() {
+        MusicMiniWindow.isOpen = false
+        MusicMiniWindow.openedForMinimize = false
+        for window in NSApp.windows where window.identifier?.rawValue == Self.windowID { window.close() }
+    }
     static let windowID = "music-mini"
-    @Environment(Store.self) private var store
-    @Environment(\.dismissWindow) private var dismissWindow
+    @EnvironmentObject private var store: Store
     @State private var hovering = false
 
     var body: some View {
@@ -42,15 +46,15 @@ struct MusicMacMiniPlayer: View {
         .padding(10).padding(.trailing, 2)
         .frame(width: 340, height: 76)
         .contentShape(.rect)
-        .gesture(WindowDragGesture())
+        .compatWindowDrag()
         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(alignment: .topLeading) { if hovering { close } }
         .onHover { hovering = $0 }
         .onAppear { MusicMiniWindow.isOpen = true }
         .onDisappear { MusicMiniWindow.isOpen = false; MusicMiniWindow.openedForMinimize = false }
         // One opened for a minimized window goes with the song.
-        .onChange(of: music.track == nil) { _, gone in
-            if gone && MusicMiniWindow.openedForMinimize { dismissWindow(id: Self.windowID) }
+        .compatOnChange(of: music.track == nil) { _, gone in
+            if gone && MusicMiniWindow.openedForMinimize { dismissMiniWindow() }
         }
     }
 
@@ -75,7 +79,7 @@ struct MusicMacMiniPlayer: View {
     }
 
     private var close: some View {
-        Button { dismissWindow(id: Self.windowID) } label: {
+        Button { dismissMiniWindow() } label: {
             Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 18, height: 18)
                 .background(.black.opacity(0.55), in: Circle())
@@ -97,7 +101,7 @@ struct MusicMacMiniPlayer: View {
     fileprivate(set) static weak var main: NSWindow?
 
     static func showMain() {
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: false)
         guard let main else { return }
         if main.isMiniaturized { main.deminiaturize(nil) }
         main.makeKeyAndOrderFront(nil)
@@ -107,9 +111,13 @@ struct MusicMacMiniPlayer: View {
 /// Behind the pages: minimizing their window while a song is loaded opens the mini player, and
 /// restoring it closes a mini player opened that way.
 struct MusicMiniPlayerTrigger: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
+    private func dismissMiniWindow() {
+        MusicMiniWindow.isOpen = false
+        MusicMiniWindow.openedForMinimize = false
+        for window in NSApp.windows where window.identifier?.rawValue == MusicMacMiniPlayer.windowID { window.close() }
+    }
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
     #if DEBUG
     @State private var qaWindow: NSWindow?
     #endif
@@ -124,7 +132,7 @@ struct MusicMiniPlayerTrigger: View {
                 MusicMiniWindow.openedForMinimize = true
                 openWindow(id: MusicMacMiniPlayer.windowID)
             } else if !minimized, MusicMiniWindow.openedForMinimize {
-                dismissWindow(id: MusicMacMiniPlayer.windowID)
+                dismissMiniWindow()
             }
         }
         #if DEBUG

@@ -6,7 +6,7 @@ import TVCore
 
 /// "Add to Playlist" in a song's menu: New Playlist, which makes one holding the songs, then the playlists.
 struct MusicPlaylistMenu: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let tracks: [MusicTrack]
 
     var body: some View {
@@ -62,7 +62,7 @@ struct MusicPlaylistsLink: View {
 
 /// The listener's playlists, newest first. Rename or delete one from its menu, or on its page.
 struct MusicPlaylistsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var creating = false
     @State private var renaming: MusicPlaylist?
     @State private var name = ""
@@ -122,7 +122,7 @@ struct MusicPlaylistsView: View {
         .screenBackdrop()
         .screenTitle(Self.title)
         #if os(macOS)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)
@@ -141,7 +141,7 @@ struct MusicPlaylistsView: View {
 /// One playlist: its songs in the order they were added, played as one list. A song leaves from its menu.
 struct MusicPlaylistView: View {
     let id: String
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var renaming = false
     @State private var deleting = false
@@ -170,7 +170,7 @@ struct MusicPlaylistView: View {
         .screenBackdrop()
         .screenTitle(title)
         #if os(macOS)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #endif
         .musicPlayerInset()
         #if os(tvOS)

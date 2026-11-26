@@ -364,7 +364,7 @@ struct ConfigCenterView: View {
         }
         .task { await open(reload: true) }
         // Back from another app (copying a password, say): the page moves to the bundle's new port, if it has one.
-        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await open(reload: false) } } }
+        .compatOnChange(of: scenePhase) { _, phase in if phase == .active { Task { await open(reload: false) } } }
     }
 
     private func open(reload: Bool) async {

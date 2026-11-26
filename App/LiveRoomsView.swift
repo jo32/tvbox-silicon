@@ -234,7 +234,7 @@ private struct LiveHomeFeedView: View {
                 }
                 .padding(.vertical, Self.bleed)
             }
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .tvFocusSection()
         }
         ForEach(feed.sections) { section in
@@ -266,7 +266,7 @@ private struct LiveHomeFeedView: View {
 
 /// One banner of a platform's home page: its picture, wide, with the title over its foot. Opens the room.
 private struct LiveBannerCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let banner: LivePluginCatalog.HomeFeed.Banner
     /// Set once the banner's own picture has loaded; until then, and when it never does, the room's cover shows.
     @State private var loaded: CGFloat?
@@ -361,7 +361,7 @@ struct LiveRoomGrid: View {
 struct LiveSearchResults: View {
     let query: String
     let sources: [LiveSource]
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var found: [LivePlatform: [LiveRoom]] = [:]
     @State private var failures: [LivePlatform: String] = [:]
     @State private var playlists: [String: [Channel]] = [:]
@@ -452,7 +452,7 @@ struct LiveSearchResults: View {
 
 /// A live room: its 16:9 cover with a live badge and the audience, then the title and the streamer.
 struct LiveRoomCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let room: LiveRoom
 
     var body: some View {
@@ -513,10 +513,10 @@ extension LivePlatform {
 /// A room each built-in platform is showing now, for its card: the busiest room with a cover in the
 /// first of its areas that has one (a signed-out "Following" list is empty), asked again after ten
 /// minutes. The fetch outlives the card's appearance: a slow platform would otherwise never finish.
-@MainActor @Observable final class LivePreviews {
+@MainActor final class LivePreviews: ObservableObject {
     static let shared = LivePreviews()
-    private(set) var rooms: [LivePlatform: LiveRoom] = [:]
-    @ObservationIgnored private var asked: [LivePlatform: Date] = [:]
+    @Published private(set) var rooms: [LivePlatform: LiveRoom] = [:]
+    private var asked: [LivePlatform: Date] = [:]
 
     func load(_ platform: LivePlatform) {
         if let date = asked[platform], Date.now.timeIntervalSince(date) < 600 { return }
