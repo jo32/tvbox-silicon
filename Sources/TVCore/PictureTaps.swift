@@ -1,13 +1,15 @@
 import Foundation
 
-/// Taps on the picture, as in YouTube: one shows or hides the controls at once; a second soon after, on a side, skips
-/// 10 seconds with the controls hidden, and each further tap on that side skips 10 more. Two in the middle play or pause.
+/// Taps on the picture: one waits `interval` for a second before showing or hiding the controls, so a double tap
+/// doesn't flash them (#2148). Two in the middle play or pause; two on a side skip 10 seconds with the controls hidden,
+/// and each further tap on that side skips 10 more right away.
 public struct PictureTaps: Sendable {
     public enum Zone: Sendable { case back, middle, forward }
 
     public enum Action: Equatable, Sendable {
-        case toggleControls
-        /// The second tap of two in the middle: undo the first one's toggle, then play or pause.
+        /// A first tap that could still become a double tap: wait `interval`, then call `settle()`.
+        case wait
+        /// Two taps in the middle: play or pause without touching the controls.
         case togglePlayback
         /// Skip `seconds`; `total` is the run so far, for its label. `first` is the second tap of the double tap.
         case skip(seconds: Double, total: Double, first: Bool)
@@ -21,6 +23,7 @@ public struct PictureTaps: Sendable {
 
     private var last: (time: Double, zone: Zone)?
     private var skipping: (zone: Zone, total: Double)?
+    private var pending = false
 
     public init() {}
 
@@ -36,11 +39,16 @@ public struct PictureTaps: Sendable {
         last = (time, zone)
         let seconds = zone == .back ? -step : step
         if let run = skipping, run.zone == zone, let previous, time - previous.time <= Self.streak {
+            pending = false
             skipping = (zone, run.total + step)
             return .skip(seconds: seconds, total: run.total + step, first: false)
         }
         skipping = nil
-        guard let previous, previous.zone == zone, time - previous.time <= Self.interval else { return .toggleControls }
+        guard let previous, previous.zone == zone, time - previous.time <= Self.interval else {
+            pending = true
+            return .wait
+        }
+        pending = false
         if zone == .middle {
             // A third tap starts over rather than pausing again.
             last = nil
@@ -48,6 +56,22 @@ public struct PictureTaps: Sendable {
         }
         skipping = (zone, step)
         return .skip(seconds: seconds, total: step, first: true)
+    }
+
+    /// Called once `interval` has passed after `.wait` without another tap: finishes the single tap and returns `true`
+    /// if the controls should toggle.
+    public mutating func settle() -> Bool {
+        guard pending else { return false }
+        pending = false
+        last = nil
+        return true
+    }
+
+    /// Drops any waiting single tap or skip run when another gesture or control takes over.
+    public mutating func cancel() {
+        pending = false
+        last = nil
+        skipping = nil
     }
 }
 

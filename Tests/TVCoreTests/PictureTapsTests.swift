@@ -2,32 +2,43 @@ import Foundation
 import Testing
 @testable import TVCore
 
-@Test func aTapTogglesTheControlsAndTwoOnASideSkip() {
+@Test func aTapWaitsBeforeTogglingControlsAndTwoOnASideSkip() {
     var taps = PictureTaps()
-    #expect(taps.tap(at: 0, in: .forward) == .toggleControls)
+    #expect(taps.tap(at: 0, in: .forward) == .wait)
     #expect(taps.tap(at: 0.2, in: .forward) == .skip(seconds: 10, total: 10, first: true))
-    // Each further tap soon after skips 10 more.
+    // The second tap cancelled the pending single tap, so settling does nothing.
+    #expect(taps.settle() == false)
+    // Each further tap soon after skips 10 more without waiting.
     #expect(taps.tap(at: 0.8, in: .forward) == .skip(seconds: 10, total: 20, first: false))
     #expect(taps.tap(at: 1.4, in: .forward) == .skip(seconds: 10, total: 30, first: false))
     // Too late: a plain tap again.
-    #expect(taps.tap(at: 2.2, in: .forward) == .toggleControls)
-    #expect(taps.tap(at: 2.4, in: .back) == .toggleControls)
+    #expect(taps.tap(at: 2.2, in: .forward) == .wait)
+    #expect(taps.tap(at: 2.4, in: .back) == .wait)
     #expect(taps.tap(at: 2.6, in: .back) == .skip(seconds: -10, total: 10, first: true))
     // The other side ends the run.
-    #expect(taps.tap(at: 2.8, in: .forward) == .toggleControls)
-    #expect(taps.tap(at: 3.5, in: .forward) == .toggleControls)
-    #expect(taps.tap(at: 3.9, in: .forward) == .toggleControls)
+    #expect(taps.tap(at: 2.8, in: .forward) == .wait)
+    #expect(taps.tap(at: 3.5, in: .forward) == .wait)
+    #expect(taps.tap(at: 3.9, in: .forward) == .wait)
+    #expect(taps.settle() == true)
+    #expect(taps.settle() == false)
 }
 
-@Test func twoTapsInTheMiddlePlayOrPauseOnce() {
+@Test func twoTapsInTheMiddlePlayOrPauseOnceWithoutTogglingControls() {
     var taps = PictureTaps()
-    #expect(taps.tap(at: 0, in: .middle) == .toggleControls)
+    #expect(taps.tap(at: 0, in: .middle) == .wait)
     #expect(taps.tap(at: 0.25, in: .middle) == .togglePlayback)
-    #expect(taps.tap(at: 0.4, in: .middle) == .toggleControls)
+    #expect(taps.settle() == false)
+    #expect(taps.tap(at: 0.4, in: .middle) == .wait)
     #expect(taps.tap(at: 0.6, in: .middle) == .togglePlayback)
     // A side tap and then a middle one are two single taps.
-    #expect(taps.tap(at: 5, in: .back) == .toggleControls)
-    #expect(taps.tap(at: 5.1, in: .middle) == .toggleControls)
+    #expect(taps.tap(at: 5, in: .back) == .wait)
+    #expect(taps.tap(at: 5.1, in: .middle) == .wait)
+    #expect(taps.settle() == true)
+    // Once a single tap has settled, the next tap starts fresh rather than pairing with it.
+    #expect(taps.tap(at: 5.2, in: .middle) == .wait)
+    taps.cancel()
+    #expect(taps.settle() == false)
+    #expect(taps.tap(at: 5.3, in: .middle) == .wait)
 }
 
 @Test func pictureZonesAreThirdsWhenThereIsATimeline() {
@@ -62,7 +73,7 @@ import Testing
 
 @Test func doubleTapsSkipTheChosenInterval() {
     var taps = PictureTaps()
-    #expect(taps.tap(at: 0, in: .back, step: 30) == .toggleControls)
+    #expect(taps.tap(at: 0, in: .back, step: 30) == .wait)
     #expect(taps.tap(at: 0.2, in: .back, step: 30) == .skip(seconds: -30, total: 30, first: true))
     #expect(taps.tap(at: 0.7, in: .back, step: 30) == .skip(seconds: -30, total: 60, first: false))
     // The skip buttons' symbols exist for each choice; anything else stored skips 10 seconds.
@@ -77,8 +88,9 @@ import Testing
     #expect(!PictureDoubleTap.standard)
     var taps = PictureTaps()
     let side = PictureTaps.zone(x: 10, width: 300, seekable: PictureDoubleTap.standard)
-    #expect(taps.tap(at: 0, in: side) == .toggleControls)
+    #expect(taps.tap(at: 0, in: side) == .wait)
     #expect(taps.tap(at: 0.2, in: side) == .togglePlayback)
+    #expect(taps.settle() == false)
 }
 
 @Test func thePlayerOptionsReadTheirStoredChoices() {
