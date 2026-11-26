@@ -124,6 +124,43 @@ def proxy_failure_status(error):
 
 
 _RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
+_CHUNK = 64 * 1024
+
+
+def body_chunks(body):
+    """A proxied body that isn't bytes (an upstream response, a file, an iterator), as it arrives. An upstream
+    response is decoded, as `content` is."""
+    if isinstance(body, requests.Response):
+        parts = body.iter_content(_CHUNK)
+    elif hasattr(body, 'read'):
+        parts = iter(lambda: body.read(_CHUNK), b'')
+    else:
+        parts = body
+    for part in parts:
+        if not part:  # also a text file's '' at its end
+            if hasattr(body, 'read'):
+                return
+            continue
+        yield bytes(part) if isinstance(part, (bytes, bytearray, memoryview)) else str(part).encode('utf-8')
+
+
+def close_body(body):
+    close = getattr(body, 'close', None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            pass
+
+
+def buffered(body):
+    """The whole body as bytes: what a range is cut from, and what the proxy keeps for the next range."""
+    if isinstance(body, bytes):
+        return body
+    try:
+        return b''.join(body_chunks(body))
+    finally:
+        close_body(body)
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -138,6 +175,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def answer(self, include_body):
         session = self.session
+        match = _RANGE.match(self.headers.get('Range', '').strip())
+        ranged = bool(match and (match.group(1) or match.group(2)))
         try:
             with open(os.path.join(session.cache, 'proxy-active'), 'w'):
                 pass
@@ -147,17 +186,23 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 cached_path, response = session.cached_response
                 if cached_path != self.path:
                     response = session.proxy_response(self.path)
-                    if response[0] == 200 and len(response[3]) <= 512 * 1024 * 1024:
-                        session.cached_response = (self.path, response)
+                    # Spiders never see the player's Range, so a range is cut from the whole body, kept for the
+                    # next one. Any other request for a body that arrives as a stream gets it as it arrives,
+                    # outside this lock: a live stream may never end, and a movie needn't wait in memory.
+                    if ranged or isinstance(response[3], bytes):
+                        response = response[:3] + (buffered(response[3]),)
+                        if response[0] == 200 and len(response[3]) <= 512 * 1024 * 1024:
+                            session.cached_response = (self.path, response)
             status, mime, headers, data = response
         except Exception as error:
             log('PY_PROXY_FAILED', ''.join(traceback.format_exception(error)))
             status, mime, headers, data = proxy_failure_status(error), 'text/plain', {}, str(error).encode()
+        if not isinstance(data, bytes):
+            return self.stream(status, mime, headers, data, include_body)
         extra = {}
         if status == 200:
             extra['Accept-Ranges'] = 'bytes'
-            match = _RANGE.match(self.headers.get('Range', '').strip())
-            if match and (match.group(1) or match.group(2)):
+            if ranged:
                 total = len(data)
                 if match.group(1):
                     first = int(match.group(1))
@@ -170,9 +215,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     status, data = 206, data[first:last + 1]
                     extra['Content-Range'] = f'bytes {first}-{last}/{total}'
         self.send_response(status)
-        for key, value in headers.items():
-            if key.lower() not in ('content-length', 'transfer-encoding', 'connection', 'content-type', 'content-range', 'accept-ranges'):
-                self.send_header(key, str(value))
+        self.send_spider_headers(headers)
         for key, value in extra.items():
             self.send_header(key, value)
         self.send_header('Content-Type', mime)
@@ -183,6 +226,56 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
             except (BrokenPipeError, ConnectionResetError):
                 pass  # Players routinely drop a range once they have the bytes they need.
+
+    def send_spider_headers(self, headers):
+        for key, value in headers.items():
+            if key.lower() not in ('content-length', 'transfer-encoding', 'connection', 'content-type', 'content-range', 'accept-ranges'):
+                self.send_header(key, str(value))
+
+    def stream(self, status, mime, headers, body, include_body):
+        """Sends a body that isn't bytes as it arrives: with the upstream's length when that is the length of what
+        is sent (no content coding), otherwise in chunks. Ranges of it go through `answer`'s whole-body path."""
+        length = None
+        if isinstance(body, requests.Response):
+            coding = body.headers.get('Content-Encoding', '').strip().lower()
+            declared = body.headers.get('Content-Length', '').strip()
+            if coding in ('', 'identity') and declared.isdigit():
+                length = int(declared)
+        try:
+            self.send_response(status)
+            self.send_spider_headers(headers)
+            if status == 200:
+                self.send_header('Accept-Ranges', 'bytes')
+            self.send_header('Content-Type', mime)
+            if length is None:
+                self.send_header('Transfer-Encoding', 'chunked')
+            else:
+                self.send_header('Content-Length', str(length))
+            self.end_headers()
+            if not include_body:
+                return
+            sent = 0
+            for chunk in body_chunks(body):
+                if length is None:
+                    self.wfile.write(b'%x\r\n' % len(chunk) + chunk + b'\r\n')
+                    continue
+                chunk = chunk[:length - sent]
+                self.wfile.write(chunk)
+                sent += len(chunk)
+                if sent >= length:
+                    break
+            if length is None:
+                self.wfile.write(b'0\r\n\r\n')
+            elif sent < length:
+                self.close_connection = True  # The upstream ended early: the player sees a short body.
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True  # The player went away: it drops streams and ranges it no longer needs.
+        except Exception as error:
+            # Headers are out: the answer can only be cut short, and this connection's framing is lost.
+            log('PY_PROXY_FAILED', ''.join(traceback.format_exception(error)))
+            self.close_connection = True
+        finally:
+            close_body(body)
 
     def log_message(self, format, *args):
         pass
@@ -272,7 +365,8 @@ class Session:
         return instance
 
     def proxy_response(self, path):
-        """Call the spider's localProxy and normalize its [status, mime, body, headers?, base64?] result."""
+        """Call the spider's localProxy and normalize its [status, mime, body, headers?, base64?] result. The body
+        is bytes, or what the spider gave to be read on: an upstream response, a file or an iterator."""
         params = dict(parse_qsl(urlsplit(path).query, keep_blank_values=True))
         result = list(self.spider.localProxy(params) or [])
         status = int(result[0]) if result else 404
@@ -283,15 +377,18 @@ class Session:
             import base64
             body = base64.b64decode(body.split('base64,', 1)[-1])
         if isinstance(body, requests.Response):
-            body = body.content
-        elif hasattr(body, 'read'):
-            body = body.read()
-        elif body is None:
+            # Spiders return [200, mime, response] and let the upstream answer stand: a refusal stays one, not a
+            # 200 whose error page the player (and the range cache) would take for the media.
+            if status == 200 and body.status_code >= 400:
+                status = body.status_code
+            return status, mime, headers, body
+        if body is None:
             body = b''
-        elif not isinstance(body, (bytes, bytearray, str)):
-            body = b''.join(chunk if isinstance(chunk, bytes) else str(chunk).encode() for chunk in body)
-        data = body.encode('utf-8') if isinstance(body, str) else bytes(body)
-        return status, mime, headers, data
+        elif isinstance(body, str):
+            body = body.encode('utf-8')
+        elif isinstance(body, (bytes, bytearray, memoryview)):
+            body = bytes(body)
+        return status, mime, headers, body
 
     def call(self, params):
         spider = self.spider
