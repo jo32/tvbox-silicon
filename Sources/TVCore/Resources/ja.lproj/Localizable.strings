@@ -2395,10 +2395,16 @@
 "Select episodes to delete" = "削除するエピソードを選択";
 "Delete %lld episodes" = "%lld 話を削除";
 "Search settings" = "設定を検索";
+"This live playlist comes from its subscription's plugin, which this device can't run." = "このライブ再生リストはサブスクリプションのプラグインが提供していますが、このデバイスではそのプラグインを実行できません。";
+"This live playlist is a file on an Android device (127.0.0.1:9978/file), which Yingxia can't open. Add the playlist's web address instead." = "このライブ再生リストは Android デバイス上のファイル（127.0.0.1:9978/file）のため、Yingxia では開けません。代わりに再生リストの Web アドレスを追加してください。";
+"This playlist only has %@ channels, which Apple's player can't play." = "この再生リストには %@ のチャンネルしかなく、Apple のプレーヤーでは再生できません。";
+"The playlist address returned a web page instead of a playlist. Its host may be offline." = "再生リストのアドレスが再生リストではなく Web ページを返しました。ホストがオフラインの可能性があります。";
+"This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "この再生リストのチャンネルのアドレスは、配信した Android プレーヤーからの相対アドレスのため、ここでは開けません。";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "このリンクは動画ではなくウェブページを開きます。ソースが再生できるアドレスに変換していません。別の回線をお試しください。";
 
-// Provider-declared programme replay.
-"Replay Programmes" = "番組を見逃し再生";
+// Live TV: replaying past programs from a playlist's catchup template.
+"Replay Programs" = "見逃し番組";
 "Back to Live" = "ライブに戻る";
 "Date" = "日付";
-"No replayable programmes on this date." = "この日付に再生できる番組はありません。";
-"This programme is no longer available for replay." = "この番組の見逃し配信期間は終了しました。";
+"No programs to replay on this date." = "この日に見逃し再生できる番組はありません。";
+"This program can no longer be replayed." = "この番組は見逃し再生の期間が終わりました。";

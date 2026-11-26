@@ -1,8 +1,16 @@
 import Foundation
 
 public enum Playlist {
-    public static func parse(_ text: String, origin: URL, headers: [String: String] = [:]) throws -> [Channel] {
+    /// `origin`: where relative addresses resolve; nil for a list with no address of its own (`LoopbackPlaylist`), whose
+    /// relative addresses are dropped.
+    public static func parse(_ text: String, origin: URL?, headers: [String: String] = [:]) throws -> [Channel] {
+        // TVBox's JSON live format reads as the TXT lines it stands for.
+        if let lines = jsonLines(text) { return try parse(lines, origin: origin, headers: headers) }
         var result: [Channel] = [], seen = Set<String>()
+        // Channel addresses this app can't play (rtmp://, rtsp://, P2P), to say so when nothing else is left.
+        var otherSchemes = Set<String>()
+        // Relative channel addresses in a list without an address of its own: nothing to resolve them against.
+        var unresolved = 0
         // Where each named channel is in `result`, by group and name: the same channel again is another line of it.
         var named: [String: Int] = [:]
         var name: String?, logo: URL?, guideID: String?, group = "", entryHeaders = headers
@@ -52,18 +60,22 @@ public enum Playlist {
                     name = parts[0]; address = parts[1]; entryHeaders = headers
                 }
                 let lines = addresses(address).compactMap { Self.channelLine($0, headers: entryHeaders, origin: origin, catchup: catchup) }
-                guard let first = lines.first else { name = nil; catchup = nil; continue }
+                guard let first = lines.first else {
+                    if let scheme = address.firstMatch(of: /^\s*([A-Za-z][A-Za-z0-9+.-]*):\/\//)?.1.lowercased(), !["http", "https"].contains(scheme) {
+                        otherSchemes.insert(scheme)
+                    } else if origin == nil, !address.contains("://") { unresolved += 1 }
+                    name = nil; catchup = nil; continue
+                }
                 if let name, let at = named[group + "|" + name] {
                     // The same channel again in its group: another line of it, as TVBox players treat it (#679).
-                    let primary = ChannelLine(url: result[at].url, headers: result[at].headers, catchup: result[at].catchup)
-                    for line in lines where line != primary && !result[at].alternates.contains(line) {
+                    for line in lines where line.url != result[at].url && !result[at].alternates.contains(where: { $0.url == line.url }) {
                         result[at].alternates.append(line)
                     }
                 } else {
                     var channel = Channel(name: name ?? first.url.lastPathComponent, group: group, url: first.url, logo: logo, headers: first.headers)
                     channel.guideID = guideID
                     channel.catchup = first.catchup
-                    for line in lines.dropFirst() where line != first && !channel.alternates.contains(line) {
+                    for line in lines.dropFirst() where line.url != channel.url && !channel.alternates.contains(where: { $0.url == line.url }) {
                         channel.alternates.append(line)
                     }
                     if seen.insert(channel.id).inserted {
@@ -74,8 +86,48 @@ public enum Playlist {
                 name = nil; logo = nil; guideID = nil; catchup = nil; entryHeaders = headers
             }
         }
-        guard !result.isEmpty else { throw TVError.emptyPlaylist }
-        return result
+        guard result.isEmpty else { return result }
+        if !otherSchemes.isEmpty {
+            let schemes = otherSchemes.sorted().prefix(4).map { $0 + "://" }.joined(separator: ", ")
+            throw TVError.unsupported(L10n.text("This playlist only has %@ channels, which Apple's player can't play.", schemes))
+        }
+        if unresolved > 0 { throw TVError.unsupported(L10n.text("This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here.")) }
+        let start = text.prefix(512).lowercased()
+        if start.contains("<!doctype") || start.contains("<html") {
+            throw TVError.unsupported(L10n.text("The playlist address returned a web page instead of a playlist. Its host may be offline."))
+        }
+        throw TVError.emptyPlaylist
+    }
+
+    /// A playlist's text: UTF-8, as most are. A few bad bytes stay as replacement characters, as on Android
+    /// players (OkHttp decodes that way), so the channels still load; a list in GBK/GB18030 decodes as that.
+    public static func text(_ data: Data) -> String {
+        if let text = String(data: data, encoding: .utf8) { return text }
+        let lossy = String(decoding: data, as: UTF8.self)
+        if lossy.unicodeScalars.lazy.filter({ $0 == "\u{FFFD}" }).count > 8 {
+            let gb18030 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+            if let text = String(data: data, encoding: gb18030) { return text }
+        }
+        return lossy
+    }
+
+    /// TVBox's JSON live list, `[{"group":…,"channels":[{"name":…,"urls":[…]}]}]` (FongMi also writes
+    /// `name`/`channel`), as `group,#genre#` and `name,url#url` lines; nil for anything else.
+    static func jsonLines(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}")))
+        guard trimmed.hasPrefix("[") || trimmed.hasPrefix("{"), let value = try? JSONDecoder().decode(JSONValue.self, from: Data(trimmed.utf8)) else { return nil }
+        let groups = value.array ?? value.object?["lives"]?.array ?? []
+        var lines: [String] = []
+        for group in groups {
+            guard let fields = group.object, let channels = (fields["channels"] ?? fields["channel"])?.array else { continue }
+            lines.append(((fields["group"] ?? fields["name"])?.string ?? "").replacingOccurrences(of: ",", with: " ") + ",#genre#")
+            for channel in channels {
+                guard let item = channel.object, let name = item["name"]?.string else { continue }
+                let urls = (item["urls"]?.array ?? []).compactMap(\.string).filter { $0.contains("://") }
+                if !urls.isEmpty { lines.append(name.replacingOccurrences(of: ",", with: " ") + "," + urls.joined(separator: "#")) }
+            }
+        }
+        return lines.contains { !$0.hasSuffix(",#genre#") } ? lines.joined(separator: "\n") : nil
     }
     /// The XMLTV guide an M3U's header names, `#EXTM3U x-tvg-url="…"` (or `url-tvg`); the first when it lists several
     /// (#802).
@@ -95,7 +147,7 @@ public enum Playlist {
 
     /// An address with the entry's headers, and its own after a `|` (`url|User-Agent=…&Referer=…`). A line's name
     /// after a `$` (`url$高清`) is dropped.
-    private static func channelLine(_ address: String, headers: [String: String], origin: URL, catchup: ChannelCatchup?) -> ChannelLine? {
+    private static func channelLine(_ address: String, headers: [String: String], origin: URL?, catchup: ChannelCatchup?) -> ChannelLine? {
         let parts = address.split(separator: "|", maxSplits: 1).map(String.init)
         guard var first = parts.first else { return nil }
         if let dollar = first.lastIndex(of: "$"), !first[first.index(after: dollar)...].contains(where: { "/=&?".contains($0) }) {

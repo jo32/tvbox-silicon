@@ -258,9 +258,12 @@ public struct LiveSource: Identifiable, Codable, Hashable, Sendable {
     public let headers: [String: String]
     /// The program guide its subscription entry names (`epg`): an XMLTV file, or an address with `{name}` (#802).
     public let guide: String?
+    /// The subscription's JAR spider, for a playlist on Android TVBox's local server that only it can answer
+    /// (`LoopbackPlaylist`).
+    public var spider: LiveSpider?
     public var id: String { name + "|" + url.absoluteString }
-    public init(name: String, url: URL, headers: [String: String] = [:], guide: String? = nil) {
-        self.name = name; self.url = url; self.headers = headers; self.guide = guide
+    public init(name: String, url: URL, headers: [String: String] = [:], guide: String? = nil, spider: LiveSpider? = nil) {
+        self.name = name; self.url = url; self.headers = headers; self.guide = guide; self.spider = spider
     }
 }
 
@@ -295,13 +298,32 @@ public struct Subscription: Codable, Sendable {
                   let api = v["api"]?.string, let type = v["type"]?.int, seen.insert(key).inserted else { return nil }
             return Site(key: key, name: Site.localizedName(v) ?? v["name"]?.string ?? key, type: type, api: api, raw: v)
         }
-        let lives = (raw["lives"]?.array ?? []).compactMap { entry -> LiveSource? in
-            guard let v = entry.object, let address = v["url"]?.string,
-                  let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
+        // A playlist on Android TVBox's local server may need the subscription's spider to answer it.
+        func spider() -> LiveSpider? {
+            LiveSpider.pick(sites, origin: origin, spider: raw["spider"]?.string?.components(separatedBy: ";md5;").first
+                .flatMap { try? WebAddress.resolve($0, relativeTo: origin) })
+        }
+        func live(_ v: [String: JSONValue], address: String, name: String?) -> LiveSource? {
+            let address = LoopbackPlaylist.normalize(address)
+            guard let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
             var headers = v["header"]?.object?.compactMapValues(\.string) ?? [:]
             if let ua = v["ua"]?.string { headers["User-Agent"] = ua }
             let guide = v["epg"]?.string.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-            return LiveSource(name: Site.localizedName(v) ?? v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers, guide: guide)
+            return LiveSource(name: name ?? L10n.text("Live TV"), url: url, headers: headers, guide: guide,
+                              spider: LoopbackPlaylist.isLoopback(url) ? spider() : nil)
+        }
+        let lives = (raw["lives"]?.array ?? []).flatMap { entry -> [LiveSource] in
+            guard let v = entry.object else { return [] }
+            if let address = v["url"]?.string {
+                return live(v, address: address, name: Site.localizedName(v) ?? v["name"]?.string).map { [$0] } ?? []
+            }
+            // TVBox's first format: `{"group":"redirect","channels":[{"name":…,"urls":["proxy://do=live&…"]}]}`, where
+            // each channel is a playlist.
+            return (v["channels"]?.array ?? []).compactMap { channel -> LiveSource? in
+                guard let item = channel.object, let address = item["urls"]?.array?.first?.string,
+                      v["group"]?.string == "redirect" || address.lowercased().hasPrefix("proxy://") else { return nil }
+                return live(v, address: address, name: item["name"]?.string)
+            }
         }
         guard !sites.isEmpty || !lives.isEmpty else { throw TVError.invalidConfiguration }
         return Subscription(origin: origin, importedAt: Date(), sites: sites, lives: lives, raw: raw)
