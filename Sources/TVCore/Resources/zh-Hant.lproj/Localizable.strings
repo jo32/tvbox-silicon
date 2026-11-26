@@ -525,6 +525,7 @@
 "Delete from Cache" = "刪除快取";
 "Delete All" = "全部刪除";
 "Delete all cached videos?" = "要刪除全部快取的影片嗎？";
+"Press Again to Delete All" = "再按一次以全部刪除";
 "Caching" = "正在快取";
 "At a Time" = "同時快取";
 "%lld at a time" = "同時 %lld 個";

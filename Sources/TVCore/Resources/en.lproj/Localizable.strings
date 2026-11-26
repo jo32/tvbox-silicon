@@ -526,6 +526,7 @@
 "Delete from Cache" = "Delete from Cache";
 "Delete All" = "Delete All";
 "Delete all cached videos?" = "Delete all cached videos?";
+"Press Again to Delete All" = "Press Again to Delete All";
 "Caching" = "Caching";
 "At a Time" = "At a Time";
 "%lld at a time" = "%lld at a time";
