@@ -43,6 +43,7 @@ public enum NovelLibrary {
             chapterTitle = ((try? c.decodeIfPresent(String.self, forKey: .chapterTitle)) ?? nil) ?? ""
             chapterCount = ((try? c.decodeIfPresent(Int.self, forKey: .chapterCount)) ?? nil) ?? 0
             position = ((try? c.decodeIfPresent(Double.self, forKey: .position)) ?? nil) ?? 0
+            seconds = ((try? c.decodeIfPresent(Double.self, forKey: .seconds)) ?? nil)
             updated = ((try? c.decodeIfPresent(Date.self, forKey: .updated)) ?? nil) ?? added
             bookmarks = ((try? c.decodeIfPresent([NovelBookmark].self, forKey: .bookmarks)) ?? nil) ?? []
         }

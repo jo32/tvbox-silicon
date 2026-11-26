@@ -57,9 +57,20 @@ import TVCore
         if let last = asked[name], now.timeIntervalSince(last) < 30 { return }
         asked[name] = now
         if let programmes = await ProgramGuides.shared.schedule(address, name: name, context: context) {
-            perChannel[name] = programmes
+            if !programmes.isEmpty { perChannel[name] = programmes }
         } else {
             asked[name] = nil
+        }
+    }
+
+    /// A day's programs for replay. An XMLTV guide is the one the playlist loaded, which keeps the history its
+    /// replayable channels declare; a DIYP address is asked for that (China) date.
+    func programmes(for channel: Channel, on date: Date) async -> [Programme] {
+        switch address {
+        case .xmltv:
+            return guide?.schedule(for: channel) ?? []
+        case .perChannel:
+            return await ProgramGuides.shared.schedule(address, name: channel.name, context: context, on: date) ?? []
         }
     }
 }

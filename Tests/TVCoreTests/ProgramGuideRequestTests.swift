@@ -2,71 +2,90 @@ import Foundation
 import Testing
 @testable import TVCore
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"] != nil)) func guideRequestContextSeparatesSourceHeadersAndDates() async throws {
-    guard let base = ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"].flatMap(URL.init(string:)) else { return }
-    let first = GuideRequestContext(sourceID: "source-a", origin: base, headers: ["Authorization": "account-a", "Cookie": "a=1"])
-    let second = GuideRequestContext(sourceID: "source-b", origin: base, headers: ["Authorization": "account-b", "Cookie": "b=1"])
-    let address = GuideAddress.perChannel(base.appendingPathComponent("epg").absoluteString + "?name={name}")
-    let guides = ProgramGuides()
-    let day = Date(timeIntervalSince1970: 1794614400)
-    let a = await guides.schedule(address, name: "News", context: first, on: day)
-    let b = await guides.schedule(address, name: "News", context: second, on: day)
-    #expect(a?.first?.title == "account-a|a=1")
-    #expect(b?.first?.title == "account-b|b=1")
-    let changedHeaders = GuideRequestContext(sourceID: "source-a", origin: base, headers: ["Authorization": "account-b", "Cookie": "b=1"])
-    let changed = await guides.schedule(address, name: "News", context: changedHeaders, on: day)
-    #expect(changed?.first?.title == "account-b|b=1")
-    let next = await guides.schedule(address, name: "News", context: first, on: day.addingTimeInterval(86400))
-    #expect(next?.first?.start.timeIntervalSince((try #require(a?.first)).start) == 86400)
+/// Answers guide requests with the Authorization each carried ("-" for none), and counts them by host.
+private final class GuideProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var counts: [String: Int] = [:]
+    static func count(_ host: String) -> Int { lock.withLock { counts[host, default: 0] } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let url = request.url!
+        Self.lock.withLock { Self.counts[url.host ?? "", default: 0] += 1 }
+        let auth = request.value(forHTTPHeaderField: "Authorization") ?? "-"
+        let body: String
+        if url.path.hasSuffix(".xml") {
+            let format = DateFormatter()
+            format.locale = Locale(identifier: "en_US_POSIX"); format.timeZone = TimeZone(identifier: "UTC"); format.dateFormat = "yyyyMMddHHmmss"
+            let start = format.string(from: Date().addingTimeInterval(-600)), stop = format.string(from: Date().addingTimeInterval(1800))
+            body = #"<tv><channel id="news"><display-name>News</display-name></channel>"#
+                + #"<programme channel="news" start="\#(start) +0000" stop="\#(stop) +0000"><title>\#(auth)</title></programme></tv>"#
+        } else {
+            body = #"{"epg_data":[{"start":"08:00","end":"09:00","title":"\#(auth)"}]}"#
+        }
+        let response = HTTPURLResponse(url: url, statusCode: url.path.contains("fail") ? 503 : 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"] != nil)) func guideRedirectsKeepSameOriginCredentialsAndNeverResurrectThem() async throws {
-    guard let base = ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"].flatMap(URL.init(string:)) else { return }
-    let context = GuideRequestContext(sourceID: "source", origin: base, headers: ["Authorization": "account-a", "Cookie": "a=1", "X-API-Key": "key", "User-Agent": "GuideTest"])
-    let same = try await GuideDownload.fetch(base.appendingPathComponent("same"), context: context, limit: 4096)
-    let returned = try await GuideDownload.fetch(base.appendingPathComponent("cross"), context: context, limit: 4096)
-    #expect(String(decoding: same.data, as: UTF8.self) == "account-a|a=1|key|GuideTest")
-    #expect(String(decoding: returned.data, as: UTF8.self) == "|||GuideTest")
-    let foreign = URL(string: base.absoluteString.replacingOccurrences(of: "127.0.0.1", with: "localhost"))!.appendingPathComponent("echo")
-    let initial = try await GuideDownload.fetch(foreign, context: context, limit: 4096)
-    #expect(String(decoding: initial.data, as: UTF8.self) == "|||GuideTest")
+private func guides() -> ProgramGuides {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [GuideProtocol.self]
+    return ProgramGuides(http: HTTPClient(session: URLSession(configuration: config)))
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"] != nil)) func guideHTTPBoundsAndCachePolicy() async throws {
-    guard let base = ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"].flatMap(URL.init(string:)) else { return }
-    let context = GuideRequestContext(sourceID: "cache", origin: base)
-    let noStore = try await GuideDownload.fetch(base.appendingPathComponent("no-store"), context: context, limit: 4096)
-    #expect(noStore.lifetime == 0)
-    await #expect(throws: (any Error).self) { _ = try await GuideDownload.fetch(base.appendingPathComponent("large"), context: context, limit: 32) }
-    await #expect(throws: (any Error).self) { _ = try await GuideDownload.fetch(base.appendingPathComponent("chunked-large"), context: context, limit: 32) }
-    let guides = ProgramGuides()
-    let address = GuideAddress.perChannel(base.appendingPathComponent("uncached-epg").absoluteString + "?name={name}")
-    let one = await guides.schedule(address, name: "News", context: context)
-    let two = await guides.schedule(address, name: "News", context: context)
-    #expect(one?.first?.title != two?.first?.title)
-    let failed = GuideAddress.perChannel(base.appendingPathComponent("failure").absoluteString + "?name={name}")
-    _ = await guides.schedule(failed, name: "News", context: context)
-    _ = await guides.schedule(failed, name: "News", context: context)
-    let counts = try await GuideDownload.fetch(base.appendingPathComponent("failure-count"), context: context, limit: 32)
-    #expect(String(decoding: counts.data, as: UTF8.self) == "1")
+@Test func guideHeadersStayOnTheSourceOrigin() {
+    let headers = ["Authorization": "token", "Cookie": "a=1", "User-Agent": "Player"]
+    let context = GuideRequestContext(origin: URL(string: "https://live.example/list.m3u"), headers: headers)
+    #expect(context.headers(for: URL(string: "https://live.example/epg?ch=1")!) == ["authorization": "token", "cookie": "a=1", "user-agent": "Player"])
+    for other in ["https://epg.example/e.xml", "http://live.example/e.xml", "https://live.example:8443/e.xml"] {
+        #expect(context.headers(for: URL(string: other)!) == ["user-agent": "Player"], "\(other)")
+    }
+    #expect(GuideRequestContext(headers: headers).headers(for: URL(string: "https://live.example/e.xml")!) == ["user-agent": "Player"])
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"] != nil)) func guideXMLCacheSeparatesAccountSourceAndRequestedDay() async throws {
-    guard let base = ProcessInfo.processInfo.environment["GUIDE_HTTP_FIXTURE"].flatMap(URL.init(string:)) else { return }
-    let guides = ProgramGuides(), url = base.appendingPathComponent("guide.xml")
-    var channel = Channel(name: "News", url: base); channel.guideID = "news"
-    let day = Date(timeIntervalSince1970: 1794614400)
-    let a = GuideRequestContext(sourceID: "one", origin: base, headers: ["Authorization": "a"])
-    let b = GuideRequestContext(sourceID: "one", origin: base, headers: ["Authorization": "b"])
-    let other = GuideRequestContext(sourceID: "two", origin: base, headers: ["Authorization": "b"])
-    let first = try await guides.guide(url, for: [channel], context: a, on: day)
-    let second = try await guides.guide(url, for: [channel], context: b, on: day)
-    let third = try await guides.guide(url, for: [channel], context: other, on: day)
-    #expect(first.schedule(for: channel)?.first?.title == "a-1")
-    #expect(second.schedule(for: channel)?.first?.title == "b-2")
-    #expect(third.schedule(for: channel)?.first?.title == "b-3")
-    let next = try await guides.guide(url, for: [channel], context: a, on: day.addingTimeInterval(86400))
-    #expect(next.schedule(for: channel)?.first?.title == "next-4")
+/// A per-channel guide on the source's own server is asked, and kept, per account.
+@Test func perChannelGuidesAreKeptPerAccount() async throws {
+    let guides = guides(), day = Date()
+    let address = try #require(GuideAddress("https://diyp.guide.test/epg?ch={name}&date={date}"))
+    let origin = URL(string: "https://diyp.guide.test/list.m3u")
+    let a = GuideRequestContext(sourceID: "a", origin: origin, headers: ["Authorization": "account-a"])
+    let b = GuideRequestContext(sourceID: "b", origin: origin, headers: ["Authorization": "account-b"])
+    #expect(await guides.schedule(address, name: "News", context: a, on: day)?.first?.title == "account-a")
+    #expect(await guides.schedule(address, name: "News", context: b, on: day)?.first?.title == "account-b")
+    #expect(await guides.schedule(address, name: "News", context: a, on: day)?.first?.title == "account-a")
+    #expect(GuideProtocol.count("diyp.guide.test") == 2)
+}
+
+/// Playlists that ask a guide elsewhere the same way share one download; on the guide's own origin each account's
+/// credentials ask for, and keep, its own.
+@Test func xmltvGuidesAreSharedUnlessCredentialsDiffer() async throws {
+    let guides = guides()
+    let url = try #require(URL(string: "https://xml.guide.test/guide.xml"))
+    var channel = Channel(name: "News", url: URL(string: "https://live.example/1")!); channel.guideID = "news"
+    let one = GuideRequestContext(sourceID: "one", origin: URL(string: "https://one.example/list.m3u"), headers: ["Authorization": "one"])
+    let two = GuideRequestContext(sourceID: "two", origin: URL(string: "https://two.example/list.m3u"), headers: ["Authorization": "two"])
+    #expect(try await guides.guide(url, for: [channel], context: one).schedule(for: channel)?.first?.title == "-")
+    #expect(try await guides.guide(url, for: [channel], context: two).schedule(for: channel)?.first?.title == "-")
+    #expect(GuideProtocol.count("xml.guide.test") == 1)
+    let origin = URL(string: "https://xml.guide.test/list.m3u")
+    let a = GuideRequestContext(sourceID: "a", origin: origin, headers: ["Authorization": "account-a"])
+    let b = GuideRequestContext(sourceID: "b", origin: origin, headers: ["Authorization": "account-b"])
+    #expect(try await guides.guide(url, for: [channel], context: a).schedule(for: channel)?.first?.title == "account-a")
+    #expect(try await guides.guide(url, for: [channel], context: b).schedule(for: channel)?.first?.title == "account-b")
+    #expect(try await guides.guide(url, for: [channel], context: a).schedule(for: channel)?.first?.title == "account-a")
+    #expect(GuideProtocol.count("xml.guide.test") == 3)
+}
+
+@Test func aFailedPerChannelGuideIsNotAskedAgainAtOnce() async throws {
+    let guides = guides()
+    let address = try #require(GuideAddress("https://fail.guide.test/fail?ch={name}"))
+    #expect(await guides.schedule(address, name: "News") == [])
+    #expect(await guides.schedule(address, name: "News") == [])
+    #expect(GuideProtocol.count("fail.guide.test") == 1)
 }
 
 @Test func guideRequestsRespectSourceCalendarAndDST() throws {

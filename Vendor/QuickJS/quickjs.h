@@ -1250,6 +1250,8 @@ JS_EXTERN int JS_EnqueueJob(JSContext *ctx, JSJobFunc *job_func,
 JS_EXTERN bool JS_IsJobPending(JSRuntime *rt);
 JS_EXTERN JSContext *JS_GetPendingJobContext(JSRuntime *rt);
 JS_EXTERN int JS_ExecutePendingJob(JSRuntime *rt, JSContext **pctx);
+JS_EXTERN uint64_t JS_BeginJobScope(JSRuntime *rt);
+JS_EXTERN void JS_EndJobScope(JSRuntime *rt, uint64_t scope, bool discard);
 
 /* Structure to retrieve (de)serialized SharedArrayBuffer objects. */
 typedef struct JSSABTab {
