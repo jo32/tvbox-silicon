@@ -63,7 +63,7 @@ TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, 
   lists them. An agent's answer never replaces a viewer's pick.
 - TMDB answers are cached per data center for a day (Cache API). 429s wait for Retry-After and try again. Model 429s
   wait when the wait is short (per-minute limits); exhausted quota and long waits fail at once.
-- Limits: 20 runs a minute per IP (only cache misses), `DAILY_RUNS` agent runs a day in all.
+- Limits: 20 runs a minute per IP (only cache misses). `DAILY_RUNS` (0 = none, the default) caps agent runs a day in all; the `usage` table counts them either way.
 
 ## Deploy
 
