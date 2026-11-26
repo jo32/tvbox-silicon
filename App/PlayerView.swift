@@ -2676,8 +2676,8 @@ struct PlaybackBadges: View {
 }
 
 /// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520, #758): TMDB's,
-/// when the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
-/// title is in the top row too.
+/// when the video's page found the title there. A video played without opening its page (from search, history or
+/// Continue Watching) asks TMDB here as its page would, and the answer is saved for the page too.
 struct PlayerTitleLogo: View {
     let channel: Channel
     /// A phone held upright: a smaller logo.
@@ -2713,7 +2713,13 @@ struct PlayerTitleLogo: View {
             keptLogo = nil
             guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
             let key = TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
-            if !(await tmdb.prepare(key: key)) { keptLogo = await TMDBMatchStore.shared.kept(for: key)?.details?.logo }
+            guard !(await tmdb.prepare(key: key)) else { return }
+            if let kept = await TMDBMatchStore.shared.kept(for: key) { keptLogo = kept.details?.logo; return }
+            let site = catalog.client.site
+            let request = TMDBMatch.Request(video: catalog.video, listVideo: catalog.video,
+                                            source: TMDBMatch.SourceRef(key: site.key, name: site.name))
+            guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+            await tmdb.run(key: key, request: request)
         }
     }
 
