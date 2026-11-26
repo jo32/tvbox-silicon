@@ -2,6 +2,7 @@
 #define TVSCRIPT_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,6 +10,14 @@ extern "C" {
 
 /// One QuickJS runtime and context. Not thread safe: use each script from one thread.
 typedef struct TVScript TVScript;
+/// An operation's cancellation flag. May be signaled from another thread; the VM remains
+/// confined to its own thread. Queued operations each have a separate flag.
+/// Keep the token alive until the cancellable VM call returns; cancel never frees it.
+typedef struct TVScriptCancellation TVScriptCancellation;
+TVScriptCancellation *tv_script_cancellation_create(void);
+void tv_script_cancellation_cancel(TVScriptCancellation *cancellation);
+bool tv_script_cancellation_is_cancelled(const TVScriptCancellation *cancellation);
+void tv_script_cancellation_free(TVScriptCancellation *cancellation);
 
 /// Answers `__host(operation, argument)` and module loading ("resolve", "module").
 /// Returns a malloc'd UTF-8 string, or NULL for JavaScript null. A result beginning with
@@ -25,6 +34,11 @@ char *tv_script_module(TVScript *script, const char *name, const char *source, d
 /// Evaluates a global expression, waits up to `seconds` if it is a promise, and returns a
 /// malloc'd JSON object: {"value": <JSON of the result>} or {"error": "<message and stack>"}.
 char *tv_script_call(TVScript *script, const char *expression, double seconds);
+char *tv_script_module_cancellable(TVScript *script, const char *name, const char *source, double seconds, TVScriptCancellation *cancellation);
+char *tv_script_call_cancellable(TVScript *script, const char *expression, double seconds, TVScriptCancellation *cancellation);
+/// Finish a group of calls with one token, on the VM thread after deciding completion vs cancellation.
+/// A different token (or an ungrouped call) also closes the previous group before evaluating anything.
+void tv_script_operation_finish(TVScript *script, TVScriptCancellation *cancellation);
 
 #ifdef __cplusplus
 }

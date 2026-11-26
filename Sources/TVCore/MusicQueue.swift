@@ -115,12 +115,29 @@ public enum MusicRepeatMode: String, CaseIterable, Sendable {
 }
 
 /// Where listening stopped, to continue from: the queue and the second within its current song.
+/// `shuffled` records whether the queue is in shuffled order, and `unshuffled` the order to put
+/// back when shuffle is switched off. Both are absent in points saved before #1728, so they
+/// decode as not shuffled and the old point still loads.
 public struct MusicResumePoint: Codable, Equatable, Sendable {
     public var queue: MusicQueue
     public var position: Double
     public var savedAt: Date
-    public init(queue: MusicQueue, position: Double, savedAt: Date = Date()) {
+    public var shuffled: Bool
+    public var unshuffled: [MusicTrack]?
+    public init(queue: MusicQueue, position: Double, savedAt: Date = Date(), shuffled: Bool = false, unshuffled: [MusicTrack]? = nil) {
         self.queue = queue; self.position = position; self.savedAt = savedAt
+        self.shuffled = shuffled; self.unshuffled = unshuffled
+    }
+
+    private enum CodingKeys: String, CodingKey { case queue, position, savedAt, shuffled, unshuffled }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        queue = try container.decode(MusicQueue.self, forKey: .queue)
+        position = try container.decode(Double.self, forKey: .position)
+        savedAt = try container.decode(Date.self, forKey: .savedAt)
+        shuffled = try container.decodeIfPresent(Bool.self, forKey: .shuffled) ?? false
+        unshuffled = try container.decodeIfPresent([MusicTrack].self, forKey: .unshuffled)
     }
 }
 

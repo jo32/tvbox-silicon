@@ -138,6 +138,7 @@ final class SubtitleHost: ScriptHostExtension, @unchecked Sendable {
     private let pending = PendingRequests()
     var allowsRemoteModules: Bool { false }
     deinit { pending.cancelAll() }
+    func cancelPending() { pending.cancelAllAndWait() }
 
     func allow(_ manifest: SubtitleProviderManifest) { lock.withLock { self.manifest = manifest } }
     func cancelAll() { pending.cancelAll() }
@@ -156,8 +157,10 @@ final class SubtitleHost: ScriptHostExtension, @unchecked Sendable {
             options["redirect"] = false
             let json = String(decoding: try JSONSerialization.data(withJSONObject: options), as: UTF8.self)
             let id = pending.add()
-            let cancel = try ScriptHTTP.start(json) { [pending] answer in pending.finish(id, answer) }
-            pending.setCancel(id, cancel)
+            do {
+                let cancel = try ScriptHTTP.start(json) { [pending] answer in pending.finish(id, answer) }
+                pending.setCancel(id, cancel)
+            } catch { pending.finish(id, ""); throw error }
             return .some(String(id))
         case "httpPoll": return .some(pending.take(Int(argument) ?? -1))
         case "httpCancel": pending.cancel(Int(argument) ?? -1); return .some(nil)

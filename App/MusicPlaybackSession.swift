@@ -240,6 +240,9 @@ typealias MusicTrack = TVCore.MusicTrack
     func resume() {
         guard let point = library.resumePoint else { return }
         play(point.queue, at: point.position)
+        // `play` clears the shuffle flag, so put back what the point saved (#1728):
+        // without this the queue stays shuffled but the App and CarPlay show it off.
+        shuffled = point.shuffled; unshuffled = point.unshuffled
     }
 
     /// The next song, or the first again when the whole queue repeats.
@@ -666,7 +669,7 @@ typealias MusicTrack = TVCore.MusicTrack
         position = 0; duration = queue.current?.duration; seekingTo = nil
         lyrics = nil; lyricsLoading = false; lyricsFor = nil
         lastSavedPosition = 0
-        library.saveResumePoint(MusicResumePoint(queue: queue, position: 0))
+        library.saveResumePoint(MusicResumePoint(queue: queue, position: 0, shuffled: shuffled, unshuffled: unshuffled))
         phase = .paused
         cued = true
     }
@@ -858,7 +861,7 @@ typealias MusicTrack = TVCore.MusicTrack
         guard let queue, selection != nil || sourceStream != nil else { return }
         guard force || abs(position - lastSavedPosition) >= 5 else { return }
         lastSavedPosition = position
-        library.saveResumePoint(MusicResumePoint(queue: queue, position: position))
+        library.saveResumePoint(MusicResumePoint(queue: queue, position: position, shuffled: shuffled, unshuffled: unshuffled))
         if let source = queue.current?.source { recordSource?(source, position, duration ?? 0) }
     }
 
@@ -900,6 +903,10 @@ typealias MusicTrack = TVCore.MusicTrack
 
     private func tearDownItem() {
         cancelSleepFade()
+        // A seek lands through the item it was made on. Replacing that item while the seek is out leaves its
+        // completion to be dropped, since the generation has moved on, so clear it here or the clock stays
+        // stopped for the rest of the session (#2349).
+        seekingTo = nil
         itemObservation = nil; pictureObservation = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []

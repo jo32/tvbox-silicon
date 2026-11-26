@@ -537,6 +537,7 @@ import IOKit.pwr_mgt
             }
             guard let self, self.generation == active, !Task.isCancelled else { await adapter.stop(); return }
             self.proxy = adapter; self.proxyOrigin = url
+            self.renewLive(adapter, channel: channel, generation: active)
             if self.automatic == url { self.automatic = address }
             self.configure(channel, url: address, generation: active)
         }
@@ -840,6 +841,54 @@ import IOKit.pwr_mgt
         if linkRenewals.count > 4 { linkRenewals.removeAll() }
         linkRenewals[channel.url] = renewal
         return renewal.renewal(length: length, name: name)
+    }
+
+    /// A fresh address for `channel`, a catalog episode playing a live FLV stream, once its connection ends
+    /// (`FLVLive.Renew`): the episode resolved again by its source, as `renewal(for:)` does for a file. A Live TV room
+    /// asks its platform again in `retryLive` instead.
+    private func liveRenewal(for channel: Channel) -> FLVLive.Renew? {
+        guard renewLink != nil, channel.historyContext != nil, !LiveCatalog.isRoom(channel.url) else { return nil }
+        return { [weak self] in
+            guard let fresh = await self?.renewLink?(channel) else { return nil }
+            let address = (try? await EmbeddedJarHost.shared.recoverProxy(fresh.url)) ?? fresh.url
+            return (address, fresh.headers)
+        }
+    }
+
+    /// Lets the HLS proxy the stream plays through renew a live playlist in place when its server refuses a reload (an
+    /// expired signature; `HLSProxy.renewsLive(with:)`), from where the address came: the Live TV room's platform, or the
+    /// catalog episode's source (`renewLink`). The item plays on. When the fresh address isn't the same stream, or none
+    /// comes, AVPlayer gets the refusal and the failure chain runs as before (`retryLive` opens a room again).
+    /// Not a retry rung: nothing is replaced, and it happens once the item reads a live window, so `PlayAttempt` doesn't
+    /// count it. A stream AVPlayer reads directly (a room on iPhone, iPad and Apple TV) has no proxy and isn't renewed.
+    private func renewLive(_ adapter: HLSProxy, channel: Channel, generation active: UUID) {
+        let room = liveRoom
+        var renewable = room != nil || (renewLink != nil && channel.historyContext != nil)
+        #if DEBUG
+        renewable = renewable || UserDefaults.standard.string(forKey: "qaLiveRenewal") != nil
+        #endif
+        guard renewable else { return }
+        Task { await adapter.renewsLive { [weak self] in await self?.renewedLiveAddress(for: channel, room: room, generation: active) } }
+    }
+
+    private func renewedLiveAddress(for channel: Channel, room: Channel?, generation active: UUID) async -> (url: URL, headers: [String: String])? {
+        guard generation == active else { return nil }
+        var fresh: Channel?
+        #if DEBUG
+        // `-qaLiveRenewal <address>`: the fresh address is that address's answer, as a room's platform would give it.
+        if let address = UserDefaults.standard.string(forKey: "qaLiveRenewal").flatMap(URL.init(string:)) {
+            var request = URLRequest(url: address); request.cachePolicy = .reloadIgnoringLocalCacheData
+            if let (data, _) = try? await URLSession.shared.data(for: request),
+               let url = URL(string: String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme != nil {
+                fresh = Channel(name: channel.name, group: channel.group, url: url, headers: channel.headers)
+            }
+            return generation == active ? fresh.map { (url: $0.url, headers: $0.headers.merging(CloudStreams.playlistHeaders(for: $0.url) ?? [:]) { $1 }) } : nil
+        }
+        #endif
+        if let room { fresh = try? await LiveCatalog.resolve(room).channel }
+        else if channel.historyContext != nil { fresh = await renewLink?(channel) }
+        guard generation == active, let fresh else { return nil }
+        return (url: fresh.url, headers: fresh.headers.merging(CloudStreams.playlistHeaders(for: fresh.url) ?? [:]) { $1 })
     }
 
     /// The other line could not be resolved either: show why instead of loading forever.
@@ -1233,6 +1282,7 @@ import IOKit.pwr_mgt
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
             #if os(macOS)
             self.proxy = prepared.adapter; self.proxyOrigin = prepared.adapterOrigin
+            if let adapter = prepared.adapter { self.renewLive(adapter, channel: channel, generation: activeGeneration) }
             #endif
             // Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: say so now, or
             // switch to the drive's transcoded line, instead of letting AVPlayer fail with a vague error.
@@ -2066,7 +2116,7 @@ extension PlaybackSession {
                         // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
                         // Keep seekable FLV files on the file path and repackage live streams as local HLS.
                         do {
-                            prepared.url = try await FLVLive.open(address, headers: channel.headers)
+                            prepared.url = try await FLVLive.open(address, headers: channel.headers, renew: liveRenewal(for: channel))
                             return prepared
                         } catch is FLVLive.NotFLV {
                             // Let the normal file path report the original conversion failure below.
