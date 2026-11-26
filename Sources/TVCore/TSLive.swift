@@ -33,6 +33,8 @@ protocol LiveCutter {
     /// The name the stream's log lines use (`flv`, `ts`).
     var name: String { get }
     mutating func feed(_ data: Data) throws -> [FLVSegmenter.Run]
+    /// Ready for the same stream from a new connection (`FLVLive.Renew`): returns the run the old one left under way.
+    mutating func resume() -> FLVSegmenter.Run?
 }
 
 /// FLV tags (`FLVTagReader`) cut by `FLVSegmenter`.
@@ -43,6 +45,12 @@ struct FLVCutter: LiveCutter {
     mutating func feed(_ data: Data) throws -> [FLVSegmenter.Run] {
         do { return try reader.append(data).compactMap { segmenter.add($0) } }
         catch FLVTagReader.Failure.notFLV { throw FLVLive.NotFLV() }
+    }
+    mutating func resume() -> FLVSegmenter.Run? {
+        let tail = segmenter.finish()
+        reader = FLVTagReader()
+        segmenter = .resuming(after: segmenter.lastEnd)
+        return tail
     }
 }
 
@@ -90,6 +98,14 @@ struct TSCutter: LiveCutter {
         }
         pending = Data(pending[offset...])
         return runs
+    }
+
+    mutating func resume() -> FLVSegmenter.Run? {
+        let tail = started ? lastPTS.flatMap { cut(end: $0) } : nil
+        var fresh = TSCutter()
+        fresh.minimum = minimum; fresh.maximum = maximum; fresh.pendingDiscontinuity = true
+        self = fresh
+        return tail
     }
 
     /// Adds one packet; returns the run it closes, if it does.
