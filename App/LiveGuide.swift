@@ -64,7 +64,7 @@ struct NowOnText: View {
     var otherwise: String? = nil
     @Environment(LiveGuide.self) private var guide: LiveGuide?
     var body: some View {
-        let schedule = guide?.schedule(for: channel, among: channels) ?? []
+        let schedule = guide?.schedule(for: channel) ?? []
         Group {
             if schedule.isEmpty {
                 if let otherwise { Text(otherwise) }
@@ -84,7 +84,7 @@ struct NowAndNext: View {
     let channel: Channel
     @Environment(LiveGuide.self) private var guide: LiveGuide?
     var body: some View {
-        let schedule = guide?.schedule(for: channel, among: channels) ?? []
+        let schedule = guide?.schedule(for: channel) ?? []
         Group {
             if !schedule.isEmpty {
                 TimelineView(.everyMinute) { context in
