@@ -580,7 +580,9 @@ struct FormSettingsView: View {
     @State private var searchQuery = ""
     @State private var searching = false
     /// The row a search result asked for, scrolled to once the page shows again.
-    @State private var jumpTarget: String?
+    @State private var jumpRequest: SettingsJumpRequest?
+    /// Temporarily highlights the jumped-to row and clears automatically.
+    @State private var highlightedTarget: String?
 
     /// A live plugin, LX Music source, or comic or book source list, in its kind's section: its page, and in its menu
     /// on or off (music) and Remove.
@@ -608,12 +610,10 @@ struct FormSettingsView: View {
     var body: some View {
         @Bindable var store = store
         let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        ScrollViewReader { proxy in
-        Form { Group {
-            if !trimmedQuery.isEmpty {
-                searchResultsContent(query: trimmedQuery)
-            } else {
-            heroSection
+        ZStack {
+            ScrollViewReader { proxy in
+            Form { Group {
+                heroSection
 
             // Who is signed in: their feedback points, and Pro.
             Section { AccountSettingsRow().settingsAnchor(.account) }
@@ -737,6 +737,7 @@ struct FormSettingsView: View {
                     .labelsHidden()
                     .autocorrectionDisabled()
                     .onSubmit { add() }
+                    .settingsAnchor(.addSubscription)
                 TextField(L10n.text("Name (optional)"), text: $store.subscriptionName, prompt: Text(L10n.text("Name (optional)")))
                     .labelsHidden()
                     .onSubmit { add() }
@@ -772,7 +773,7 @@ struct FormSettingsView: View {
                     let count = store.livePluginPlatforms.count
                     FormLink(symbol: "dot.radiowaves.left.and.right", tint: .red, title: L10n.text("Live Plugins"),
                              value: count == 0 ? nil : String(count)) { LivePluginsView() }
-                        .id("settings.livePlugins")
+                        .settingsAnchor(.livePlugins)
                 } footer: {
                     Text(L10n.text("Live platforms added as AngelLive plugins show in Live TV."))
                 }
@@ -829,8 +830,8 @@ struct FormSettingsView: View {
 
             Section {
                 FormLink(symbol: "person.2.fill", tint: .teal, title: L10n.text("Profiles"), value: store.profile.title) { ProfilesView() }
+                    .settingsAnchor(.profiles)
             }
-            .id("settings.profiles")
 
             // Only the main profile's library syncs (#1456).
             if store.profile.isMain {
@@ -1055,7 +1056,7 @@ struct FormSettingsView: View {
                     .settingsAnchor(.releaseNotes)
                 }
                 FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
-                    .id("settings.end")
+                    .settingsAnchor(.licenses)
             } header: {
                 Text(L10n.text("About"))
             } footer: {
@@ -1101,23 +1102,42 @@ struct FormSettingsView: View {
                     .settingsAnchor(.releaseNotes)
                 }
                 FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
-                    .id("settings.end")
+                    .settingsAnchor(.licenses)
             } header: {
                 Text(L10n.text("About"))
             } footer: {
                 if store.extrasUnlocked { Text(supportNote) }
             }
             #endif
-            }
         }.settingsRows() }
-        .task(id: jumpTarget) {
-            guard let target = jumpTarget else { return }
-            // Twice, as for `-qaScrollTo`: the first lands by estimated row heights, the second once they're laid out.
-            for delay in [0.15, 0.35] {
-                try? await Task.sleep(for: .seconds(delay))
-                withAnimation { proxy.scrollTo(target, anchor: .center) }
+        .environment(\.settingsHighlight, highlightedTarget)
+        .environment(\.settingsJumpRequest, jumpRequest)
+        .task(id: jumpRequest) {
+            guard let request = jumpRequest else { return }
+            let target = request.anchor
+            defer {
+                if highlightedTarget == target {
+                    withAnimation(.easeOut(duration: 0.35)) { highlightedTarget = nil }
+                }
             }
-            jumpTarget = nil
+            // Wait a tick for the search overlay to dismiss and toolbar search focus to settle.
+            try? await Task.sleep(for: .milliseconds(60))
+            #if !os(macOS)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(target, anchor: .center)
+            }
+            #endif
+            try? await Task.sleep(for: .milliseconds(160))
+            withAnimation(.easeIn(duration: 0.20)) {
+                highlightedTarget = target
+            }
+            try? await Task.sleep(for: .milliseconds(750))
+            withAnimation(.easeOut(duration: 0.55)) {
+                highlightedTarget = nil
+            }
+            if jumpRequest == request {
+                jumpRequest = nil
+            }
         }
         #if DEBUG
         // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
@@ -1132,6 +1152,15 @@ struct FormSettingsView: View {
             }
         }
         #endif
+        }
+        .opacity(trimmedQuery.isEmpty ? 1 : 0)
+        .allowsHitTesting(trimmedQuery.isEmpty)
+        if !trimmedQuery.isEmpty {
+            Form {
+                searchResultsContent(query: trimmedQuery)
+            }
+            .settingsRows()
+        }
         }
         .settingsForm(L10n.text("Settings"))
         .searchable(text: $searchQuery, isPresented: $searching, prompt: Text(L10n.text("Search settings")))
@@ -1331,9 +1360,102 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     }
 }
 
+private struct SettingsJumpRequest: Equatable {
+    let id = UUID()
+    let anchor: String
+}
+
+private extension EnvironmentValues {
+    @Entry var settingsHighlight: String? = nil
+    @Entry var settingsJumpRequest: SettingsJumpRequest? = nil
+}
+
+#if os(macOS)
+/// Scrolls the enclosing grouped Form's NSScrollView directly to center the anchored row.
+/// SwiftUI's ScrollViewProxy.scrollTo can be ignored or overridden when dismissing a toolbar search field on macOS.
+private struct SettingsRowScrollAnchor: NSViewRepresentable {
+    let anchor: String
+    let request: SettingsJumpRequest?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let request, request.anchor == anchor, context.coordinator.lastHandled != request.id else { return }
+        context.coordinator.lastHandled = request.id
+        // Delay briefly so the search field finishes resigning first responder before we center the target row.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            guard let scroll = view.enclosingScrollView, let doc = scroll.documentView else { return }
+            if anchor != SettingsSearchTarget.addSubscription.anchor {
+                view.window?.makeFirstResponder(nil)
+            }
+            let rectInDoc = view.convert(view.bounds, to: doc)
+            let insets = scroll.contentInsets
+            let visibleHeight = scroll.contentView.bounds.height - insets.top - insets.bottom
+            let minOriginY = -insets.top
+            let maxOriginY = max(minOriginY, doc.bounds.height - scroll.contentView.bounds.height + insets.bottom)
+            let targetY = min(maxOriginY, max(minOriginY, rectInDoc.midY - insets.top - visibleHeight / 2))
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.28
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                scroll.contentView.animator().setBoundsOrigin(NSPoint(x: scroll.contentView.bounds.origin.x, y: targetY))
+            }, completionHandler: {
+                MainActor.assumeIsolated {
+                    scroll.reflectScrolledClipView(scroll.contentView)
+                }
+            })
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    final class Coordinator { var lastHandled: UUID? }
+}
+#endif
+
+private struct SettingsAnchorModifier: ViewModifier {
+    let anchor: String
+    @Environment(\.settingsHighlight) private var highlighted
+    @Environment(\.settingsJumpRequest) private var jumpRequest
+
+    func body(content: Content) -> some View {
+        let active = highlighted == anchor
+        #if os(macOS)
+        content
+            .background {
+                ZStack {
+                    SettingsRowScrollAnchor(anchor: anchor, request: jumpRequest)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(active ? 0.24 : 0))
+                        .padding(.horizontal, -8)
+                        .padding(.vertical, -6)
+                }
+                .allowsHitTesting(false)
+            }
+            .animation(.easeInOut(duration: 0.3), value: active)
+        #else
+        content
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Brand.accent.opacity(active ? 0.18 : 0))
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -4)
+                    .allowsHitTesting(false)
+            }
+            .animation(.easeInOut(duration: 0.3), value: active)
+        #endif
+    }
+}
+
 private extension View {
-    /// Marks the row a search result for `target` scrolls to.
-    func settingsAnchor(_ target: SettingsSearchTarget) -> some View { id(target.anchor) }
+    /// Marks the row a search result for `target` scrolls to and gently highlights when jumped to.
+    func settingsAnchor(_ target: SettingsSearchTarget) -> some View {
+        modifier(SettingsAnchorModifier(anchor: target.anchor))
+            .id(target.anchor)
+    }
 }
 
 private extension FormSettingsView {
@@ -1347,7 +1469,7 @@ private extension FormSettingsView {
         }
         .onChange(of: language) { _, code in MacLanguage.choose(code) }
         .accessibilityIdentifier("settings.language")
-        .id("settings.language")
+        .settingsAnchor(.language)
         if language != MacLanguage.launched {
             HStack {
                 Text(L10n.text("Restart Yingxia to use the new language.")).foregroundStyle(.secondary)
@@ -1384,11 +1506,11 @@ private extension FormSettingsView {
         }
     }
 
-    /// Leaves the search and scrolls the page to `target`'s row (the `.task(id: jumpTarget)` on the page).
+    /// Leaves the search and scrolls the page to `target`'s row.
     func jump(to target: SettingsSearchTarget) {
         searching = false
         searchQuery = ""
-        jumpTarget = target.anchor
+        jumpRequest = SettingsJumpRequest(anchor: target.anchor)
     }
 
     var searchItems: [SettingsSearchItem<SettingsSearchTarget>] {
@@ -1434,10 +1556,8 @@ private extension FormSettingsView {
             add(.removeSubscriptions, title: L10n.text("Remove Subscriptions"), section: secSubs,
                 keywords: ["remove", "delete", "删除", "移除", "订阅"])
         }
-        #if os(iOS)
         add(.addSubscription, title: L10n.text("Add Subscription"), section: secSubs,
-            keywords: ["add", "url", "import", "添加", "导入", "订阅"])
-        #endif
+            keywords: ["add", "url", "import", "tvbox", "m3u", "txt", "添加", "导入", "订阅"])
 
         if store.extrasUnlocked || !store.livePlugins.isEmpty {
             for plugin in store.livePlugins {
