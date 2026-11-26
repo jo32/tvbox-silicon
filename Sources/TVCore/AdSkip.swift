@@ -121,9 +121,19 @@ public enum AdSkip {
         func fetch(_ address: URL) async -> (String, URL)? {
             var request = URLRequest(url: address, timeoutInterval: 6)
             headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false,
-                  data.count < 4 << 20 else { return nil }
+            // Read as it comes, and no more than 4 MB: an .m3u8 address that sends an endless MPEG-TS stream (IPTV
+            // relays) would otherwise be held whole, growing until the system ends the app, before AVPlayer starts.
+            guard let (stream, response) = try? await URLSession.shared.bytes(for: request) else { return nil }
+            defer { stream.task.cancel() }
+            guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false else { return nil }
+            var data = Data()
+            do {
+                for try await byte in stream {
+                    data.append(byte)
+                    if data.count == 1024, HLSProxy.binary(data) != nil { return nil }
+                    if data.count >= 4 << 20 { return nil }
+                }
+            } catch { return nil }
             return (String(decoding: data, as: UTF8.self), response.url ?? address)
         }
         guard var (text, origin) = await fetch(url), text.hasPrefix("#EXTM3U") || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#EXTM3U") else { return nil }
