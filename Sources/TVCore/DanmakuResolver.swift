@@ -203,7 +203,7 @@ public struct DanmakuResolver: Sendable {
         var mappings = cache.data(for: key, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
         // Mappings are kept per platform preference (`lookupKey`), so any saved one was found for this preference or
         // picked by hand under it, possibly from another platform; a hand pick is kept rather than searched again.
-        let saved = mappings.first { $0.track(for: context) != nil }
+        let saved = hasPick(for: context) ? mappings.first : mappings.first { $0.track(for: context) != nil }
         var mapping = saved
         do {
             let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
@@ -219,13 +219,26 @@ public struct DanmakuResolver: Sendable {
                     }
                 } catch {
                     // A server without `comment?url=` answers 404, or a list it can't parse: search by title instead.
-                    if error is CancellationError || error is DanmakuAuthorizationRequired || error is DandanplayLimitReached
-                        || Self.serverFailed(error) { throw error }
+                    try Self.checkCandidateFailure(error)
+                    if Self.serverFailed(error) { throw error }
                 }
             }
             if mapping == nil {
                 if savedOnly { return AutomaticDanmakuResult(comments: [], track: "", source: "", state: "unmatched") }
-                mapping = try await customMapping(context, client: client)
+                let found = try await firstCustomMatch(context, client: client, preference: preferredSource) { candidate, track, id -> AutomaticDanmakuResult? in
+                    let comments = try await client.comments(CatalogDanmakuEpisode(id: id, title: track.title))
+                    guard !comments.isEmpty else { return nil }
+                    let platform = DanmakuProvider(source: track.source ?? candidate.source ?? candidate.provider)
+                    let source = platform == .automatic ? candidate.source ?? candidate.provider : platform.title
+                    return AutomaticDanmakuResult(comments: comments, track: candidate.title + " · " + track.title,
+                        source: source, state: "loaded")
+                }
+                try Task.checkCancellation()
+                if let (candidate, result) = found {
+                    keep(candidate, in: &mappings, key: key, ticket: ticket)
+                    return keep(result, context: context, ticket: ticket)
+                }
+                return customNegative(context, state: "unmatched", ticket: ticket)
             }
             if let selected = mapping, let track = selected.track(for: context), let id = track.id {
                 let comments: [CatalogDanmakuComment]
@@ -252,8 +265,7 @@ public struct DanmakuResolver: Sendable {
             try Task.checkCancellation()
             return customNegative(context, state: "unmatched", ticket: ticket)
         } catch {
-            try Task.checkCancellation()
-            if error is CancellationError { throw error }
+            try Self.checkCancellation(error)
             if error is DandanplayLimitReached { DandanplayPause.pause(dandanServer) }
             // A refused token or address won't fix itself within seconds; ask again only as often as for "no match".
             if error is DanmakuAuthorizationRequired { return customNegative(context, state: "unavailable", ttl: 300, ticket: ticket) }
@@ -312,67 +324,116 @@ public struct DanmakuResolver: Sendable {
         return result
     }
 
-    private func customMapping(_ context: PlaybackHistoryContext, client: CatalogDanmakuClient,
-                               selectedSource: DanmakuProvider? = nil) async throws -> DanmakuMapping? {
-        let preference = selectedSource ?? preferredSource
+    private static func checkCancellation(_ error: Error) throws {
+        try Task.checkCancellation()
+        if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+    }
+
+    private static func checkCandidateFailure(_ error: Error) throws {
+        try checkCancellation(error)
+        if error is DanmakuAuthorizationRequired || error is DandanplayLimitReached { throw error }
+    }
+
+    private static let candidateLimit = 12
+    private func firstCustomMatch<Value>(_ context: PlaybackHistoryContext, client: CatalogDanmakuClient, preference: DanmakuProvider,
+                                         pinnedSource: String? = nil,
+                                         accept: (DanmakuMapping, DanmakuTrack, String) async throws -> Value?) async throws -> (DanmakuMapping, Value)? {
         let results = try await client.search(CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName), source: preference)
+        try Task.checkCancellation()
         let candidates = CatalogDanmakuMatcher.animeCandidates(title: context.videoName, year: context.year, source: preference, in: results)
-        let groups = Dictionary(grouping: candidates, by: { $0.source })
+        let groups = Dictionary(grouping: candidates) {
+            $0.provider == .automatic ? CatalogDanmakuMatcher.normalized($0.source) : $0.provider.rawValue
+        }
         // Platform order is stable, but no order within a platform resolves an ambiguous edition.
         let order = DanmakuProvider.allCases.filter { $0 != .automatic }
-        let unique = groups.values.compactMap { $0.count == 1 ? $0.first : nil }.sorted { left, right in
+        let unique = groups.values.compactMap { group -> CatalogDanmakuAnime? in
+            Set(group.map(\.id)).count == 1 ? group.first : nil
+        }.sorted { left, right in
             let l = order.firstIndex(of: left.provider) ?? order.count, r = order.firstIndex(of: right.provider) ?? order.count
             return l == r ? left.source < right.source : l < r
         }
-        // A few episode lists at a time: one after another, twelve shows on a slow server took minutes. The earliest
-        // show in the order above still wins.
-        let shortlist = Array(unique.prefix(12))
-        for start in stride(from: 0, to: shortlist.count, by: 4) {
+        // At most four lists in flight and twelve candidates. Preserve platform order, while one platform's
+        // transport or parse failure does not discard another platform's successfully matched episode list.
+        var failure: Error?
+        var tried = Set<String>()
+        let shortlist = Array(unique.prefix(Self.candidateLimit))
+        batches: for start in stride(from: 0, to: shortlist.count, by: 4) {
             try Task.checkCancellation()
             let batch = Array(shortlist[start..<min(start + 4, shortlist.count)])
-            let lists = try await withThrowingTaskGroup(of: (Int, [CatalogDanmakuEpisode]).self) { group in
-                for (index, anime) in batch.enumerated() { group.addTask { (index, try await client.episodes(anime)) } }
-                var lists = [[CatalogDanmakuEpisode]](repeating: [], count: batch.count)
-                for try await (index, episodes) in group { lists[index] = episodes }
+            let lists = try await withThrowingTaskGroup(of: (Int, Result<[CatalogDanmakuEpisode], Error>).self) { group in
+                for (index, anime) in batch.enumerated() {
+                    group.addTask {
+                        do { return (index, .success(try await client.episodes(anime))) }
+                        catch {
+                            try Self.checkCandidateFailure(error)
+                            return (index, .failure(error))
+                        }
+                    }
+                }
+                var lists = [Result<[CatalogDanmakuEpisode], Error>](repeating: .success([]), count: batch.count)
+                for try await (index, result) in group { lists[index] = result }
                 return lists
             }
-            for (anime, episodes) in zip(batch, lists) {
-                if let mapping = customMapping(context, anime: anime, episodes: episodes, preference: preference) { return mapping }
+            try Task.checkCancellation()
+            for (anime, result) in zip(batch, lists) {
+                switch result {
+                case .success(let episodes):
+                    for mapping in customMappings(context, anime: anime, episodes: episodes, preference: preference, pinnedSource: pinnedSource) {
+                        try Task.checkCancellation()
+                        guard let track = mapping.track(for: context), let id = track.id, tried.insert(id).inserted else { continue }
+                        do {
+                            if let value = try await accept(mapping, track, id) {
+                                try Task.checkCancellation()
+                                return (mapping, value)
+                            }
+                        } catch {
+                            try Self.checkCandidateFailure(error)
+                            failure = error
+                        }
+                        if tried.count == Self.candidateLimit { break batches }
+                    }
+                case .failure(let error): failure = error
+                }
             }
         }
+        try Task.checkCancellation()
+        if let failure { throw failure }
         return nil
     }
 
-    private func customMapping(_ context: PlaybackHistoryContext, anime: CatalogDanmakuAnime,
-                               episodes: [CatalogDanmakuEpisode], preference: DanmakuProvider) -> DanmakuMapping? {
-        let platforms = preference == .automatic ? DanmakuProvider.allCases.filter { $0 != .automatic } + [.automatic] : [preference]
-        for platform in platforms {
+    private func customMappings(_ context: PlaybackHistoryContext, anime: CatalogDanmakuAnime,
+                                episodes: [CatalogDanmakuEpisode], preference: DanmakuProvider, pinnedSource: String? = nil) -> [DanmakuMapping] {
+        let platforms = preference == .automatic && pinnedSource == nil ? DanmakuProvider.allCases.filter { $0 != .automatic } + [.automatic] : [preference]
+        return platforms.compactMap { platform in
             let filtered = episodes.filter { episode in
-                platform == .automatic ? episode.provider == .automatic : episode.provider == platform
+                if platform == .automatic, let pinnedSource { return episode.source == pinnedSource }
+                return episode.provider == platform
             }
             // Duplicate rows for the same service ID must not create false ambiguity.
             var seen = Set<CatalogDanmakuEpisode>()
             let unique = filtered.filter { seen.insert($0).inserted }
-            guard CatalogDanmakuMatcher.episode(name: context.episodeName, seriesTitle: anime.title, in: unique) != nil else { continue }
-            let source = platform == .automatic ? anime.source : platform.rawValue
+            guard CatalogDanmakuMatcher.episode(name: context.episodeName, seriesTitle: anime.title, in: unique) != nil else { return nil }
+            let source = platform == .automatic ? pinnedSource ?? anime.source : platform.rawValue
             return DanmakuMapping(provider: source, title: anime.title, year: anime.year,
                 tracks: unique.map { DanmakuTrack(number: $0.episodeNumber, title: $0.title, id: $0.id, source: $0.source) }, animeID: anime.id, source: source)
         }
-        return nil
     }
 
     private func refreshedCustomMapping(_ context: PlaybackHistoryContext, saved: DanmakuMapping,
                                         client: CatalogDanmakuClient) async throws -> DanmakuMapping? {
-        let platform = DanmakuProvider(source: saved.source ?? saved.provider)
+        let source = saved.source ?? saved.provider
+        let platform = DanmakuProvider(source: source)
         if let animeID = saved.animeID {
             let anime = CatalogDanmakuAnime(id: animeID, title: saved.title, source: saved.source ?? saved.provider, year: saved.year)
             do {
-                return customMapping(context, anime: anime, episodes: try await client.episodes(anime), preference: platform)
+                let episodes = try await client.episodes(anime)
+                try Task.checkCancellation()
+                return customMappings(context, anime: anime, episodes: episodes, preference: platform, pinnedSource: source).first
             } catch TVError.http(404) {
                 // Catalog IDs may also have changed. One title search is enough; never retry indefinitely.
             }
         }
-        return try await customMapping(context, client: client, selectedSource: platform)
+        return try await firstCustomMatch(context, client: client, preference: platform, pinnedSource: source) { _, _, _ in true }?.0
     }
 
     /// Asks Dandanplay, waiting at most `wait` seconds. nil when it isn't asked: its limit was reached a short
