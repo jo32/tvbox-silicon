@@ -523,6 +523,8 @@
 "Delete all cached episodes of %@?" = "刪除《%@》的所有已快取劇集？";
 "Delete Cached Items" = "刪除快取";
 "Delete from Cache" = "刪除快取";
+"Delete All" = "全部刪除";
+"Delete all cached videos?" = "要刪除全部快取的影片嗎？";
 "Caching" = "正在快取";
 "At a Time" = "同時快取";
 "%lld at a time" = "同時 %lld 個";

@@ -523,6 +523,8 @@
 "Delete all cached episodes of %@?" = "「%@」のキャッシュ済みエピソードをすべて削除しますか？";
 "Delete Cached Items" = "キャッシュを削除";
 "Delete from Cache" = "キャッシュを削除";
+"Delete All" = "すべて削除";
+"Delete all cached videos?" = "キャッシュ済みの動画をすべて削除しますか？";
 "Caching" = "キャッシュ中";
 "At a Time" = "同時キャッシュ数";
 "%lld at a time" = "同時に %lld 件";
