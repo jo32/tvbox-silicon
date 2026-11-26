@@ -20,13 +20,14 @@ public struct HTTPClient: Sendable {
             request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
             if fresh { request.cachePolicy = .reloadIgnoringLocalCacheData }
             for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
-            guard (200..<300).contains(http.statusCode) else { throw TVError.http(http.statusCode) }
-            guard data.count <= limit else {
+            let data: Data, response: URLResponse
+            do { (data, response) = try await BoundedHTTPData.load(request, session: session, maximumBytes: limit) }
+            catch let error as URLError where error.code == .dataLengthExceedsMaximum {
                 throw TVError.unsupported(limit == 20_000_000 ? L10n.text("The playlist exceeds 20 MB. Use a smaller subscription.")
                                           : L10n.text("The file is larger than %lld MB.", limit / 1_000_000))
             }
+            guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
+            guard (200..<300).contains(http.statusCode) else { throw TVError.http(http.statusCode) }
             // A mirror's address isn't the file's origin: relative paths resolve against the original.
             return (data, address == url ? response.url ?? url : url)
         }
