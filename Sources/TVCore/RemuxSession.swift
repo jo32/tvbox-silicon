@@ -352,7 +352,8 @@ final class RemuxSession: @unchecked Sendable {
             guard let decoder = tvm_bitmap_open(input, Int32(plan.tracks[track].stream.index)) else { continue }
             bitmapDecoders[track] = decoder
             let position = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle }.firstIndex(of: track) ?? 0
-            let bitmap = BitmapSubtitleTrack(name: names[track] ?? "", position: position, videoSize: videoSize)
+            let bitmap = BitmapSubtitleTrack(name: names[track] ?? "", position: position, videoSize: videoSize,
+                                             isPGS: plan.tracks[track].stream.codec == "hdmv_pgs_subtitle")
             condition.withLock { bitmaps[track] = bitmap }
         }
         if !bitmapTracks.isEmpty {

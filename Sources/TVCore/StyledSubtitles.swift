@@ -11,9 +11,24 @@ public struct StyledSubtitleFrame: @unchecked Sendable, Equatable {
     /// The frame it was drawn for, in pixels.
     public let size: CGSize
 
-    public init(image: CGImage?, rect: CGRect, size: CGSize) { self.image = image; self.rect = rect; self.size = size }
+    /// PGS pictures are authored in square pixels, including the space around both lines of a bilingual cue.
+    public let fitsCanvas: Bool
+
+    public init(image: CGImage?, rect: CGRect, size: CGSize, fitsCanvas: Bool = false) {
+        self.image = image; self.rect = rect; self.size = size; self.fitsCanvas = fitsCanvas
+    }
+
+    /// The layer for the whole subtitle canvas. Keep the entire PGS canvas inside the visible video, even in zoom.
+    public func canvasRect(in picture: CGRect, visible: CGRect) -> CGRect {
+        guard fitsCanvas, size.width > 0, size.height > 0 else { return picture }
+        let area = picture.intersection(visible)
+        guard !area.isEmpty else { return .zero }
+        let scale = min(area.width / size.width, area.height / size.height)
+        let width = size.width * scale, height = size.height * scale
+        return CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height)
+    }
     public static func == (lhs: StyledSubtitleFrame, rhs: StyledSubtitleFrame) -> Bool {
-        lhs.image === rhs.image && lhs.rect == rhs.rect && lhs.size == rhs.size
+        lhs.image === rhs.image && lhs.rect == rhs.rect && lhs.size == rhs.size && lhs.fitsCanvas == rhs.fitsCanvas
     }
 }
 

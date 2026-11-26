@@ -281,7 +281,7 @@ import IOKit.pwr_mgt
     private(set) var audioChoices: [UngroupedAudio.Choice] = []
     private(set) var audioChoice: CMPersistentTrackID?
     /// The item has subtitle tracks of its own (shown in AVKit's Subtitles menu, not with the subtitle files).
-    private(set) var hasOwnSubtitles = false
+    var hasOwnSubtitles: Bool { mediaTracks.legible?.options.isEmpty == false }
     /// A live stream: played at the live edge, without scrubbing.
     private(set) var isLive = false
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
@@ -768,7 +768,7 @@ import IOKit.pwr_mgt
         externalSubtitles.cues = subtitles
         externalSubtitles.player = player
         externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
-        externalSubtitles.fileChosen = { [weak self] in self?.subtitleChoice = nil }
+        subtitles.mediaSelectionChanged = { [weak self] in self?.mediaTracks.selectionChanged() }
         subtitles.nativeChosen = { [weak self] in self?.externalSubtitles.nativeChosen() }
         subtitles.clockChanged = { [weak self] in self?.followSubtitleDelay() }
         followSubtitleDelay()
@@ -845,27 +845,50 @@ import IOKit.pwr_mgt
         }
     }
     @ObservationIgnored private var subtitleClockInterval: Double?
-    /// The subtitle track picked in the player's menu, for the next episodes of the same title (#779) and, kept across
-    /// launches, for other videos in its language (#1174).
-    @ObservationIgnored private var subtitleChoice = SubtitleChoice.saved()
-    /// The title the playing item belongs to (`Channel.skipScope`).
+    let mediaTracks = MediaTracks()
     @ObservationIgnored private var subtitleScope: String?
 
-    /// The viewer picked one of the item's own subtitle tracks, or Off (nil), in the player's menu.
-    func choseSubtitle(_ option: AVMediaSelectionOption?) {
-        subtitleChoice = option.map { SubtitleChoice(scope: subtitleScope ?? "", name: $0.displayName, language: $0.extendedLanguageTag) }
-        SubtitleChoice.save(subtitleChoice)
+    private static func subtitleScope(for channel: Channel) -> String? {
+        if let scope = channel.historyContext?.id ?? channel.skipScope { return scope }
+        if channel.url.scheme == DownloadLibrary.scheme, let id = channel.url.host(),
+           let download = DownloadLibrary.shared.item(id: id) {
+            return "download:" + DownloadShow.key(for: download)
+        }
+        return nil
     }
 
-    /// Picks the remembered track in an item that is ready, once the system has made its own choice.
-    /// Returns whether it found the track there.
-    @discardableResult
-    private func restoreSubtitleChoice(_ item: AVPlayerItem, channel: Channel) async -> Bool {
-        guard let choice = subtitleChoice, choice.scope == channel.skipScope || choice.language != nil,
-              let group = try? await item.asset.loadMediaSelectionGroup(for: .legible), subtitleChoice == choice else { return false }
-        let options = group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }
-        guard let index = choice.index(among: options.map { ($0.displayName, $0.extendedLanguageTag) }, in: channel.skipScope) else { return false }
-        if item.currentMediaSelection.selectedMediaOption(in: group) != options[index] { item.select(options[index], in: group) }
+    /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
+    func chooseSubtitle(_ option: AVMediaSelectionOption?, in group: AVMediaSelectionGroup) {
+        guard let item, player.currentItem === item, let tracks = mediaTracks.legible, tracks.group == group else { return }
+        let description: TrackLabel.Option?
+        if let option {
+            guard let index = tracks.options.firstIndex(of: option) else { return }
+            description = tracks.descriptions[index]
+        } else {
+            guard group.allowsEmptySelection else { return }
+            description = nil
+        }
+        if item.currentMediaSelection.selectedMediaOption(in: group) != option { mediaTracks.select(option, in: tracks) }
+        externalSubtitles.nativeChosen()
+        SubtitleChoice.remember(description, for: subtitleScope)
+    }
+
+    /// A missing track may fall back for this episode. Only the viewer can change the remembered choice.
+    private func restoreSubtitleChoice(_ item: AVPlayerItem, tracks: MediaTracks.Group?, scope: String?) -> Bool {
+        guard let preference = SubtitleChoice.preference(for: scope) else { return false }
+        let option: AVMediaSelectionOption?
+        switch preference {
+        case .off:
+            guard let tracks else { return true }
+            guard tracks.group.allowsEmptySelection else { return false }
+            option = nil
+        case .track(let choice):
+            guard let tracks, let index = choice.match(tracks.descriptions, in: scope) else { return false }
+            option = tracks.options[index]
+        }
+        if let group = tracks?.group, item.currentMediaSelection.selectedMediaOption(in: group) != option {
+            item.select(option, in: group)
+        }
         return true
     }
 
@@ -1209,8 +1232,8 @@ import IOKit.pwr_mgt
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil; hasOwnSubtitles = false; liveReadyAt = nil
-        subtitleScope = channel.skipScope
+        audioChoices = []; audioChoice = nil; liveReadyAt = nil
+        mediaTracks.follow(item)
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
@@ -1234,16 +1257,12 @@ import IOKit.pwr_mgt
                         self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
                     }
                     Task { [weak self] in
-                        let group = try? await item.asset.loadMediaSelectionGroup(for: .legible)
-                        let own = group?.options.contains { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) } ?? false
-                        guard let self, self.generation == activeGeneration, self.item === item else { return }
-                        self.hasOwnSubtitles = own
-                    }
-                    Task { [weak self] in
-                        // The track picked in the last episode, in place of a subtitle file that came on by itself.
-                        guard let self, await self.restoreSubtitleChoice(item, channel: channel),
-                              self.generation == activeGeneration, self.item === item else { return }
-                        self.externalSubtitles.nativeChosen()
+                        guard let self, self.item === item else { return }
+                        await self.mediaTracks.load(item)
+                        guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
+                        if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                            self.externalSubtitles.nativeChosen()
+                        }
                     }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
@@ -1497,6 +1516,8 @@ import IOKit.pwr_mgt
         catalogDanmaku.clear()
         externalSubtitles.stop()
         subtitles.follow(nil)
+        mediaTracks.follow(nil)
+        subtitleScope = nil
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
@@ -1552,6 +1573,7 @@ import IOKit.pwr_mgt
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
+        subtitleScope = Self.subtitleScope(for: channel)
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
         // A new title starts at the speed set in Settings › Playback, when one is set. Its next episodes and other
@@ -1892,7 +1914,11 @@ extension PlaybackSession {
                     } else if status == .readyToPlay {
                         // Before it plays, so a file with ungrouped dubs starts with one of them.
                         UngroupedAudio.playOne(queued)
-                        Task { [weak self] in await self?.restoreSubtitleChoice(queued, channel: next) }
+                        Task { [weak self] in
+                            let tracks = await MediaTracks.subtitleGroup(queued)
+                            guard let self, self.upcoming?.item === queued else { return }
+                            _ = self.restoreSubtitleChoice(queued, tracks: tracks, scope: Self.subtitleScope(for: next))
+                        }
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
                             queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
