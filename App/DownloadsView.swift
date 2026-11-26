@@ -11,6 +11,11 @@ import BackgroundTasks
 struct DownloadsView: View {
     @Environment(Store.self) private var store
     @State private var action: CachedShowAction?
+    @State private var confirmsDeleteAll = false
+    #if os(tvOS)
+    /// Apple TV asks for a second press instead of a dialog; moving off the button takes the question back.
+    @FocusState private var deleteAllFocused: Bool
+    #endif
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
     /// How the downloaded shows are listed, and 倒序 (#653): the other way round.
@@ -127,6 +132,11 @@ struct DownloadsView: View {
             .menuStyle(.button).buttonStyle(.borderless).fixedSize()
             .help(L10n.text("Sort By"))
             ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+            Button(role: .destructive) { confirmsDeleteAll = true } label: {
+                Text(L10n.text("Delete All")).lineLimit(1).fixedSize()
+            }
+            .buttonStyle(.borderless).fixedSize()
+            .accessibilityIdentifier("downloads.deleteAll")
             #else
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
@@ -141,11 +151,42 @@ struct DownloadsView: View {
                     .accessibilityLabel(L10n.text("Sort By"))
                     // Filled while the list runs the other way round.
                     ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+                    #if os(tvOS)
+                    // A second press confirms: Downloads can be a page pushed from More, and a dialog on a pushed
+                    // tvOS page hangs (#272).
+                    Button(role: .destructive) {
+                        if confirmsDeleteAll { deleteAll() } else { confirmsDeleteAll = true }
+                    } label: {
+                        FittingLabel(title: L10n.text(confirmsDeleteAll ? "Press Again to Delete All" : "Delete All"), symbol: "trash")
+                    }
+                    .controlButton()
+                    .focused($deleteAllFocused)
+                    .onChange(of: deleteAllFocused) { _, focused in if !focused { confirmsDeleteAll = false } }
+                    .accessibilityIdentifier("downloads.deleteAll")
+                    #else
+                    Button(role: .destructive) { confirmsDeleteAll = true } label: {
+                        FittingLabel(title: L10n.text("Delete All"), symbol: "trash")
+                    }
+                    .controlButton()
+                    .accessibilityIdentifier("downloads.deleteAll")
+                    #endif
                 }
             }
             .environment(\.glassControls, true)
             #endif
         }
+        // One tap clears the whole offline cache, so it confirms first. As on the songs page, it also
+        // takes the downloads still on their way.
+        #if !os(tvOS)
+        .confirmationDialog(L10n.text("Delete all cached videos?"), isPresented: $confirmsDeleteAll, titleVisibility: .visible) {
+            Button(L10n.text("Delete Cached Items"), role: .destructive) { deleteAll() }
+        }
+        #endif
+    }
+
+    private func deleteAll() {
+        confirmsDeleteAll = false
+        library.remove(library.items.map(\.id))
     }
 
     #if os(macOS)

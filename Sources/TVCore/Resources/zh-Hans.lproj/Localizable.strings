@@ -523,6 +523,9 @@
 "Delete all cached episodes of %@?" = "删除《%@》的所有已缓存剧集？";
 "Delete Cached Items" = "删除缓存";
 "Delete from Cache" = "删除缓存";
+"Delete All" = "全部删除";
+"Delete all cached videos?" = "要删除全部缓存的视频吗？";
+"Press Again to Delete All" = "再按一次以全部删除";
 "Caching" = "正在缓存";
 "At a Time" = "同时缓存";
 "%lld at a time" = "同时 %lld 个";
