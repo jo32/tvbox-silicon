@@ -253,37 +253,43 @@ struct DiscoverDetailView: View {
     }
     #endif
 
-    private var sourceButton: some View {
+    @ViewBuilder private var sourceButton: some View {
         #if os(iOS)
-        if let entry = resumeEntry {
-            Button {
-                store.resume(entry)
-            } label: {
-                VStack(spacing: 3) {
-                    Label(L10n.text("Continue Playing"), systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text(HistoryFormat.status(entry)).font(.system(size: 12)).opacity(0.8)
-                }
-                .frame(maxWidth: .infinity).frame(height: 54)
+        if let entry = resumeEntry { continueButton(entry) } else { searchButton }
+        #else
+        searchButton
+        #endif
+    }
+
+    #if os(iOS)
+    private func continueButton(_ entry: PlaybackHistoryEntry) -> some View {
+        Button {
+            store.resume(entry)
+        } label: {
+            VStack(spacing: 3) {
+                Label(L10n.text("Continue Playing"), systemImage: "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(HistoryFormat.status(entry)).font(.system(size: 12)).opacity(0.8)
+            }
+            .frame(maxWidth: .infinity).frame(height: 54)
+            .foregroundStyle(dark ? Color.black : Color.white)
+            .background(dark ? Color.white : Color.black, in: Capsule())
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("discover.continuePlaying")
+    }
+    #endif
+
+    private var searchButton: some View {
+        Button {
+            episode = nil
+            if store.subscription == nil { store.section = .settings }
+            else { store.searchVideos(item.name) }
+        } label: {
+            Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 54)
                 .foregroundStyle(dark ? Color.black : Color.white)
                 .background(dark ? Color.white : Color.black, in: Capsule())
-            }
-            .buttonStyle(.plain).accessibilityIdentifier("discover.continuePlaying")
-        } else {
-        #endif
-            Button {
-                episode = nil
-                if store.subscription == nil { store.section = .settings }
-                else { store.searchVideos(item.name) }
-            } label: {
-                Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
-                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 54)
-                    .foregroundStyle(dark ? Color.black : Color.white)
-                    .background(dark ? Color.white : Color.black, in: Capsule())
-            }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
-        #if os(iOS)
-        }
-        #endif
+        }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
     }
 
     /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes
