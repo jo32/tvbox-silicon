@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.32",
+          "buildVersion": "70",
+          "date": "2026-11-27",
+          "localizedDescription": "• 大网盘文件拖动更顺滑\n• 更多链接能播放\n• 直播回看更好用，节目单更准\n• 字幕选择按剧记住\n• 其他修复\n\n• Smoother seeking in big drive files\n• More links play\n• Live TV replay and a better guide\n• Subtitles remembered per series\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.32/Yingxia-1.8.32-ios.ipa",
+          "size": 187033358,
+          "sha256": "520cbcd3f19f47a29ec095a7d47f14241afa6573ae91f0771e476034756d4dfc",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.31",
           "buildVersion": "69",
           "date": "2026-11-25",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.28/Yingxia-1.8.28-ios.ipa",
           "size": 185712074,
           "sha256": "3fef22ae1bdcb1ba1209c8aa5d6f4c11dada494775647e3759304807667f3782",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.27",
-          "buildVersion": "65",
-          "date": "2026-11-21",
-          "localizedDescription": "• 映匣账号\n• 帮映匣变好，赚积分\n• 视频里的广告更少了\n• “正在播放”全屏显示\n• 其他修复\n\n• A Yingxia account\n• Points for helping Yingxia\n• Fewer ads in videos\n• Now Playing fills the screen\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.27/Yingxia-1.8.27-ios.ipa",
-          "size": 185065395,
-          "sha256": "3db7ec3168f89e87d9377f3fde59a0c3048ca8a2a61c2f4ade835980141841f5",
           "minOSVersion": "17.0"
         }
       ],
