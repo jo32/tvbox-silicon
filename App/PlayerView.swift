@@ -187,9 +187,12 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
-            if FloatingPlayback.shared.take(session) {
+            if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
+                // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
+                // Only for a player of its own screen; a watch page turns for itself.
+                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
             } else {
                 FloatingPlayback.shared.end()
                 startCatalogPlayback(session, channel: channel, store: store)
