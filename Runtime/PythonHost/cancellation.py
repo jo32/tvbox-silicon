@@ -63,6 +63,7 @@ class RequestScope:
         source = os.path.abspath(os.path.dirname(request.get('script') or __file__))
         modules = os.path.abspath(os.path.join(request.get('profile') or source, 'modules'))
         self.folders = (source + os.sep, os.path.realpath(source) + os.sep, modules + os.sep)
+        self.dynamic_files = {}
 
     def __enter__(self):
         self.previous, self.previous_trace = current_request(), sys.gettrace()
@@ -104,7 +105,24 @@ class RequestScope:
                     self.condition.wait(.05)
 
     def trace(self, frame, event, arg):
-        if frame.f_code.co_filename.startswith(self.folders):
+        filename = frame.f_code.co_filename
+        source = filename.startswith(self.folders)
+        if not source:
+            # exec/eval/compile normally use <string>, but may name a virtual file. Classify
+            # once per filename, then require a traced source ancestor. Host/framework cleanup
+            # keeps its own real filename and is never interrupted by the source trace.
+            dynamic = self.dynamic_files.get(filename)
+            if dynamic is None:
+                dynamic = not os.path.isfile(filename)
+                self.dynamic_files[filename] = dynamic
+            if dynamic:
+                parent = frame.f_back
+                while parent is not None:
+                    if parent.f_trace == self.trace:
+                        source = True
+                        break
+                    parent = parent.f_back
+        if source:
             self.check()
             return self.trace
         return None

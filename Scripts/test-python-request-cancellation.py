@@ -29,6 +29,8 @@ class Spider(Base):
                     for i in range(100): value = i * i
                 except Exception:
                     pass
+        elif key == 'dynamic':
+            exec(compile('while time.monotonic() < dynamic_end: pass', '<dynamic-source>', 'exec'), {'time':time, 'dynamic_end':time.monotonic()+2})
         elif key == 'sleep':
             time.sleep(2)
         elif key == 'requests':
@@ -124,6 +126,13 @@ class PythonCancellationTests(unittest.TestCase):
     def test_running_python_loop_exits_even_when_source_catches_exception(self):
         result, done = self.start()
         self.wait_started()
+        self.cancel()
+        self.assert_stopped(result, done)
+
+    def test_dynamic_exec_bytecode_obeys_request_cancellation(self):
+        result, done = self.start(keyword='dynamic')
+        self.wait_started()
+        time.sleep(.05)
         self.cancel()
         self.assert_stopped(result, done)
 
