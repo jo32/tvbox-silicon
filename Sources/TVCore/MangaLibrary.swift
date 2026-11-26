@@ -117,19 +117,9 @@ public actor MangaImages {
     }
 
     private static func cachedData(_ request: MangaImageRequest) -> Data? {
-        var candidates = [file(request.key)]
-        // Existing context-free covers are safe to reuse. Old page entries omit hook context and
-        // may contain another chapter's transformed pixels, so pages use the complete new identity.
-        if !request.page, request.comic == nil, request.chapter == nil,
-           !request.source.contains("\n"), !request.url.contains("\n") {
-            candidates.append(file(request.source + "\n" + request.url))
-        }
-        for candidate in candidates {
-            guard let size = try? candidate.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= request.maximumBytes,
-                  let data = try? Data(contentsOf: candidate), (try? request.check(data)) != nil else { continue }
-            return data
-        }
-        return nil
+        let path = Self.file(request.key)
+        guard let size = try? path.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= request.maximumBytes else { return nil }
+        return try? Data(contentsOf: path)
     }
 
     public func data(source: String, url: String, kind: Kind, comic: String? = nil, chapter: String? = nil) async throws -> Data {

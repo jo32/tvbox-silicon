@@ -75,25 +75,72 @@ enum MangaHTTP {
         }
     }
 
-    /// Image callers supply a bound; source API calls retain their existing transport policy.
-    /// Use this session so redirects still update the source cookie jar.
+    /// Image callers supply a bound; source API calls keep their existing transport policy. A bounded read stays on
+    /// this session, so redirects still update the source cookie jar.
     private static func read(_ request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse) {
         guard let maximumBytes else { return try await session.data(for: request) }
-        let limit = max(0, maximumBytes)
         try Task.checkCancellation()
-        let (bytes, response) = try await session.bytes(for: request)
-        defer { bytes.task.cancel() }
-        guard response.expectedContentLength <= limit else { throw URLError(.dataLengthExceedsMaximum) }
-        return try await withTaskCancellationHandler {
-            var data = Data()
-            data.reserveCapacity(min(limit, 64 * 1024))
-            for try await byte in bytes {
-                guard data.count < limit else { throw URLError(.dataLengthExceedsMaximum) }
-                data.append(byte)
+        return try await BoundedRead(limit: max(0, maximumBytes)).run(request, in: session)
+    }
+
+    /// One answer read in the pieces the network delivers: refused at once when its declared length is over the
+    /// limit, and stopped as soon as what arrived passes it.
+    private final class BoundedRead: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        private let limit: Int
+        private let lock = NSLock()
+        private var data = Data()
+        private var response: URLResponse?
+        private var continuation: CheckedContinuation<(Data, URLResponse), Error>?
+        init(limit: Int) { self.limit = limit }
+
+        func run(_ request: URLRequest, in session: URLSession) async throws -> (Data, URLResponse) {
+            let task = session.dataTask(with: request)
+            task.delegate = self
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    lock.withLock { self.continuation = continuation }
+                    task.resume()
+                }
+            } onCancel: { task.cancel() }
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            guard response.expectedContentLength <= Int64(limit) else {
+                finish(.failure(URLError(.dataLengthExceedsMaximum)))
+                completionHandler(.cancel)
+                return
             }
-            try Task.checkCancellation()
-            return (data, response)
-        } onCancel: { bytes.task.cancel() }
+            lock.withLock {
+                self.response = response
+                if response.expectedContentLength > 0 { data.reserveCapacity(Int(response.expectedContentLength)) }
+            }
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive chunk: Data) {
+            let over = lock.withLock { () -> Bool in
+                guard data.count + chunk.count <= limit else { return true }
+                data.append(chunk)
+                return false
+            }
+            if over { finish(.failure(URLError(.dataLengthExceedsMaximum))); dataTask.cancel() }
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            let (data, response) = lock.withLock { (self.data, self.response) }
+            if let error { finish(.failure(error)) }
+            else if let response { finish(.success((data, response))) }
+            else { finish(.failure(URLError(.badServerResponse))) }
+        }
+
+        private func finish(_ result: Result<(Data, URLResponse), Error>) {
+            let continuation = lock.withLock { () -> CheckedContinuation<(Data, URLResponse), Error>? in
+                defer { self.continuation = nil }
+                return self.continuation
+            }
+            continuation?.resume(with: result)
+        }
     }
 
     private static func answer(_ request: Request, maximumBytes: Int?) async throws -> (Data, HTTPURLResponse) {
