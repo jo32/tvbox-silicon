@@ -107,6 +107,15 @@ import Testing
         let size = CGSize(width: 640, height: 360), video = CGSize(width: 192, height: 108)
         let one = try #require(renderer.render(at: 500_000, size: size, video: video))
         #expect(one.image != nil && one.size == CGSize(width: 1920, height: 1080))
+        // A 1080-line subtitle canvas over cropped video: both lines keep square pixels and stay on screen.
+        let cropped = CGRect(x: 0, y: 0, width: 1920, height: 800)
+        let canvas = one.canvasRect(in: cropped, visible: cropped)
+        #expect(abs(canvas.width / one.size.width - canvas.height / one.size.height) < 0.0001)
+        #expect(cropped.contains(canvas))
+        let zoom = CGRect(x: -150, y: -100, width: 2250, height: 1000)
+        #expect(one.canvasRect(in: zoom, visible: cropped) == canvas)
+        let original = CGRect(origin: .zero, size: one.size)
+        #expect(one.canvasRect(in: original, visible: original) == original)
         #expect(one.rect.maxY > 900 && abs(one.rect.midX - 960) < 2)
         #expect(renderer.render(at: 700_000, size: size, video: video) == nil)
         let gap = try #require(renderer.render(at: 1_200_000, size: size, video: video))
@@ -119,6 +128,7 @@ import Testing
         let vob = try #require(tracks.last)
         #expect(vob.count >= 2)
         let vobFrame = try #require(BitmapSubtitleRenderer(track: vob).render(at: 500_000, size: size, video: video))
+        #expect(vobFrame.canvasRect(in: zoom, visible: cropped) == zoom)
         #expect(vobFrame.image != nil && vobFrame.size.width > 0)
     }
 }

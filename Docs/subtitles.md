@@ -8,6 +8,10 @@ issue #576. The other subtitle issues stay open until each is checked: #496, #31
 - **The item's own subtitles stay AVPlayer's.** This covers the subtitles inside an MP4 or HLS stream, and the
   tracks the repackager makes from a file (`Remux`). AVPlayer draws them in Picture in Picture. On screen, the app
   draws them in the chosen style (`SubtitleCues`, #547).
+- **Embedded track choices are local to each series.** On Mac, iPhone and iPad the Subtitles menu lists
+  individual renditions with their titles and formats. Apple TV uses the native subtitle picker. An explicit
+  track or Off is remembered. An episode missing the chosen track can use another track in the same language
+  while the original choice remains available for later episodes.
 - **Subtitle files the app fetches itself go to the overlay** (`ExternalSubtitles` → `SubtitleCues.show`). These
   are a source's `subs` beside a video AVPlayer plays directly (an MP4, an HLS stream, a cloud file), and any file
   the viewer adds while watching. The app reads them into a `SubtitleDocument`. The player's clock (a 50 ms periodic
@@ -418,17 +422,14 @@ them. Now the player draws them over the video like ASS.
   the one that clears it, and at most 10 s when no next one is known yet.
 - **Drawing.** `BitmapSubtitleRenderer` composites the pictures on screen at a moment onto the stream's canvas
   (PGS presentation size, VobSub frame size, else the video's) and returns a new image only when the set of
-  cues changes. The overlay stretches that canvas over the video's rect, so it follows resizing without
-  redrawing.
+  cues changes. A PGS canvas fits inside the visible picture with square pixels, including when a cropped film
+  is wider than the original subtitle canvas. VobSub keeps the DVD picture's display proportions.
 - **Limits.**
   - Standalone `.sup`/`.idx`+`.sub` files are not read; only tracks inside a file the repackager opens.
   - DVB subtitles (`dvb_subtitle`) are not included.
   - After a seek far ahead, PGS pictures appear once that segment is made. A PGS epoch that continues from
     before the seek point can miss objects it would have reused; such streams normally repeat an acquisition
     point at every cue.
-  - The canvas is mapped onto the whole video rect. A PGS stream made for 1920×1080 on a video cropped to
-    1920×800 is squeezed vertically rather than centred. That is uncommon in remuxes, which keep the original
-    size.
 - **Tests.** `BitmapSubtitleTests`:
   - the plan offers bitmap tracks only when the player draws them
   - translation twins come only from text tracks
