@@ -130,6 +130,9 @@ extension PlaybackHistoryEntry {
     public private(set) var entries: [PlaybackHistoryEntry] = []
     public private(set) var persistenceError: String?
     private let file: URL
+    @ObservationIgnored private let persistence: PlaybackHistoryPersistence
+    @ObservationIgnored private var persistenceRevision: UInt64 = 0
+    @ObservationIgnored private var entriesRevision: UInt64 = 0
     private let cache: MediaCache
     private let defaults: UserDefaults
     /// Called after the history changes here (not after `adopt`), for iCloud sync.
@@ -143,7 +146,10 @@ extension PlaybackHistoryEntry {
         let directory = URL.applicationSupportDirectory
         #endif
         self.file = file ?? directory.appending(path: "playback-history-v1.json")
-        if let data = try? Data(contentsOf: self.file), data.count <= 2 * 1024 * 1024,
+        self.persistence = PlaybackHistoryPersistence.writer(for: self.file)
+        if let latest = persistence.latestEntries {
+            entries = latest; entriesRevision = persistence.latestRevision
+        } else if let data = try? Data(contentsOf: self.file), data.count <= 2 * 1024 * 1024,
            let decoded = try? JSONDecoder().decode([PlaybackHistoryEntry].self, from: data) {
             var seen = Set<String>()
             entries = Array(decoded.filter { Self.valid($0) }.sorted { $0.updatedAt > $1.updatedAt }
@@ -153,6 +159,7 @@ extension PlaybackHistoryEntry {
     }
 
     public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double, now: Date = Date()) {
+        refreshPendingEntries()
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0 else { return }
         // A real local playback change follows the history already seen, even when this device's clock is behind.
         // Sync uses this date, not the later time at which a delayed upload happens.
@@ -175,6 +182,7 @@ extension PlaybackHistoryEntry {
 
     /// Another device's merged history. An entry that is no longer in it loses its caches as if removed here.
     public func adopt(_ synced: [PlaybackHistoryEntry]) {
+        refreshPendingEntries()
         var seen = Set<String>()
         let next = Array(synced.filter { Self.valid($0) }.sorted { $0.updatedAt > $1.updatedAt }
             .filter { seen.insert($0.id).inserted }.prefix(Self.limit))
@@ -186,6 +194,7 @@ extension PlaybackHistoryEntry {
 
     /// Continue Watching of a subscription whose address changed (#982), under the new address.
     public func moveOrigin(from old: URL, to new: URL) {
+        refreshPendingEntries()
         guard entries.contains(where: { $0.context.origin.absoluteString == old.absoluteString }) else { return }
         var seen = Set<String>()
         entries = entries.map { entry in
@@ -198,10 +207,11 @@ extension PlaybackHistoryEntry {
 
     public func remove(_ id: String) { remove(Set([id])) }
     public func remove(_ ids: Set<String>) {
+        refreshPendingEntries()
         for entry in entries where ids.contains(entry.id) { clean(entry) }
         entries.removeAll { ids.contains($0.id) }; prioritizeCaches(); persist(); onChange?()
     }
-    public func clear() { for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist(); onChange?() }
+    public func clear() { refreshPendingEntries(); for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist(); onChange?() }
 
     /// Watched titles whose source is not hidden.
     public func visibleEntries(hiding hidden: HiddenSources) -> [PlaybackHistoryEntry] {
@@ -209,9 +219,7 @@ extension PlaybackHistoryEntry {
         return entries.filter { !hidden.contains($0.context) }
     }
     private func prioritizeCaches() {
-        cache.prioritize(Set(entries.flatMap { entry in
-            [entry.id] + (entry.context.poster.map { [PosterResource.artworkScope($0)] } ?? [])
-        }))
+        persistence.prioritize(entries, cache: cache)
     }
     private func clean(_ entry: PlaybackHistoryEntry) {
         cache.remove(scope: entry.id)
@@ -226,11 +234,32 @@ extension PlaybackHistoryEntry {
     }
 
     private func persist() {
-        do {
-            let data = try JSONEncoder().encode(entries)
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: file, options: .atomic)
-            persistenceError = nil
-        } catch { persistenceError = error.localizedDescription }
+        persistenceRevision = persistence.enqueue(entries, cache: cache) { [weak self] result in
+            Task { @MainActor [weak self] in
+                guard let self, self.persistenceRevision == result.revision,
+                      self.persistence.latestRevision == result.revision else { return }
+                self.persistenceError = result.error
+            }
+        }
+        entriesRevision = persistenceRevision
+    }
+
+    private func refreshPendingEntries() {
+        let revision = persistence.latestRevision
+        guard revision != entriesRevision, let latest = persistence.latestEntries else { return }
+        entries = latest
+        entriesRevision = revision
+    }
+
+    /// Close/background/restore callers can await durable latest state without blocking rendering.
+    /// Entries change immediately; `persistenceError` is updated when this drain completes.
+    @discardableResult public func flushPersistence() async -> Bool {
+        while true {
+            let result = await persistence.flush()
+            // A newer mutation may arrive before the main actor resumes after the drain.
+            guard persistence.latestRevision == result.revision else { continue }
+            persistenceError = result.error
+            return result.error == nil
+        }
     }
 }

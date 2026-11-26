@@ -7,7 +7,7 @@ private func historyContext(video: String = "series", episode: String = "1", sou
         videoID: video, videoName: "Series", episodeID: episode, episodeName: "Episode " + episode, episodeFlag: "line")
 }
 
-@Test @MainActor func playbackHistoryPersistsUpdatesAndDeletesWithoutStreamCredentials() throws {
+@Test @MainActor func playbackHistoryPersistsUpdatesAndDeletesWithoutStreamCredentials() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let file = directory.appending(path: "history.json")
@@ -26,9 +26,10 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(PlaybackHistory(file: file).entries.count == 1)
     restored.clear()
     #expect(PlaybackHistory(file: file).entries.isEmpty)
+    #expect(await history.flushPersistence())
 }
 
-@Test @MainActor func playbackHistoryRejectsInvalidProgressAndDoesNotOverwriteWithLoadingZero() throws {
+@Test @MainActor func playbackHistoryRejectsInvalidProgressAndDoesNotOverwriteWithLoadingZero() async throws {
     let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: file) }
     let history = PlaybackHistory(file: file)
@@ -40,6 +41,7 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(history.entries.first?.position == 1800)
     #expect(history.entries.first?.completed == true)
     #expect(history.entries.first?.resumePosition == 0)
+    #expect(await history.flushPersistence())
 }
 
 @Test func playbackHistoryFindsTheSameEpisodeAfterReorderingAndRejectsMissingEpisodes() {
@@ -92,7 +94,7 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(entry("2", at: 163).continuation(in: [first, next]) == nil)
 }
 
-@Test @MainActor func playbackHistoryBoundsAndRecoversItsPersistentFile() throws {
+@Test @MainActor func playbackHistoryBoundsAndRecoversItsPersistentFile() async throws {
     let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: file) }
     try Data("broken history".utf8).write(to: file)
@@ -106,6 +108,7 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(history.entries.first?.context.videoID == String(PlaybackHistory.limit))
     #expect(history.entries.contains { $0.context.videoID == "0" } == false)
     #expect(PlaybackHistory(file: file).entries == history.entries)
+    #expect(await history.flushPersistence())
 }
 
 @Test func historyResumeClampsChangedDurationsAndCoexistsWithSegmentSkipping() {
@@ -168,7 +171,7 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(entry.resumePosition(for: twice[0], among: line + twice) == nil)
 }
 
-@Test @MainActor func hiddenSourcesStayOutOfVisiblePlaybackHistoryUntilUnhidden() throws {
+@Test @MainActor func hiddenSourcesStayOutOfVisiblePlaybackHistoryUntilUnhidden() async throws {
     let suite = "history.hidden." + UUID().uuidString
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -217,4 +220,5 @@ private func historyContext(video: String = "series", episode: String = "1", sou
                           provenance: SourceProvenance(origin: movedA, spider: nil))
     hidden.toggle(movedSiteA, origin: mergedOrigin)
     #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC", "vA"])
+    #expect(await history.flushPersistence())
 }

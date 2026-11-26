@@ -111,6 +111,11 @@ import TVCore
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
+                        #if os(iOS)
+                        PlaybackHistoryLifecycle.enterBackground(history: store.playbackHistory)
+                        #else
+                        Task { await store.playbackHistory.flushPersistence() }
+                        #endif
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
                         store.cloudSync?.flushPending()
                     }
