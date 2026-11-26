@@ -689,6 +689,7 @@ private struct DiscoverMacSeasonButton: View {
         order = Dictionary(store.recommendationSites(config).enumerated().map { ($1.key, $0) }) { first, _ in first }
         search.order = store.sourceOrder
         search.onResult = { [weak self] in self?.absorb($0) }
+        search.onProgress = { [weak self] in self?.settle() }
         if search.keyword.isEmpty {
             let hidden = store.hiddenSources
             // A title is a film or a series. A listening source's album or chapter with the same name is not
@@ -697,7 +698,7 @@ private struct DiscoverMacSeasonButton: View {
                 hidden.contains(site, origin: config.origin) || AudioSources.isCandidate(site)
             }
             // Answered from the model's own cache, the results are in already.
-            search.results.forEach(absorb)
+            for result in search.results { absorb(result) }
         } else if search.suspended {
             search.resumeSuspended(config: config)
         }
@@ -783,6 +784,9 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 12) {
                         heading
+                        if let message = sources.search.resultLimitMessage {
+                            Text(message).font(.footnote).foregroundStyle(.secondary)
+                        }
                         if sources.finished {
                             Text(L10n.text(selectedSeason == nil ? "None of your sources has this title." : "None of your sources has this season."))
                                 .font(.subheadline).foregroundStyle(.secondary)
@@ -924,6 +928,9 @@ private struct DiscoverSourcePicker: View {
             #endif
             .accessibilityAddTraits(checked ? .isSelected : [])
             .accessibilityIdentifier("discover.sources.option")
+        }
+        if let message = sources.search.resultLimitMessage {
+            Text(message).font(.footnote).foregroundStyle(.secondary)
         }
         if !sources.finished {
             HStack(spacing: 10) {

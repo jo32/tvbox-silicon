@@ -2395,3 +2395,5 @@
 "Select episodes to delete" = "削除するエピソードを選択";
 "Delete %lld episodes" = "%lld 話を削除";
 "Search settings" = "設定を検索";
+
+"Search results reached the memory limit. Try a more specific search." = "検索結果がメモリ上限に達しました。検索条件を絞り込んでください。";

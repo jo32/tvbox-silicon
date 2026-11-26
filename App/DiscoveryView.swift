@@ -312,6 +312,9 @@ struct GlobalSearchView: View {
                 // the source chips below, so the remote passed them by. As a section, moving onto the row lands on them.
                 .focusSection()
                 #endif
+                if let message = model.resultLimitMessage {
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                }
                 if model.busy {
                     SearchActivityList(origin: config.origin, sources: model.activeSources, waiting: model.waitingSources, completed: model.completed, total: model.total, runStart: model.runStart,
                                        showsSources: showsActivity)

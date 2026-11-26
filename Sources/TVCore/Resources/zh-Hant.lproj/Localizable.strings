@@ -2395,3 +2395,5 @@
 "Select episodes to delete" = "選擇要刪除的劇集";
 "Delete %lld episodes" = "刪除 %lld 集";
 "Search settings" = "搜尋設定";
+
+"Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";

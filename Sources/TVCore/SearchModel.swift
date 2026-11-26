@@ -13,6 +13,9 @@ import Observation
     public var total = 0
     public var keyword = ""
     public var stopped = false
+    /// A single bounded notice also covers answers omitted because even their error would exceed the budget.
+    public private(set) var resultLimitMessage: String?
+    @ObservationIgnored private var omittedSources = Set<String>()
     /// Sources this search left out because they are failing (`SourceHealth.paused`); a retry asks them.
     public private(set) var paused: [Site] = []
     /// Keys of the sources this search asks: searchable, not hidden by the viewer, not paused.
@@ -44,10 +47,11 @@ import Observation
     private let http: HTTPClient
     private struct Cached {
         let results: [SearchSourceResult]
-        let total: Int
         let created: Date
+        let cost: SearchPayloadBudget.Cost
     }
     private var cache: [String: Cached] = [:]
+    private var payloadBudget = SearchPayloadBudget()
     private var subscriptionID: String?
     /// Each source's position in `SourceStrategy` order, or the viewer's own; matches are listed in this order.
     private var rank: [String: Int] = [:]
@@ -57,6 +61,8 @@ import Observation
     /// Told of each source's answer as it arrives, for a page that reads the answers once each instead of on every redraw
     /// (Discover's title page, `DiscoverSources`).
     @ObservationIgnored public var onResult: (@MainActor (SearchSourceResult) -> Void)?
+    /// Progress can advance without a retained answer when its payload does not fit.
+    @ObservationIgnored public var onProgress: (@MainActor () -> Void)?
     public init(http: HTTPClient = HTTPClient()) { self.http = http }
 
     public var failures: [SearchSourceResult] { results.filter { $0.error != nil } }
@@ -115,7 +121,14 @@ import Observation
                 let known = Set(self.videos(for: result.id).map(\.id))
                 let fresh = answer.videos.filter { !known.contains($0.id) }
                 self.nextPage[result.id] = fresh.isEmpty ? Int.max : page + 1
-                if !fresh.isEmpty { self.batches.append(SearchBatch(source: result.id, page: page, videos: fresh)) }
+                if !fresh.isEmpty {
+                    guard self.payloadBudget.reserve(SearchPayloadBudget.cost(fresh)) else {
+                        self.nextPage[result.id] = .max
+                        self.resultLimitMessage = SearchPayloadBudget.message
+                        continue
+                    }
+                    self.batches.append(SearchBatch(source: result.id, page: page, videos: fresh))
+                }
             }
             if self.runID == run, self.pageGeneration == pageToken {
                 self.loadingMore = false; self.moreTask = nil
@@ -131,6 +144,8 @@ import Observation
     private func clearPages() {
         cancelPages()
         batches = []; nextPage = [:]; pageFailures = [:]; loadingMore = false; runID = UUID()
+        payloadBudget = SearchPayloadBudget()
+        resultLimitMessage = nil; omittedSources = []
     }
 
     public func stop() {
@@ -198,10 +213,11 @@ import Observation
         selectedSource = sites.contains { $0.id == preferred } ? preferred : nil; scrollID = nil
         rank = Dictionary(arrange(eligible, config: config, failing: failing(config)).enumerated().map { ($1.id, $0) }) { first, _ in first }
         total = sites.count
-        if let hit = cache[value], Date().timeIntervalSince(hit.created) < 300 {
-            results = Self.visible(hit.results, excluding: hidden)
-            total = sites.count
+        if let hit = cache[value], Date().timeIntervalSince(hit.created) < 300,
+           hit.results.count == total, Set(hit.results.map(\.id)) == asking {
+            results = hit.results
             completed = results.count
+            for result in results { _ = payloadBudget.reserve(SearchPayloadBudget.cost(result)) }
             stopped = false
             return
         }
@@ -209,8 +225,8 @@ import Observation
     }
 
     public func resume(config: Subscription, retryFailures: Bool = false) {
-        guard !busy, !keyword.isEmpty else { return }
-        let finished = Set(results.map(\.id))
+        guard !busy, !keyword.isEmpty, retryFailures || completed < total else { return }
+        let finished = Set(results.map(\.id)).union(omittedSources)
         let failed = Set(failures.map(\.id))
         // A retry also asks the sources paused for failing: the viewer asked for them.
         let held = Set(paused.map(\.id))
@@ -218,7 +234,8 @@ import Observation
             retryFailures ? failed.contains($0.id) || held.contains($0.id) : !finished.contains($0.id) && !held.contains($0.id)
         }
         if retryFailures {
-            results.removeAll { failed.contains($0.id) }; completed = results.count
+            results.removeAll { failed.contains($0.id) }; completed = results.count + omittedSources.count
+            rebuildPayloadBudget()
             total += paused.count; paused = []
         }
         asking.formUnion(sites.map(\.key))
@@ -255,8 +272,7 @@ import Observation
             guard self.generation == token else { return }
             self.busy = false; self.task = nil; self.activeSources = []; self.waitingSources = []
             if self.completed == self.total {
-                self.cache[keyword] = Cached(results: self.results, total: self.total, created: Date())
-                if self.cache.count > 6, let oldest = self.cache.min(by: { $0.value.created < $1.value.created })?.key { self.cache[oldest] = nil }
+                self.cacheResults(keyword)
             }
         }
     }
@@ -276,6 +292,36 @@ import Observation
         return { down.contains($0.id) }
     }
 
+    private func rebuildPayloadBudget() {
+        payloadBudget = SearchPayloadBudget()
+        for result in results { _ = payloadBudget.reserve(SearchPayloadBudget.cost(result)) }
+        for batch in batches { _ = payloadBudget.reserve(SearchPayloadBudget.cost(batch.videos)) }
+    }
+
+    func retain(_ result: SearchSourceResult) -> SearchSourceResult? {
+        let trimmed = SearchSourceResult(site: result.site, page: result.page.map(SearchPayloadBudget.trimmed), error: result.error)
+        if payloadBudget.reserve(SearchPayloadBudget.cost(trimmed)) { return trimmed }
+        resultLimitMessage = SearchPayloadBudget.message
+        // An error retains its Site too. It needs its own successful reservation; never smuggle an
+        // oversized source configuration (or another result after the item cap) into the failure list.
+        let failure = SearchSourceResult(site: result.site, page: nil, error: SearchPayloadBudget.message)
+        return payloadBudget.reserve(SearchPayloadBudget.cost(failure)) ? failure : nil
+    }
+
+    private func cacheResults(_ keyword: String) {
+        cache[keyword] = nil
+        guard resultLimitMessage == nil else { return }
+        let cost = results.reduce(SearchPayloadBudget.Cost(bytes: keyword.utf8.count + 32)) { $0 + SearchPayloadBudget.cost($1) }
+        guard cost.bytes <= 12 << 20, cost.items <= 12_000 else { return }
+        cache = cache.filter { Date().timeIntervalSince($0.value.created) < 300 }
+        while cache.count >= 6 || cache.values.reduce(cost.bytes, { $0 + $1.cost.bytes }) > 12 << 20 ||
+              cache.values.reduce(cost.items, { $0 + $1.cost.items }) > 12_000 {
+            guard let oldest = cache.min(by: { $0.value.created < $1.value.created })?.key else { break }
+            cache[oldest] = nil
+        }
+        cache[keyword] = Cached(results: results, created: Date(), cost: cost)
+    }
+
     private func started(_ site: Site, token: UUID) {
         guard generation == token else { return }
         activeSources.append(SearchSourceActivity(site: site, started: Date()))
@@ -284,10 +330,20 @@ import Observation
 
     private func receive(_ result: SearchSourceResult, token: UUID) {
         guard generation == token else { return }
+        accept(result)
+    }
+
+    func accept(_ result: SearchSourceResult) {
+        let token = generation
         activeSources.removeAll { $0.id == result.id }
         completed += 1
-        results.append(result)
-        onResult?(result)
+        if let result = retain(result) {
+            results.append(result)
+            onResult?(result)
+        } else {
+            omittedSources.insert(result.id)
+        }
+        if generation == token { onProgress?() }
     }
 }
 

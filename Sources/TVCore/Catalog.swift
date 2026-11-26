@@ -263,6 +263,9 @@ public struct CatalogPage: Sendable {
     public let categories: [Category]
     public let videos: [Video]
     public let pageCount: Int
+    init(videos: [Video], pageCount: Int = 1) {
+        categories = []; self.videos = videos; self.pageCount = pageCount
+    }
     public init(json: [String: JSONValue], origin: URL) {
         let filters = CategoryFilter.all(json["filters"])
         categories = (json["class"]?.array ?? []).compactMap {
@@ -413,8 +416,9 @@ public struct CatalogClient: Sendable {
                 throw crashed
             }
         }
-        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
-        do { return try JSONDecoder().decode([String: JSONValue].self, from: data) }
+        let maximumBytes = params["wd"]?.isEmpty == false ? CatalogResponseParser.searchBytes : 20_000_000
+        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:], limit: maximumBytes)
+        do { return try await CatalogResponseParser.decode(data, maximumBytes: maximumBytes) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
             let start = String(decoding: data.prefix(512), as: UTF8.self).lowercased()
@@ -484,7 +488,10 @@ public struct CatalogClient: Sendable {
             params["ac"] = "detail"; params["t"] = category
             params.merge(Self.filterParameters(choices, siteType: site.type)) { _, new in new }
         }
-        return CatalogPage(json: try await request(params), origin: origin)
+        var json = try await request(params)
+        // Search never shows category/filter catalogs, including filters encoded as another JSON string.
+        if !query.isEmpty { json["class"] = nil; json["filters"] = nil }
+        return CatalogPage(json: json, origin: origin)
     }
 
     /// A category's filter choices as the source reads them, leaving out empty ("全部") values: as other TVBox clients
