@@ -44,45 +44,26 @@ public enum GuideAddress: Hashable, Sendable {
     }
 }
 
-/// What's on a playlist's channels, with exact XMLTV IDs and unambiguous name aliases (#802).
+/// What's on a playlist's channels, by a key of each name and id the guide gives a channel (#802).
 public struct ProgramGuide: Sendable {
-    /// Programmes in time order, by the exact XMLTV channel ID.
+    /// Programmes in time order, by `key(_:)`. Where guide channels share a key ("CCTV1" and "CCTV1 HD"), the first
+    /// one in the guide has it.
     let schedules: [String: [Programme]]
-    /// A normalized name can belong to several IDs, including channels with no programmes in this window.
-    let aliases: [String: Set<String>]
-    public var isEmpty: Bool { schedules.isEmpty }
+    /// The same programmes by each guide channel's exact id, which a playlist's `tvg-id` names: "News-HD" and "news"
+    /// share a key but are two channels.
+    var exact: [String: [Programme]] = [:]
+    public var isEmpty: Bool { schedules.isEmpty && exact.isEmpty }
 
-    /// Explicit IDs win. Names must identify one guide channel and, for an implicit display name, one playlist channel.
-    public func schedule(for channel: Channel, excludingImplicitNames ambiguousNames: Set<String> = []) -> [Programme]? {
-        if let id = channel.guideID {
-            if aliases[Self.key(id)]?.contains(id) == true { return schedules[id] }
-            if let alias = schedule(named: id) { return alias }
+    /// The channel's programmes: by its exact `tvg-id`/`tvg-name`, else by the key of that or of its name.
+    public func schedule(for channel: Channel) -> [Programme]? {
+        if let id = channel.guideID, let found = exact[id] { return found }
+        for name in [channel.guideID, channel.name].compactMap({ $0 }) {
+            if let found = schedules[Self.key(name)] { return found }
         }
-        let name = Self.key(channel.name)
-        guard !ambiguousNames.contains(name) else { return nil }
-        return schedule(named: channel.name)
+        return nil
     }
 
-    /// Convenience for a single lookup; lists should build `ambiguousNames(in:)` once and reuse it for their rows.
-    public func schedule(for channel: Channel, among channels: [Channel]) -> [Programme]? {
-        schedule(for: channel, excludingImplicitNames: Self.ambiguousNames(in: channels))
-    }
-
-    public static func ambiguousNames(in channels: [Channel]) -> Set<String> {
-        var seen = Set<String>(), ambiguous = Set<String>()
-        for channel in channels {
-            let name = key(channel.name)
-            if !seen.insert(name).inserted { ambiguous.insert(name) }
-        }
-        return ambiguous
-    }
-
-    private func schedule(named name: String) -> [Programme]? {
-        guard let ids = aliases[Self.key(name)], ids.count == 1, let id = ids.first else { return nil }
-        return schedules[id]
-    }
-
-    /// The keys a guide's channels are looked up by, for the channels a playlist lists.
+    /// The keys (and exact ids) a guide's channels are looked up by, for the channels a playlist lists.
     public static func wanted(_ channels: [Channel]) -> Set<String> {
         var keys = Set<String>()
         for channel in channels {
@@ -135,17 +116,16 @@ public struct ProgramGuide: Sendable {
         parser.shouldResolveExternalEntities = false
         // A guide cut short (a dropped connection, a bad character near the end) keeps what was read.
         if !parser.parse(), reader.programmes.isEmpty { throw parser.parserError ?? TVError.invalidConfiguration }
-        var aliases: [String: Set<String>] = [:]
-        for (id, keys) in reader.channelKeys {
-            for key in keys { aliases[key, default: []].insert(id) }
+        var schedules: [String: [Programme]] = [:], exact: [String: [Programme]] = [:]
+        // In the guide's order, so the first of the channels that share a key keeps it, every time.
+        for id in reader.order {
+            guard let list = reader.programmes[id] else { continue }
+            let keys = reader.channelKeys[id] ?? [key(id)]
+            let sorted = closingGaps(list.sorted { $0.start < $1.start })
+            if wanted?.contains(id) ?? true { exact[id] = sorted }
+            for key in keys where schedules[key] == nil && (wanted?.contains(key) ?? true) { schedules[key] = sorted }
         }
-        var schedules: [String: [Programme]] = [:]
-        for (id, list) in reader.programmes {
-            schedules[id] = closingGaps(list.sorted { $0.start < $1.start })
-            // XMLTV may omit the channel declaration; the ID still works as an exact ID and unique alias.
-            aliases[key(id), default: []].insert(id)
-        }
-        return ProgramGuide(schedules: schedules, aliases: aliases)
+        return ProgramGuide(schedules: schedules, exact: exact)
     }
 
     /// `20261114083000 +0800`.
@@ -235,6 +215,9 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
     /// The keys of each `<channel id>`'s id and display names.
     var channelKeys: [String: [String]] = [:]
     var programmes: [String: [Programme]] = [:]
+    /// Channel ids in the order the guide first names them.
+    private(set) var order: [String] = []
+    private var named = Set<String>()
     private var kept: [String: Bool] = [:]
     private var channel: String?
     private var keys: [String] = []
@@ -244,6 +227,8 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
     private var reading = false
 
     init(wanted: Set<String>?, from: Date, to: Date) { self.wanted = wanted; self.from = from; self.to = to }
+
+    private func note(_ id: String) { if named.insert(id).inserted { order.append(id) } }
 
     private func keeps(_ id: String) -> Bool {
         if let known = kept[id] { return known }
@@ -284,7 +269,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
             if !name.isEmpty { keys.append(ProgramGuide.key(name)) }
             reading = false
         case "channel":
-            if let channel { channelKeys[channel] = keys }
+            if let channel { channelKeys[channel] = keys; note(channel) }
             channel = nil; keys = []
         case "title" where programme != nil && title == nil:
             title = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -292,6 +277,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
         case "programme":
             if let programme, let title, !title.isEmpty {
                 programmes[programme.channel, default: []].append(Programme(title: title, start: programme.start, end: programme.end))
+                note(programme.channel)
             }
             programme = nil; title = nil; reading = false
         default:
