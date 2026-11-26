@@ -77,6 +77,17 @@ private func signed(_ json: String, by key: Curve25519.Signing.PrivateKey) throw
     #expect(Account.Points.Rules.standard.fixed == 50 && Account.Points.Rules.standard.adopted == 100)
 }
 
+@Test func feedbackSummaryCountsFixedBugsWithAdoptedIdeas() throws {
+    // The account page's "sent · adopted" counts what the points page's Feedback Adopted counts: fixed bugs too (#2419).
+    let feedback = try JSONDecoder().decode(Account.Feedback.self, from: Data(
+        #"{"sent":4,"fixed":2,"adopted":1,"declined":1,"points":53,"rewardDays":0,"issues":[]}"#.utf8))
+    #expect(feedback.fixed == 2 && feedback.used == 3)
+    // An account saved before the app read `fixed` still decodes.
+    let older = try JSONDecoder().decode(Account.Feedback.self, from: Data(
+        #"{"sent":3,"adopted":2,"declined":1,"points":23,"rewardDays":0,"issues":[]}"#.utf8))
+    #expect(older.fixed == nil && older.used == 2)
+}
+
 @Test func everyRedeemRefusalHasItsOwnMessage() {
     let reasons = ["not_found", "revoked", "expired", "used_up", "already_redeemed"]
     let messages = Set(reasons.map { AccountService.Failure.code($0).errorDescription ?? "" })

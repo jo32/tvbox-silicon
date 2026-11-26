@@ -73,9 +73,10 @@ struct MusicMiniPlayer: View {
             }
             .font(.title3)
         }
-        // Beside the minimized tab bar the strip is a 48 pt capsule: 10 pt in, the cover sits in the middle of its round
-        // end, as far from the end as from the top and bottom. At 6 pt it was pressed into the curve (#858).
-        .padding(.leading, 10).padding(.trailing, inline ? 4 : 8)
+        // Beside the minimized tab bar the strip is a 48 pt capsule: 14 pt in, the cover sits clear of the round
+        // end, as far from the end as from the top and bottom. At 6 pt it was pressed into the curve (#858), at 10
+        // pt still too close for some artwork (#2305).
+        .padding(.leading, 14).padding(.trailing, inline ? 4 : 8)
         .frame(maxHeight: .infinity)
         .contentShape(.rect)
         .modifier(NowPlayingZoomSource())

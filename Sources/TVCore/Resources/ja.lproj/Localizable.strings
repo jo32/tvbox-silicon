@@ -523,6 +523,9 @@
 "Delete all cached episodes of %@?" = "「%@」のキャッシュ済みエピソードをすべて削除しますか？";
 "Delete Cached Items" = "キャッシュを削除";
 "Delete from Cache" = "キャッシュを削除";
+"Delete All" = "すべて削除";
+"Delete all cached videos?" = "キャッシュ済みの動画をすべて削除しますか？";
+"Press Again to Delete All" = "もう一度押すとすべて削除";
 "Caching" = "キャッシュ中";
 "At a Time" = "同時キャッシュ数";
 "%lld at a time" = "同時に %lld 件";
@@ -950,6 +953,7 @@
 "Your feedback is now issue #%lld on GitHub." = "フィードバックは GitHub の Issue #%lld になりました。";
 "Send Another" = "もう一件送信";
 "Your Feedback" = "送信したフィードバック";
+"%lld sent · %lld adopted" = "%lld 件送信 · %lld 件採用";
 "Received" = "受付済み";
 "Replied" = "返信あり";
 "Resolved" = "解決済み";
