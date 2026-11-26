@@ -59,9 +59,9 @@ enum MangaHTTP {
     static let plainUserAgent = "Dart/3.5 (dart:io)"
 
     /// One request with the jar's cookies; the jar keeps what the answer sets.
-    static func data(_ request: Request, notes: Bool = false) async throws -> (Data, HTTPURLResponse) {
+    static func data(_ request: Request, notes: Bool = false, maximumBytes: Int? = nil) async throws -> (Data, HTTPURLResponse) {
         do {
-            let (data, http) = try await answer(request)
+            let (data, http) = try await answer(request, maximumBytes: maximumBytes)
             if notes, let kind = MangaSiteProblem.kind(http, data) {
                 MangaSiteProblem.note(MangaSiteProblem(kind: kind, host: request.url.host ?? "", status: http.statusCode))
                 #if DEBUG
@@ -75,20 +75,41 @@ enum MangaHTTP {
         }
     }
 
-    private static func answer(_ request: Request) async throws -> (Data, HTTPURLResponse) {
+    /// Image callers supply a bound; source API calls retain their existing transport policy.
+    /// Use this session so redirects still update the source cookie jar.
+    private static func read(_ request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse) {
+        guard let maximumBytes else { return try await session.data(for: request) }
+        let limit = max(0, maximumBytes)
+        try Task.checkCancellation()
+        let (bytes, response) = try await session.bytes(for: request)
+        defer { bytes.task.cancel() }
+        guard response.expectedContentLength <= limit else { throw URLError(.dataLengthExceedsMaximum) }
+        return try await withTaskCancellationHandler {
+            var data = Data()
+            data.reserveCapacity(min(limit, 64 * 1024))
+            for try await byte in bytes {
+                guard data.count < limit else { throw URLError(.dataLengthExceedsMaximum) }
+                data.append(byte)
+            }
+            try Task.checkCancellation()
+            return (data, response)
+        } onCancel: { bytes.task.cancel() }
+    }
+
+    private static func answer(_ request: Request, maximumBytes: Int?) async throws -> (Data, HTTPURLResponse) {
         var request = request
         if let answer = signedOutFavorite(request) { return answer }
         let chosenAgent = request.headers.keys.contains { $0.lowercased() == "user-agent" }
         let host = request.url.host ?? ""
         if !chosenAgent, plainHosts.contains(host) { request.headers["User-Agent"] = plainUserAgent }
-        var (data, response) = try await session.data(for: request.urlRequest())
+        var (data, response) = try await read(request.urlRequest(), maximumBytes: maximumBytes)
         guard var http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         MangaCookieJar.shared.store(http, for: http.url ?? request.url)
         let challenged = http.url?.path.contains("challenge") == true || http.value(forHTTPHeaderField: "cf-mitigated") == "challenge"
         if challenged, !chosenAgent, request.headers["User-Agent"] != plainUserAgent {
             plainHosts.insert(host)
             request.headers["User-Agent"] = plainUserAgent
-            (data, response) = try await session.data(for: request.urlRequest())
+            (data, response) = try await read(request.urlRequest(), maximumBytes: maximumBytes)
             guard let retried = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             http = retried
             MangaCookieJar.shared.store(http, for: http.url ?? request.url)
@@ -112,7 +133,7 @@ enum MangaHTTP {
             waited += pause
             tries += 1
             _ = MangaDevice.renew(&request.headers)
-            (data, response) = try await session.data(for: request.urlRequest())
+            (data, response) = try await read(request.urlRequest(), maximumBytes: maximumBytes)
             guard let again = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             http = again
             #if DEBUG

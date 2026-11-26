@@ -75,8 +75,10 @@ public actor MangaImages {
     public static let shared = MangaImages()
     public enum Kind: Sendable { case page, cover }
 
-    private var pending: [String: Task<Data, Error>] = [:]
+    private let work = MangaImageWork()
     private var thumbnailRequests: [String: (url: String, headers: [String: String])] = [:]
+    private var thumbnailOrder: [String] = []
+    private var thumbnailBytes = 0
     private var writes = 0
     private static var folder: URL { URL.cachesDirectory.appending(path: "com.tvbox.yingxia/MangaImages", directoryHint: .isDirectory) }
     private static let limit: Int64 = 1_000_000_000
@@ -88,32 +90,70 @@ public actor MangaImages {
         let missing = urls.filter { thumbnailRequests[source + "\n" + $0] == nil && !$0.isEmpty }
         guard !missing.isEmpty else { return }
         let answers = await MangaRuntime.shared.thumbnailRequests(source, urls: missing)
-        for url in missing { thumbnailRequests[source + "\n" + url] = answers[url] ?? (url, [:]) }
+        for url in missing {
+            let key = source + "\n" + url, value = answers[url] ?? (url, [:])
+            if let previous = thumbnailRequests.removeValue(forKey: key) {
+                thumbnailBytes -= Self.thumbnailCost(key, previous)
+                thumbnailOrder.removeAll { $0 == key }
+            }
+            let cost = Self.thumbnailCost(key, value)
+            guard cost <= 2 << 20 else { continue }
+            while thumbnailOrder.count >= 512 || thumbnailBytes > (2 << 20) - cost {
+                guard !thumbnailOrder.isEmpty else { break }
+                let oldest = thumbnailOrder.removeFirst()
+                if let removed = thumbnailRequests.removeValue(forKey: oldest) { thumbnailBytes -= Self.thumbnailCost(oldest, removed) }
+            }
+            thumbnailRequests[key] = value; thumbnailOrder.append(key); thumbnailBytes += cost
+        }
+    }
+
+    private static func thumbnailCost(_ key: String, _ value: (url: String, headers: [String: String])) -> Int {
+        value.headers.reduce(key.utf8.count + value.url.utf8.count + 128) { $0 + $1.key.utf8.count + $1.value.utf8.count + 64 }
     }
 
     public func cached(source: String, url: String) -> Data? {
-        try? Data(contentsOf: Self.file(source + "\n" + url))
+        let request = MangaImageRequest(source: source, url: url, page: false, comic: nil, chapter: nil)
+        return Self.cachedData(request)
+    }
+
+    private static func cachedData(_ request: MangaImageRequest) -> Data? {
+        var candidates = [file(request.key)]
+        // Existing context-free covers are safe to reuse. Old page entries omit hook context and
+        // may contain another chapter's transformed pixels, so pages use the complete new identity.
+        if !request.page, request.comic == nil, request.chapter == nil,
+           !request.source.contains("\n"), !request.url.contains("\n") {
+            candidates.append(file(request.source + "\n" + request.url))
+        }
+        for candidate in candidates {
+            guard let size = try? candidate.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= request.maximumBytes,
+                  let data = try? Data(contentsOf: candidate), (try? request.check(data)) != nil else { continue }
+            return data
+        }
+        return nil
     }
 
     public func data(source: String, url: String, kind: Kind, comic: String? = nil, chapter: String? = nil) async throws -> Data {
-        // Pages are kept under keys of their own since #836: some kept before then were stored still scrambled.
-        let key = (kind == .page ? "page\n" : "") + source + "\n" + url
-        if let data = try? Data(contentsOf: Self.file(key)) { return data }
-        if let task = pending[key] { return try await task.value }
-        let thumbnail = kind == .cover ? thumbnailRequests[key] : nil
-        let task = Task { try await Self.download(source: source, url: url, kind: kind, comic: comic, chapter: chapter, thumbnail: thumbnail) }
-        pending[key] = task
-        defer { pending[key] = nil }
-        let data = try await task.value
-        try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
-        try? data.write(to: Self.file(key), options: .atomic)
+        try Task.checkCancellation()
+        let request = MangaImageRequest(source: source, url: url, page: kind == .page, comic: comic, chapter: chapter)
+        if let cached = Self.cachedData(request) { try Task.checkCancellation(); return cached }
+        let thumbnail = kind == .cover ? thumbnailRequests[source + "\n" + url] : nil
+        let data = try await work.data(key: request.key, page: request.page) {
+            let file = Self.file(request.key)
+            if let data = Self.cachedData(request) { return data }
+            let data = try await Self.download(source: source, url: url, kind: kind, comic: comic, chapter: chapter,
+                                               thumbnail: thumbnail, maximumBytes: request.maximumBytes)
+            try Task.checkCancellation()
+            try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
+            try? data.write(to: file, options: .atomic)
+            return data
+        }
         writes += 1
         if writes % 80 == 0 { Task.detached(priority: .background) { Self.trim() } }
         return data
     }
 
     private static func download(source: String, url: String, kind: Kind, comic: String?, chapter: String?,
-                                 thumbnail: (url: String, headers: [String: String])?) async throws -> Data {
+                                 thumbnail: (url: String, headers: [String: String])?, maximumBytes: Int) async throws -> Data {
         let runtime = MangaRuntime.shared
         let info = try? await runtime.info(source)
         var config: MangaRuntime.ImageConfig?
@@ -130,16 +170,21 @@ public actor MangaImages {
             request = MangaHTTP.Request(url: target)
         }
         defer { if let config { Task { await runtime.release(source, config: config.id) } } }
-        var (data, response) = try await MangaHTTP.data(request)
+        var (data, response) = try await MangaHTTP.data(request, maximumBytes: maximumBytes)
         if !(200..<300).contains(response.statusCode), let config, config.onLoadFailed, let retry = await runtime.retryRequest(source, config: config.id) {
-            (data, response) = try await MangaHTTP.data(retry)
+            (data, response) = try await MangaHTTP.data(retry, maximumBytes: maximumBytes)
         }
         guard (200..<300).contains(response.statusCode) else { throw TVError.http(response.statusCode) }
+        try Task.checkCancellation()
         if let config, config.onResponse { data = try await runtime.transformResponse(source, config: config.id, data: data) }
+        guard data.count <= maximumBytes else { throw URLError(.dataLengthExceedsMaximum) }
+        try Task.checkCancellation()
         if let config, config.modifyImage, let image = decode(data) {
             let modified = try await runtime.modify(source, config: config.id, image: image)
             if let encoded = encode(modified) { data = encoded }
         }
+        guard data.count <= maximumBytes else { throw URLError(.dataLengthExceedsMaximum) }
+        try Task.checkCancellation()
         guard CGImageSourceCreateWithData(data as CFData, nil).map({ CGImageSourceGetCount($0) > 0 }) == true else {
             throw TVError.unsupported(L10n.text("The source sent something that is not an image."))
         }
