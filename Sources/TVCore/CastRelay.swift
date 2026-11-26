@@ -21,6 +21,8 @@ public actor CastRelay {
 
     private let token = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
     private var routeKey = SymmetricKey(size: .bits256)
+    /// Derives each ticket's nonce from its contents, so one address keeps one ticket for the whole cast.
+    private var nonceKey = SymmetricKey(size: .bits256)
     private var headerContexts: [String: [String: String]] = [:]
     private var headerBytes = 0
     private static let maximumHeaderContexts = 32
@@ -48,7 +50,7 @@ public actor CastRelay {
 
     /// Forgets every route; the next cast starts afresh.
     public func reset() {
-        headerContexts = [:]; headerBytes = 0; routeKey = SymmetricKey(size: .bits256)
+        headerContexts = [:]; headerBytes = 0; routeKey = SymmetricKey(size: .bits256); nonceKey = SymmetricKey(size: .bits256)
     }
 
     private func start() async throws -> UInt16 {
@@ -90,8 +92,13 @@ public actor CastRelay {
             headerBytes += bytes
         }
         guard url.absoluteString.utf8.count <= Self.maximumRouteCharacters else { throw URLError(.dataLengthExceedsMaximum) }
-        let data = try JSONEncoder().encode(Ticket(url: url, headers: context, playlist: playlist))
-        let sealed = try AES.GCM.seal(data, using: routeKey)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(Ticket(url: url, headers: context, playlist: playlist))
+        // A TV refreshing a live playlist matches segments it already has by their address (GStreamer's hlsdemux
+        // does), so the same route must get the same ticket every time: a random nonce would rename every segment.
+        let nonce = try AES.GCM.Nonce(data: Data(HMAC<SHA256>.authenticationCode(for: data, using: nonceKey)).prefix(12))
+        let sealed = try AES.GCM.seal(data, using: routeKey, nonce: nonce)
         guard let combined = sealed.combined else { throw URLError(.unknown) }
         let id = combined.base64EncodedString().replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")

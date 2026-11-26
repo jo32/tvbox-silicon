@@ -433,3 +433,15 @@ func castRelayDoesNotIssuePlaylistRoutesAcrossReset(declaredPlaylist: Bool) asyn
     for index in 0..<32 { _ = try await relay.register(url, headers: ["Authorization": "account \(index)"], playlist: false) }
     await #expect(throws: URLError.self) { _ = try await relay.register(url, headers: ["Authorization": "account 33"], playlist: false) }
 }
+
+@Test func castRelayGivesOneAddressTheSameTicketEachTime() async throws {
+    let relay = CastRelay()
+    let url = URL(string: "https://cdn.example/live/segment-1.ts?sign=abc")!
+    let first = try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false)
+    // A refreshed live playlist names the segment exactly as before.
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false) == first)
+    #expect(try await relay.register(url, headers: ["Referer": "https://other.example/"], playlist: false) != first)
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: true) != first)
+    await relay.reset()
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false) != first)
+}
