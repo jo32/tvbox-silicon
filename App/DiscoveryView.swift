@@ -1284,7 +1284,10 @@ struct RecommendationsView: View {
                 if !model.items.isEmpty {
                     Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil }
                 }
-                ForEach(model.categories) { item in
+                // The source's own "推荐" category: the chip above shows the home's recommendations, so the source's
+                // copy would be a second chip with the same name (#2209). Without the home's recommendations the
+                // chip above is not there, and the source's category stays, so its content is still reachable.
+                ForEach(model.categories.filter { !($0.isRecommendations && !model.items.isEmpty) }) { item in
                     Chip(title: item.name, selected: category == item.id) {
                         category = item.id; categoryFilters = CategoryFilter.initialChoices(item.filters)
                     }

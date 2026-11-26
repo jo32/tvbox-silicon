@@ -1428,7 +1428,10 @@ struct SiteView: View {
                     if browser.hasRecommendations {
                         Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
                     }
-                    ForEach(browser.categories) { item in
+                    // The source's own "推荐" category beside the chip above would be a second chip with the same name
+                    // (#2209). Without home videos there is no chip above, and the source's category stays: the page
+                    // opens on it.
+                    ForEach(browser.categories.filter { !($0.isRecommendations && browser.hasRecommendations) }) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
                             query = ""
                             let filters = CategoryFilter.initialChoices(item.filters)
