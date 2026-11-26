@@ -2,6 +2,9 @@ import SwiftUI
 import ImageIO
 import CoreImage
 import TVCore
+#if os(macOS)
+import AppKit
+#endif
 
 extension View {
     /// `endsWhenIdle`: on iPhone and iPad, search mode ends when the page is scrolled or the keyboard goes away with nothing
@@ -168,25 +171,29 @@ extension View {
 
     #if os(macOS)
     /// A page whose artwork runs under the window toolbar: the toolbar draws no backing and, on macOS 26, the scroll
-    /// edge is soft, so the art fades under the toolbar instead of stopping at a solid band.
-    @ViewBuilder func artUnderToolbar() -> some View {
+    /// edge is soft, so the art fades under the toolbar instead of stopping at a solid band. `scheme` keeps the detail
+    /// toolbar's controls (back button, actions and title) legible over the artwork when the page's appearance differs
+    /// from the window's (e.g. a dark video page in Light Mode, #2292).
+    @ViewBuilder func artUnderToolbar(_ scheme: ColorScheme = .dark) -> some View {
+        let base = background { DetailToolbarAppearance(scheme: scheme) }
         if #available(macOS 26, *) {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar).scrollEdgeEffectStyle(.soft, for: .top)
+            base.toolbarBackgroundVisibility(.hidden, for: .windowToolbar).scrollEdgeEffectStyle(.soft, for: .top)
         } else {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            base.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         }
     }
 
     /// A page whose hero runs up to the window's top edge, as in the TV app: while the hero is under the toolbar the
     /// toolbar draws nothing over it, neither a backing nor the scroll edge's blur. Once the page scrolls past the hero
     /// the soft edge comes back, so rows don't run sharp under the toolbar's buttons.
-    @ViewBuilder func heroUnderToolbar(_ underHero: Bool) -> some View {
+    @ViewBuilder func heroUnderToolbar(_ underHero: Bool, scheme: ColorScheme? = nil) -> some View {
+        let base = background { DetailToolbarAppearance(scheme: underHero ? scheme : nil) }
         if #available(macOS 26, *) {
-            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            base.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
                 .scrollEdgeEffectStyle(.soft, for: .top)
                 .scrollEdgeEffectHidden(underHero, for: .top)
         } else {
-            toolbarBackgroundVisibility(underHero ? .hidden : .automatic, for: .windowToolbar)
+            base.toolbarBackgroundVisibility(underHero ? .hidden : .automatic, for: .windowToolbar)
         }
     }
     #endif
@@ -256,6 +263,220 @@ extension View {
         }
     }
 }
+
+#if os(macOS)
+/// Matches the detail column's window-toolbar controls to a page whose artwork runs under the toolbar (#2292).
+/// On macOS 15, toolbar buttons (the NavigationStack back chevron and action icons) have no glass platter behind them:
+/// over a dark detail hero in Light Mode, Aqua drew a near-black `<` directly on black. Setting the appearance on
+/// detail-column toolbar items and the title view keeps them legible without turning the light sidebar's toggle button
+/// white. On macOS 26+, Liquid Glass buttons keep their own platters (overriding only the icon made white-on-white),
+/// while the bare title text still follows the page's scheme.
+private struct DetailToolbarAppearance: NSViewRepresentable {
+    let scheme: ColorScheme?
+    func makeNSView(context: Context) -> Anchor { Anchor() }
+    func updateNSView(_ view: Anchor, context: Context) {
+        // Mixed themes paint their own opaque band under the toolbar in the window's appearance (ThemedTitleBand).
+        let effective = ColorThemes.shared.current.palette.regions?.titleBar == nil ? scheme : nil
+        view.setScheme(effective)
+    }
+    static func dismantleNSView(_ view: Anchor, coordinator: ()) { view.detach() }
+
+    final class Anchor: NSView {
+        private var scheme: ColorScheme?
+        private weak var trackedWindow: NSWindow?
+        private var lastDetailRange: ClosedRange<CGFloat>?
+
+        func setScheme(_ newScheme: ColorScheme?) {
+            let changed = scheme != newScheme
+            scheme = newScheme
+            guard let window else { return }
+            trackedWindow = window
+            let controller = ToolbarAppearanceController.forWindow(window)
+            controller.update(token: ObjectIdentifier(self), anchor: self, scheme: newScheme)
+            if changed || newScheme != nil { controller.scheduleSync() }
+        }
+
+        func detach() {
+            if let window = trackedWindow ?? self.window {
+                ToolbarAppearanceController.forWindow(window).remove(token: ObjectIdentifier(self))
+            }
+            trackedWindow = nil
+            lastDetailRange = nil
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow == nil { detach() }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            trackedWindow = window
+            lastDetailRange = nil
+            let controller = ToolbarAppearanceController.forWindow(window)
+            controller.update(token: ObjectIdentifier(self), anchor: self, scheme: scheme)
+            controller.scheduleSync()
+        }
+
+        override func layout() {
+            super.layout()
+            guard let window, scheme != nil, bounds.width > 0 else { return }
+            let controller = ToolbarAppearanceController.forWindow(window)
+            guard let toolbarView = controller.toolbarView(in: window) else { return }
+            let rect = convert(bounds, to: toolbarView)
+            if let last = lastDetailRange, abs(last.lowerBound - rect.minX) <= 0.5, abs(last.upperBound - rect.maxX) <= 0.5 {
+                return
+            }
+            lastDetailRange = rect.minX...rect.maxX
+            controller.sync()
+            controller.scheduleSync()
+        }
+    }
+}
+
+@MainActor private final class ToolbarAppearanceController {
+    private struct Entry {
+        let token: ObjectIdentifier
+        weak var anchor: NSView?
+        var scheme: ColorScheme?
+    }
+    private struct WeakView {
+        weak var view: NSView?
+    }
+
+    private static let table = NSMapTable<NSWindow, ToolbarAppearanceController>.weakToStrongObjects()
+    private weak var window: NSWindow?
+    private var entries: [Entry] = []
+    private var styled: [WeakView] = []
+    private var pendingSync = false
+
+    private init(window: NSWindow) { self.window = window }
+
+    static func forWindow(_ window: NSWindow) -> ToolbarAppearanceController {
+        if let existing = table.object(forKey: window) { return existing }
+        let controller = ToolbarAppearanceController(window: window)
+        table.setObject(controller, forKey: window)
+        return controller
+    }
+
+    func update(token: ObjectIdentifier, anchor: NSView, scheme: ColorScheme?) {
+        entries.removeAll { $0.anchor == nil }
+        if let index = entries.firstIndex(where: { $0.token == token }) {
+            entries[index].anchor = anchor
+            entries[index].scheme = scheme
+        } else {
+            entries.append(Entry(token: token, anchor: anchor, scheme: scheme))
+        }
+        sync()
+    }
+
+    func remove(token: ObjectIdentifier) {
+        entries.removeAll { $0.token == token || $0.anchor == nil }
+        sync()
+    }
+
+    func scheduleSync() {
+        guard !pendingSync else { return }
+        pendingSync = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pendingSync = false
+            self.sync()
+        }
+    }
+
+    func toolbarView(in window: NSWindow) -> NSView? {
+        window.contentView?.superview.flatMap(Self.findToolbarView)
+    }
+
+    func sync() {
+        entries.removeAll { $0.anchor == nil }
+        guard let window, let active = entries.last, let scheme = active.scheme, let anchor = active.anchor,
+              let toolbarView = toolbarView(in: window) else {
+            resetStyled()
+            return
+        }
+        let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        let detailRect = anchor.bounds.width > 0 ? anchor.convert(anchor.bounds, to: toolbarView) : nil
+        var targets: [NSView] = []
+
+        func inDetail(_ view: NSView) -> Bool {
+            guard let detailRect else { return false }
+            let rect = view.convert(view.bounds, to: toolbarView)
+            return rect.width > 0 && rect.midX >= detailRect.minX - 8 && rect.midX <= detailRect.maxX + 8
+        }
+
+        // Title text sits directly over the page on every macOS version (no glass platter behind it).
+        Self.walk(toolbarView.superview ?? toolbarView) { view in
+            if NSStringFromClass(type(of: view)) == "NSToolbarTitleView" {
+                targets.append(view)
+            }
+        }
+
+        // Before macOS 26 (no Liquid Glass platters), toolbar buttons draw bare glyphs directly over the artwork.
+        if #unavailable(macOS 26) {
+            Self.walk(toolbarView) { view in
+                if NSStringFromClass(type(of: view)) == "NSToolbarItemViewer", inDetail(view) {
+                    targets.append(view)
+                }
+            }
+            if let items = window.toolbar?.items {
+                var pastSeparator = false
+                for item in items {
+                    if item is NSTrackingSeparatorToolbarItem || item.itemIdentifier.rawValue.contains("splitViewSeparator") {
+                        pastSeparator = true
+                        continue
+                    }
+                    guard let itemView = item.view else { continue }
+                    if pastSeparator || inDetail(itemView) {
+                        if let viewer = Self.itemViewer(containing: itemView) { targets.append(viewer) }
+                        targets.append(itemView)
+                    }
+                }
+            }
+        }
+
+        let targetIDs = Set(targets.map(ObjectIdentifier.init))
+        for entry in styled {
+            if let view = entry.view, !targetIDs.contains(ObjectIdentifier(view)) {
+                view.appearance = nil
+            }
+        }
+        var seen = Set<ObjectIdentifier>()
+        styled = []
+        for view in targets where seen.insert(ObjectIdentifier(view)).inserted {
+            if view.appearance != appearance { view.appearance = appearance }
+            styled.append(WeakView(view: view))
+        }
+    }
+
+    private func resetStyled() {
+        for entry in styled { entry.view?.appearance = nil }
+        styled = []
+    }
+
+    private static func findToolbarView(in view: NSView) -> NSView? {
+        if NSStringFromClass(type(of: view)) == "NSToolbarView" { return view }
+        for subview in view.subviews { if let found = findToolbarView(in: subview) { return found } }
+        return nil
+    }
+
+    private static func itemViewer(containing view: NSView) -> NSView? {
+        var current = view.superview
+        while let candidate = current {
+            if NSStringFromClass(type(of: candidate)) == "NSToolbarItemViewer" { return candidate }
+            current = candidate.superview
+        }
+        return nil
+    }
+
+    private static func walk(_ view: NSView, visit: (NSView) -> Void) {
+        visit(view)
+        for subview in view.subviews { walk(subview, visit: visit) }
+    }
+}
+#endif
 
 extension Color {
     /// `mix(with:by:)`; before iOS 18 and tvOS 18 a plain blend in sRGB.
