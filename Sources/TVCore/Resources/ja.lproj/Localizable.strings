@@ -950,6 +950,7 @@
 "Your feedback is now issue #%lld on GitHub." = "フィードバックは GitHub の Issue #%lld になりました。";
 "Send Another" = "もう一件送信";
 "Your Feedback" = "送信したフィードバック";
+"%lld sent · %lld adopted" = "%lld 件送信 · %lld 件採用";
 "Received" = "受付済み";
 "Replied" = "返信あり";
 "Resolved" = "解決済み";
