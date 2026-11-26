@@ -522,7 +522,7 @@ struct NovelReaderView: View {
         }
         #endif
         .sheet(isPresented: $showContents) {
-            NovelReaderContents(model: model, colors: colors, dark: dark, showsBookmarks: $contentsShowsBookmarks) { index, position in
+            NovelReaderContents(model: model, colors: colors, dark: dark, showsBookmarks: $contentsShowsBookmarks, close: { showContents = false }) { index, position in
                 showContents = false
                 Task { await model.open(index, position: position) }
             }
@@ -1451,47 +1451,69 @@ private struct NovelReaderContents: View {
     let colors: (background: Color, text: Color)
     let dark: Bool
     @Binding var showsBookmarks: Bool
+    let close: () -> Void
     /// A chapter, and how far into it.
     let open: (Int, Double) -> Void
     @State private var store = NovelStore.shared
-    @Environment(\.dismiss) private var dismiss
 
     private var bookmarks: [NovelBookmark] { store.bookmarks(model.book) }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker(L10n.text("Show"), selection: $showsBookmarks) {
-                    Text(L10n.text("Contents")).tag(false)
-                    Text(L10n.text("Bookmarks")).tag(true)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 16).padding(.vertical, 8)
-                .accessibilityIdentifier("novel.reader.contentsKind")
-                if showsBookmarks {
-                    bookmarkList
-                } else {
-                    NovelChapterList(book: model.book, chapters: model.displayChapters, current: model.currentChapter,
-                                     colors: NovelListColors(background: colors.background, text: colors.text, accent: colors.text)) { open($0, 0) }
-                }
+        #if os(macOS)
+        // A plain fixed-size sheet on the Mac, without NavigationStack, toolbar, .searchable or .presentationBackground:
+        // on macOS 15 those together inside a sheet looped NSHostingView's constraint updates until AppKit raised an
+        // exception in -[NSWindow(NSDisplayCycle) _postWindowNeedsUpdateConstraints] (#2138, #2331).
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text(showsBookmarks ? L10n.text("Bookmarks") : L10n.text("Contents"))
+                    .font(.headline)
+                Spacer(minLength: 0)
+                Button(L10n.text("Done"), action: close)
+                    .keyboardShortcut(.cancelAction)
             }
-            .background(colors.background.ignoresSafeArea())
-            .navigationTitle(showsBookmarks ? L10n.text("Bookmarks") : L10n.text("Contents"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if !os(tvOS)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Done")) { dismiss() } } }
-            #endif
+            .padding(.horizontal, Layout.gutter).padding(.top, 16).padding(.bottom, 6)
+            contentsBody(horizontalPadding: Layout.gutter)
+        }
+        .foregroundStyle(colors.text)
+        .frame(width: 500, height: 620)
+        .background(colors.background)
+        .environment(\.colorScheme, dark ? .dark : .light)
+        #else
+        NavigationStack {
+            contentsBody(horizontalPadding: 16)
+                .background(colors.background.ignoresSafeArea())
+                .navigationTitle(showsBookmarks ? L10n.text("Bookmarks") : L10n.text("Contents"))
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                #if !os(tvOS)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Done"), action: close) } }
+                #endif
         }
         .environment(\.colorScheme, dark ? .dark : .light)
         #if !os(tvOS)
         .presentationBackground(colors.background)
         #endif
-        #if os(macOS)
-        .frame(minWidth: 460, minHeight: 560)
         #endif
+    }
+
+    private func contentsBody(horizontalPadding: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Picker(L10n.text("Show"), selection: $showsBookmarks) {
+                Text(L10n.text("Contents")).tag(false)
+                Text(L10n.text("Bookmarks")).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, horizontalPadding).padding(.vertical, 8)
+            .accessibilityIdentifier("novel.reader.contentsKind")
+            if showsBookmarks {
+                bookmarkList
+            } else {
+                NovelChapterList(book: model.book, chapters: model.displayChapters, current: model.currentChapter,
+                                 colors: NovelListColors(background: colors.background, text: colors.text, accent: colors.text)) { open($0, 0) }
+            }
+        }
     }
 }
 
