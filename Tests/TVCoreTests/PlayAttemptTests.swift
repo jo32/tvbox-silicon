@@ -65,7 +65,9 @@ private func counters(_ reports: ErrorReports, _ directory: URL) throws -> [Stri
     for live in [true, false] {
         for address in addresses {
             for via in vias {
-                for rung in [nil, "range", "hdr-sdr", "audio", "loopback", "drop", "live", "line", "repackage", "segments"] {
+                for rung in [nil, "range", "hdr-sdr", "audio", "loopback", "drop", "live", "line", "repackage", "segments",
+                             "plugin-again", "hls-proxy", "container", "rescue-hls", "rescue-ts", "rescue-flv", "rescue-remux", "rescue-file",
+                             "rescue-origin"] {
                     var attempt = PlayAttempt(live: live, address: address)
                     if let rung { attempt.retrying(rung) }
                     for outcome in [PlayAttempt.Outcome.started, .failed, .abandoned] {

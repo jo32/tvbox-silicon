@@ -52,6 +52,8 @@ public enum PlaybackRescue {
         while let error = current {
             if ["CoreMediaErrorDomain", NSOSStatusErrorDomain].contains(error.domain), error.code == -12939 { return .ignoredRange }
             if [NSURLErrorDomain, "kCFErrorDomainCFNetwork"].contains(error.domain), (-1204 ... -1200).contains(error.code) { return .insecure }
+            // The HLS proxy answers 495 for a certificate the system refused (`HLSProxy.gatewayStatus`).
+            if error.domain == "CoreMediaErrorDomain", error.code == -16845, error.localizedDescription.contains("HTTP 495") { return .insecure }
             current = error.userInfo[NSUnderlyingErrorKey] as? NSError
         }
         return nil

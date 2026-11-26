@@ -24,6 +24,10 @@ struct PlaybackRescueTests {
         #expect(PlaybackRescue.trouble(NSError(domain: NSURLErrorDomain, code: -1206)) == nil)
         #expect(PlaybackRescue.trouble(NSError(domain: NSURLErrorDomain, code: -1005)) == nil)
         #expect(PlaybackRescue.trouble(nil) == nil)
+        // The HLS proxy's 495 for a refused certificate; any other HTTP status through it is not a TLS trouble.
+        let proxied = { (status: Int) in NSError(domain: "CoreMediaErrorDomain", code: -16845, userInfo: [NSLocalizedDescriptionKey: "The operation couldn’t be completed. (CoreMediaErrorDomain error -16845 - HTTP \(status): SSL Certificate Error)"]) }
+        #expect(PlaybackRescue.trouble(proxied(495)) == .insecure)
+        #expect(PlaybackRescue.trouble(proxied(400)) == nil)
     }
 
     // MARK: What a link sends
