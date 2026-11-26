@@ -951,6 +951,7 @@
 "Your feedback is now issue #%lld on GitHub." = "Your feedback is now issue #%lld on GitHub.";
 "Send Another" = "Send Another";
 "Your Feedback" = "Your Feedback";
+"%lld sent · %lld adopted" = "%lld sent · %lld adopted";
 "Received" = "Received";
 "Replied" = "Replied";
 "Resolved" = "Resolved";
