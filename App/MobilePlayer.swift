@@ -1,8 +1,8 @@
-#if os(iOS)
 import SwiftUI
 import AVKit
-import MediaPlayer
 import TVCore
+#if os(iOS)
+import MediaPlayer
 
 /// The iPhone and iPad player. The picture plays in a layer of our own and every control is drawn here: AVKit's
 /// controls on iOS keep AirPlay and volume in a row of their own above anything laid over them and take no buttons
@@ -1258,11 +1258,16 @@ extension View {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// The position and the length in a capsule over a scrubber the width of the screen, as in YouTube's player, and
 /// scrubbing as in Telegram's: while dragged, only the bar, the time and a frame from that point (above the handle)
 /// follow the finger, and the video seeks once, when the finger lifts. Seeking the playing video along with the finger
 /// left it stuttering behind. A view of its own, so only it redraws as the position moves.
-private struct SeekBar<Accessory: View>: View {
+struct SeekBar<Accessory: View>: View {
     /// The height of the time's row, which the accessory shares: the episode buttons are 36 points round.
     static var timeRow: CGFloat { 36 }
     let clock: PlayerClock
@@ -1433,6 +1438,10 @@ private struct SeekBar<Accessory: View>: View {
     }
 }
 
+#endif
+
+#if os(iOS)
+
 /// The top row's three parts: Back, the title and the buttons. All in one row while the title keeps `minimumTitle`;
 /// otherwise Back and the buttons share the first row and the title has the next one to itself. On a screen too
 /// narrow even for Back beside the buttons, the buttons take the first row alone and Back goes beside the title.
@@ -1494,8 +1503,13 @@ private struct PlayerTopBar: SwiftUI.Layout {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// A round glass button of the given size, for play and skip in the middle of the picture.
-private struct PlayerCircleStyle: ButtonStyle {
+struct PlayerCircleStyle: ButtonStyle {
     var size: CGFloat
     @Environment(\.isEnabled) private var enabled
     @Environment(\.chromeGrouped) private var grouped
@@ -1512,6 +1526,10 @@ private struct PlayerCircleStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: configuration.isPressed)
     }
 }
+
+#endif
+
+#if os(iOS)
 
 /// AirPlay, drawn like the buttons beside it: the 15 pt mark, not the system's bigger, heavier one (#1560). All of it is
 /// UIKit: the system's button, all but invisible, takes the tap and opens its picker itself, with our mark on top. A
@@ -1971,6 +1989,11 @@ private struct BatteryGauge: View {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// The playing item's position and duration, four times a second while it plays.
 @MainActor @Observable final class PlayerClock {
     private(set) var position: Double = 0
@@ -2221,6 +2244,10 @@ private struct BatteryGauge: View {
         if abs(value - buffered) >= 1 || (value == 0) != (buffered == 0) { buffered = value }
     }
 }
+
+#endif
+
+#if os(iOS)
 
 /// The video on the Lock Screen, in Control Center and on headphones, with play, pause, skip and scrub: AVKit's
 /// own player published these by itself. Music holds Now Playing only while no video plays (MusicRemoteControl).
