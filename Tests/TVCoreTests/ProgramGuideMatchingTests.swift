@@ -46,3 +46,14 @@ private func matchingProgramme(_ id: String, title: String) -> String {
     #expect(guide.schedule(for: matchingChannel("News", id: "one"), among: [first, second])?.first?.title == "Bulletin")
     #expect(guide.schedule(for: matchingChannel("News", id: "News"), among: [first, second])?.first?.title == "Bulletin")
 }
+
+@Test func guideReusesPlaylistAmbiguityIndexAcrossVisibleRows() throws {
+    let guide = try matchingGuide("<channel id=\"one\"><display-name>News</display-name></channel>", matchingProgramme("one", title: "Bulletin"))
+    let channels = (0..<2000).map { matchingChannel("Station \($0)") } + [matchingChannel("News", group: "North"), matchingChannel("News HD", group: "South")]
+    let ambiguous = ProgramGuide.ambiguousNames(in: channels)
+    #expect(ambiguous == ["news"])
+    for _ in 0..<40 {
+        #expect(guide.schedule(for: matchingChannel("News"), excludingImplicitNames: ambiguous) == nil)
+        #expect(guide.schedule(for: matchingChannel("News", id: "one"), excludingImplicitNames: ambiguous)?.first?.title == "Bulletin")
+    }
+}

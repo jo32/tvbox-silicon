@@ -53,14 +53,28 @@ public struct ProgramGuide: Sendable {
     public var isEmpty: Bool { schedules.isEmpty }
 
     /// Explicit IDs win. Names must identify one guide channel and, for an implicit display name, one playlist channel.
-    public func schedule(for channel: Channel, among channels: [Channel] = []) -> [Programme]? {
+    public func schedule(for channel: Channel, excludingImplicitNames ambiguousNames: Set<String> = []) -> [Programme]? {
         if let id = channel.guideID {
             if aliases[Self.key(id)]?.contains(id) == true { return schedules[id] }
             if let alias = schedule(named: id) { return alias }
         }
         let name = Self.key(channel.name)
-        guard channels.filter({ Self.key($0.name) == name }).count <= 1 else { return nil }
+        guard !ambiguousNames.contains(name) else { return nil }
         return schedule(named: channel.name)
+    }
+
+    /// Convenience for a single lookup; lists should build `ambiguousNames(in:)` once and reuse it for their rows.
+    public func schedule(for channel: Channel, among channels: [Channel]) -> [Programme]? {
+        schedule(for: channel, excludingImplicitNames: Self.ambiguousNames(in: channels))
+    }
+
+    public static func ambiguousNames(in channels: [Channel]) -> Set<String> {
+        var seen = Set<String>(), ambiguous = Set<String>()
+        for channel in channels {
+            let name = key(channel.name)
+            if !seen.insert(name).inserted { ambiguous.insert(name) }
+        }
+        return ambiguous
     }
 
     private func schedule(named name: String) -> [Programme]? {

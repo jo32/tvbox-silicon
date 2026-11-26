@@ -7,7 +7,7 @@ import TVCore
     let address: GuideAddress
     private(set) var guide: ProgramGuide?
     private(set) var perChannel: [String: [Programme]] = [:]
-    @ObservationIgnored private var channels: [Channel] = []
+    @ObservationIgnored private var ambiguousNames = Set<String>()
     @ObservationIgnored private var asked = Set<String>()
 
     init(address: GuideAddress) { self.address = address }
@@ -24,14 +24,14 @@ import TVCore
 
     func schedule(for channel: Channel) -> [Programme]? {
         switch address {
-        case .xmltv: guide?.schedule(for: channel, among: channels)
+        case .xmltv: guide?.schedule(for: channel, excludingImplicitNames: ambiguousNames)
         case .perChannel: perChannel[channel.name]
         }
     }
 
     /// Loads an XMLTV guide for the playlist's channels.
     func load(_ channels: [Channel]) async {
-        self.channels = channels
+        ambiguousNames = ProgramGuide.ambiguousNames(in: channels)
         guard case let .xmltv(url) = address else { return }
         do { guide = try await ProgramGuides.shared.guide(url, for: channels) }
         catch {
