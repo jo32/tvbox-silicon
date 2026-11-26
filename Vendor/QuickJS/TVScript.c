@@ -207,6 +207,11 @@ static JSValue settle(TVScript *script, JSValue value) {
             JS_FreeValue(context, value);
             return JS_ThrowInternalError(context, "the script is waiting for something that never happens");
         }
+        // Waiting for a timer that falls past the deadline would only hold the VM until then.
+        if (script->deadline > 0 && now_seconds() + wait / 1000 > script->deadline) {
+            JS_FreeValue(context, value);
+            return JS_ThrowInternalError(context, "interrupted: the script did not finish in time");
+        }
         if (wait > 0) usleep((useconds_t)(wait > 50 ? 50000 : wait * 1000));
     }
 }

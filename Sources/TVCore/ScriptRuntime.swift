@@ -135,19 +135,23 @@ final class ScriptSession: @unchecked Sendable {
     }
 
     private func perform<T: Sendable>(seconds: Double, stopped: T, _ body: @escaping (ScriptCancellation) -> T) async -> T {
-        let token = ScriptCancellation(), scope = ScriptRequestScope(deadline: Date().addingTimeInterval(seconds))
+        let token = ScriptCancellation(), scope = ScriptRequestScope()
         let id = UUID()
         guard token.pointer != nil, stateLock.withLock({
             guard !closed else { return false }
             operations[id] = (token, scope); return true
         }) else { return stopped }
-        let expiry = DispatchWorkItem { if token.cancel() { scope.cancel() } }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, seconds), execute: expiry)
-        defer { expiry.cancel(); _ = stateLock.withLock { operations.removeValue(forKey: id) } }
+        defer { _ = stateLock.withLock { operations.removeValue(forKey: id) } }
         return await withTaskCancellationHandler {
             if Task.isCancelled, token.cancel() { scope.cancel() }
             return await thread.run(stopped: stopped) {
-                guard token.isActive, scope.deadline.timeIntervalSinceNow > 0 else { return stopped }
+                guard token.isActive else { return stopped }
+                // The time allowed starts when the VM takes the call, not while it waits behind the session's
+                // other calls (as `tv_script_call` counts it).
+                scope.arm(seconds)
+                let expiry = DispatchWorkItem { if token.cancel() { scope.cancel() } }
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, seconds), execute: expiry)
+                defer { expiry.cancel() }
                 self.bridge.beginRequest(scope)
                 let result = body(token)
                 if scope.deadline.timeIntervalSinceNow <= 0 { token.cancel() }
@@ -450,16 +454,18 @@ struct ScriptHostError: Error { let message: String; init(_ message: String) { s
 /// A VM call may synchronously enter HTTP, where the bytecode interrupt cannot run.
 /// Keep that transport cancellable and retain the execution fence through its callback.
 final class ScriptRequestScope: @unchecked Sendable {
-    let deadline: Date
     private let condition = NSCondition()
     private var stopped = false
     private var next = 0
     private var active: [Int: (() -> Void)?] = [:]
-    init(deadline: Date) { self.deadline = deadline }
+    private var end = Date.distantFuture
+    var deadline: Date { condition.withLock { end } }
+    /// Starts the operation's time, when it begins on the VM thread.
+    func arm(_ seconds: Double) { condition.withLock { end = Date().addingTimeInterval(seconds) } }
     var cancelled: Bool { condition.withLock { stopped } }
     func begin() throws -> Int {
         try condition.withLock {
-            guard !stopped, deadline.timeIntervalSinceNow > 0 else { throw CancellationError() }
+            guard !stopped, end.timeIntervalSinceNow > 0 else { throw CancellationError() }
             defer { next += 1 }
             active[next] = .some(nil)
             return next
