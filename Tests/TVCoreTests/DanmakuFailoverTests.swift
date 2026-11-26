@@ -188,12 +188,21 @@ func automaticDanmakuCancellationDoesNotFallThrough(_ mode: String) async throws
     #expect(await transport.paths.count == 1)
 }
 
-@Test func manuallyPickedDanmakuWithMissingEpisodeDoesNotStartAutomaticSearch() async throws {
+/// A hand pick whose saved list lacks the episode reads the picked show's list again; it never searches other titles.
+@Test(arguments: ["empty", "new-episode"])
+func manuallyPickedDanmakuWithMissingEpisodeRereadsOnlyThePickedShow(_ mode: String) async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
-    let cache = MediaCache(root: root), transport = FailoverTransport("empty")
-    let resolver = DanmakuResolver(cache: cache, http: .init { try await transport.send($0) }, dandanServer: "https://failover.example/manual-missing")
+    let cache = MediaCache(root: root), transport = FailoverTransport(mode)
+    let resolver = DanmakuResolver(cache: cache, http: .init { try await transport.send($0) }, dandanServer: "https://failover.example/manual-missing-" + mode)
     resolver.remember(.init(provider: "iqiyi", title: "测试剧", year: "2023", tracks: [.init(number: 2, title: "第2集", id: "iq-2", source: "iqiyi")], animeID: "iq", source: "iqiyi"), for: failoverContext(), ticket: cache.ticket(), picked: true)
-    #expect(try await resolver.resolve(failoverContext()).comments.isEmpty)
-    #expect(await transport.paths.isEmpty)
+    let result = try await resolver.resolve(failoverContext())
+    let paths = await transport.paths
+    #expect(!paths.contains { $0.hasSuffix("search/anime") })
+    #expect(paths.contains { $0.hasSuffix("bangumi/iq") })
+    if mode == "empty" {
+        #expect(result.comments.isEmpty && result.state == "unmatched")
+    } else {
+        #expect(result.state == "loaded" && result.comments.first?.text == "next platform")
+    }
 }

@@ -240,6 +240,11 @@ public struct DanmakuResolver: Sendable {
                 }
                 return customNegative(context, state: "unmatched", ticket: ticket)
             }
+            // A show picked by hand may have episodes newer than its saved list: read that show's list again (its
+            // own catalog entry, no title search) before calling the episode unmatched.
+            if let selected = mapping, selected.track(for: context) == nil, selected.animeID != nil, hasPick(for: context) {
+                mapping = try await refreshedCustomMapping(context, saved: selected, client: client) ?? selected
+            }
             if let selected = mapping, let track = selected.track(for: context), let id = track.id {
                 let comments: [CatalogDanmakuComment]
                 do {
