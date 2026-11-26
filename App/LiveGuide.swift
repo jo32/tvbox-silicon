@@ -25,7 +25,7 @@ import TVCore
     func schedule(for channel: Channel) -> [Programme]? {
         switch address {
         case .xmltv: guide?.schedule(for: channel)
-        case .perChannel: perChannel[channel.guideID ?? channel.name]
+        case .perChannel: perChannel[channel.name]
         }
     }
 
@@ -42,7 +42,8 @@ import TVCore
     /// Asks for today's programmes when the channel reappears, with a short UI retry interval.
     func fetch(_ channel: Channel) async {
         guard case .perChannel = address else { return }
-        let name = channel.guideID ?? channel.name, now = Date()
+        // DIYP templates ask for the display name; tvg-id may be an opaque XMLTV identifier.
+        let name = channel.name, now = Date()
         if let last = asked[name], now.timeIntervalSince(last) < 30 { return }
         asked[name] = now
         if let programmes = await ProgramGuides.shared.schedule(address, name: name, context: context) {
@@ -76,7 +77,7 @@ struct NowOnText: View {
                 }
             }
         }
-        .task(id: channel.guideID ?? channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.name) { await guide?.fetch(channel) }
     }
 }
 
@@ -102,7 +103,7 @@ struct NowAndNext: View {
                 }
             }
         }
-        .task(id: channel.guideID ?? channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.name) { await guide?.fetch(channel) }
     }
 
     private func line(_ label: String, _ programme: Programme, emphasis: Bool) -> some View {

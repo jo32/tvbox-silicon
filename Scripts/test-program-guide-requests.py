@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import threading
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +41,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path in ['/epg', '/uncached-epg']:
             title = str(self.counts[path]) if path == '/uncached-epg' else '|'.join(self.headers.get(k, '') for k in ['Authorization', 'Cookie'])
             body = ('{"epg_data":[{"start":"08:00","end":"09:00","title":"' + title + '"}]}').encode()
+        elif path == '/named-epg':
+            name = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('name', [''])[0]
+            body = b'{"epg_data":[{"start":"08:00","end":"09:00","title":"Named News Bulletin"}]}' if name == 'News' else b'{"epg_data":[]}'
         elif path == '/guide.xml':
             auth = self.headers.get('Authorization', '')
             number = self.counts[path]
@@ -74,11 +78,17 @@ let package = Package(name: "GuideRequests", platforms: [.macOS(.v14)], targets:
         (root / 'Sources/TVCore' / name).symlink_to(ROOT / 'Sources/TVCore' / name)
     (root / 'Sources/TVCore/Support.swift').write_text('''import Foundation
 public struct Channel: Sendable { public var name: String; public var guideID: String?; public init(name: String, url: URL) { self.name = name } }
+public struct LiveSource { public var url: URL; public var guide: String? }
+public struct Diagnostics: Sendable { public static let shared = Diagnostics(); public enum Level { case warning }; public func record(_ level: Level, _ area: String, _ text: String) {} }
 enum TVError: Error { case invalidConfiguration }
 enum LoadedLivePlugin { static func inflate(_ data: Data, format: String) -> Data? { nil } }
 enum WebAddress { static func resolve(_ text: String, relativeTo url: URL?) throws -> URL { URL(string: text, relativeTo: url)!.absoluteURL } }
 ''')
     (root / 'Tests/TVCoreTests/ProgramGuideRequestTests.swift').symlink_to(ROOT / 'Tests/TVCoreTests/ProgramGuideRequestTests.swift')
+    source = (ROOT / 'App/LiveGuide.swift').read_text()
+    controller = source[source.index('@MainActor @Observable final class LiveGuide'):source.index('\n/// Redraws a programme line')]
+    (root / 'Tests/TVCoreTests/LiveGuideUnderTest.swift').write_text('import SwiftUI\nimport TVCore\n@MainActor @Observable final class Store { var guideAddresses: [String: String] = [:] }\n' + controller)
+    (root / 'Tests/TVCoreTests/LiveGuideRequest.swift').symlink_to(ROOT / 'Tests/TVCoreTests/Fixtures/LiveGuideRequest.swift')
     env = dict(os.environ, GUIDE_HTTP_FIXTURE=f'http://127.0.0.1:{server.server_port}')
     subprocess.run(['swift', 'test', '--package-path', str(root)], check=True, env=env)
     server.shutdown()
