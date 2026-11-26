@@ -236,6 +236,39 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(await history.flushPersistence())
 }
 
+@Test @MainActor func hiddenCloudDriveStaysOutOfVisiblePlaybackHistory() async throws {
+    let suite = "history.hidden.cloud." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+
+    let subscriptionOrigin = URL(string: "https://one.example/a.json")!
+    // A folder watched in Cloud Files: its history keeps one sourceKey for every drive and an origin of its own,
+    // while the drive hides under its site key and the subscription's origin (#2360).
+    let history = PlaybackHistory(file: file, defaults: defaults)
+    let folder = PlaybackHistoryContext(origin: URL(string: "tvbox-files://quark")!, sourceKey: CloudFiles.sourceKey,
+        sourceName: "Quark", videoID: "folder", videoName: "Series", episodeID: "file",
+        episodeName: "Episode 1", episodeFlag: "quark")
+    history.record(folder, position: 60, duration: 600, now: Date(timeIntervalSince1970: 10))
+    let hidden = HiddenSources(defaults: defaults)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["folder"])
+
+    // Hiding the drive hides its watched folder; another drive's folder is untouched.
+    hidden.insert(CloudFilesSource.site(.quark), origin: subscriptionOrigin)
+    #expect(history.visibleEntries(hiding: hidden).isEmpty)
+    let other = PlaybackHistoryContext(origin: URL(string: "tvbox-files://uc")!, sourceKey: CloudFiles.sourceKey,
+        sourceName: "UC", videoID: "other", videoName: "Other", episodeID: "file",
+        episodeName: "Episode 1", episodeFlag: "uc")
+    history.record(other, position: 60, duration: 600, now: Date(timeIntervalSince1970: 20))
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["other"])
+
+    // Unhiding brings the folder back.
+    hidden.toggle(CloudFilesSource.site(.quark), origin: subscriptionOrigin)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["other", "folder"])
+    #expect(await history.flushPersistence())
+}
+
 @Test @MainActor func playbackHistoryWaitsForItsBackgroundWritesWhenQuitting() throws {
     let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: file) }

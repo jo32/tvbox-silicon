@@ -30,7 +30,12 @@ typealias MusicTrack = TVCore.MusicTrack
         // Between songs nothing plays, and iOS suspends an app in the background within seconds of its sound
         // stopping. Finding the next song often takes longer (channels that fail first), so the queue stopped until
         // the app was opened again (#1301). Ask for time while a song is found or loads; sound keeps the app running.
-        didSet { if phase == .resolving || phase == .loading { grace.hold() } else { grace.release() } }
+        didSet {
+            if phase == .resolving || phase == .loading { grace.hold() } else { grace.release() }
+            #if os(tvOS)
+            holdScreenSaver()
+            #endif
+        }
     }
     /// Every channel tried for this song, with how it went.
     private(set) var attempts: [MusicAttempt] = []
@@ -128,6 +133,12 @@ typealias MusicTrack = TVCore.MusicTrack
     private var sleepFadeRevision: UUID?
     private var sleepChangedObserver: NSObjectProtocol?
     private var sleepObserver: NSObjectProtocol?
+    #if os(tvOS)
+    /// Whether the music holds off the TV's screen saver (`holdScreenSaver`), and whether the app is in the background.
+    @ObservationIgnored private var holdsScreenSaver = false
+    @ObservationIgnored private var inBackground = false
+    @ObservationIgnored private var appStateObservers: [NSObjectProtocol] = []
+    #endif
 
     init(library: MusicLibrary = .shared) {
         self.library = library
@@ -159,6 +170,13 @@ typealias MusicTrack = TVCore.MusicTrack
                 self.cancelSleepFade()
             }
         }
+        #if os(tvOS)
+        for (name, background) in [(UIApplication.didEnterBackgroundNotification, true), (UIApplication.willEnterForegroundNotification, false)] {
+            appStateObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.inBackground = background; self?.holdScreenSaver() }
+            })
+        }
+        #endif
         #if !os(macOS)
         // An alarm, a call or Siri pauses the player; it plays again when the system says it may (#803).
         interruptionObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main) { [weak self] note in
@@ -887,6 +905,25 @@ typealias MusicTrack = TVCore.MusicTrack
         @unknown default: break
         }
     }
+
+    #if os(tvOS)
+    /// The TV's screen saver starting broke the music off for a moment (#2397), and an Apple TV left alone dims to it
+    /// mid-song. The video player's AVPlayer holds it off for a film by itself, but not for sound alone, so hold it
+    /// while a song plays or the next one is found, and let it go when the music pauses, stops or fails, and in the
+    /// background. Nothing else on Apple TV sets the idle timer, so this doesn't undo another hold.
+    private func holdScreenSaver() {
+        let hold = !inBackground && (phase == .playing || phase == .loading || phase == .resolving)
+        guard hold != holdsScreenSaver else { return }
+        holdsScreenSaver = hold
+        var disabled = hold
+        #if DEBUG
+        // `-qaKeepAwake 1` keeps a QA Apple TV awake whatever plays (QALaunch).
+        disabled = disabled || UserDefaults.standard.bool(forKey: "qaKeepAwake")
+        #endif
+        UIApplication.shared.isIdleTimerDisabled = disabled
+        Diagnostics.shared.record(.info, "music", hold ? "holds the screen saver off" : "lets the screen saver come")
+    }
+    #endif
 
     #if !os(macOS)
     private func interrupted(began: Bool, mayResume: Bool) {
