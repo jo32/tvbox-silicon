@@ -164,6 +164,11 @@ public enum Remux {
 
     public static func transfer(for url: URL) -> (received: Int64, host: String?)? { session(url)?.source.transfer }
 
+    /// The server did not provide a byte range that can be used to read a file.
+    public struct NoByteRanges: LocalizedError {
+        public var errorDescription: String? { "no byte ranges" }
+    }
+
     /// A file behind an HTTP(S) link that answers byte ranges. One that sends the bytes asked for is read
     /// like a cloud drive's file, in parallel chunks. One that answers every range with the rest of the file
     /// (a plugin's drive proxy, which downloads it with its own threads) is read through one connection.
@@ -440,7 +445,7 @@ final class RangeConnection: NSObject, URLSessionDataDelegate, @unchecked Sendab
         guard status == 206, let match = range?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/), Int64(match.1) == first,
               let end = Int64(match.2), let total = Int64(match.3), end < total else {
             completionHandler(.cancel)
-            self.end(status >= 400 ? TVError.http(status) : TVError.unsupported("no byte ranges"))
+            self.end(status >= 400 ? TVError.http(status) : Remux.NoByteRanges())
             return
         }
         let opening = lock.withLock {

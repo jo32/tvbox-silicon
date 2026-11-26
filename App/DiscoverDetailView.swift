@@ -648,7 +648,11 @@ private struct DiscoverMacSeasonButton: View {
         search.onResult = { [weak self] in self?.absorb($0) }
         if search.keyword.isEmpty {
             let hidden = store.hiddenSources
-            search.search(keyword, config: config) { hidden.contains($0, origin: config.origin) }
+            // A title is a film or a series. A listening source's album or chapter with the same name is not
+            // it, and its episodes open in the music player, so those sources are not asked (#2293).
+            search.search(keyword, config: config) { site in
+                hidden.contains(site, origin: config.origin) || AudioSources.isCandidate(site)
+            }
             // Answered from the model's own cache, the results are in already.
             search.results.forEach(absorb)
         } else if search.suspended {
