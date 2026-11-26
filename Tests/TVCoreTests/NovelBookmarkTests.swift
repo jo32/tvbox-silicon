@@ -38,6 +38,25 @@ private func toc(_ titles: [String], volumes: Set<Int> = []) -> [NovelChapter] {
     #expect(old.bookmarks.isEmpty && old.chapterIndex == 2 && old.book == book)
 }
 
+/// An audiobook's second is kept when the shelf is read back (#2348).
+@Test func novelShelfKeepsWhereListeningStopped() throws {
+    let book = NovelBook(sourceKey: "a", url: "https://a/1", name: "书", author: "人")
+    var entry = NovelLibrary.ShelfBook(book: book, chapterIndex: 2, chapterTitle: "第2章 相遇", position: 1)
+    entry.seconds = 634.5
+    let saved = try JSONDecoder().decode(NovelLibrary.ShelfBook.self, from: JSONEncoder().encode(entry))
+    #expect(saved.seconds == 634.5)
+}
+
+/// A shelf saved before audiobooks have no `seconds` key (#2348): it still loads, with no second to resume at.
+@Test func novelShelfWithoutASecondStillLoads() throws {
+    let book = NovelBook(sourceKey: "a", url: "https://a/1", name: "书", author: "人")
+    let entry = NovelLibrary.ShelfBook(book: book, chapterIndex: 2, chapterTitle: "第2章 相遇")
+    var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+    object["seconds"] = nil
+    let old = try JSONDecoder().decode(NovelLibrary.ShelfBook.self, from: JSONSerialization.data(withJSONObject: object))
+    #expect(old.seconds == nil && old.chapterIndex == 2 && old.book == book)
+}
+
 /// Moving to another source keeps the place and every bookmark at the same chapters there, found by title (#1450).
 @Test func novelShelfFollowsAnotherSourceWithItsBookmarks() {
     let book = NovelBook(sourceKey: "a", url: "https://a/1", name: "书", author: "人")

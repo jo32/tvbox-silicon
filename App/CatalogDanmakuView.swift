@@ -213,12 +213,13 @@ import UniformTypeIdentifiers
     }
 
     func load(_ episode: CatalogDanmakuEpisode, anime: CatalogDanmakuAnime, client: CatalogDanmakuClient, siblings: [CatalogDanmakuEpisode] = []) async throws {
-        cancelAutomatic()
         let settings = Preferences.load(), resolver = settings.resolver(server: client.server.absoluteString)
         let active = generation
         let comments = try await client.comments(episode)
         try Task.checkCancellation()
         guard generation == active, Preferences.load() == settings else { throw CancellationError() }
+        guard !comments.isEmpty else { throw TVError.unsupported(L10n.text("No danmaku found. Try another title or server.")) }
+        cancelAutomatic()
         let ticket = automaticContext.map { resolver.invalidateEpisodes(for: $0) } ?? MediaCache.shared.ticket()
         self.comments = comments; track = anime.title + " · " + episode.title
         let platform = episode.source.isEmpty ? anime.source : episode.source
@@ -247,18 +248,18 @@ import UniformTypeIdentifiers
             // Picked on this server: one picked on another before no longer goes first (`DanmakuChain`).
             for other in settings.chain().resolvers where other.dandanServer != resolver.dandanServer { other.forgetPick(context) }
         }
-        offset = 0; revision = UUID(); automaticState = comments.isEmpty ? "unmatched" : "loaded"; enabled = true
+        offset = 0; revision = UUID(); automaticState = "loaded"; enabled = true
     }
 
     /// Comments for an episode page the viewer pasted, from `server` (#1089).
     func load(page: String, server: String) async throws {
-        cancelAutomatic()
         let settings = Preferences.load(), resolver = settings.resolver(server: server)
         let active = generation
         let result = try await resolver.comments(page: page)
         try Task.checkCancellation()
         guard generation == active, Preferences.load() == settings else { throw CancellationError() }
         guard !result.comments.isEmpty else { throw TVError.unsupported(L10n.text("No comments were found for this link.")) }
+        cancelAutomatic()
         let ticket = automaticContext.map { resolver.invalidateEpisodes(for: $0) } ?? MediaCache.shared.ticket()
         comments = result.comments; track = result.track; source = result.source
         fromCache = false; manuallySelected = true; selectedOverridesSource = true; currentResolver = resolver
@@ -288,11 +289,12 @@ import UniformTypeIdentifiers
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         guard size <= CatalogDanmakuParser.maximumBytes else { throw TVError.unsupported(L10n.text("The danmaku file is too large.")) }
         let parsed = try CatalogDanmakuParser.parse(Data(contentsOf: url, options: .mappedIfSafe))
+        guard !parsed.isEmpty else { throw TVError.unsupported(L10n.text("No matching episode has comments.")) }
         cancelAutomatic()
         comments = parsed; track = url.deletingPathExtension().lastPathComponent
         source = L10n.text("Imported file"); fromCache = false; manuallySelected = true; selectedOverridesSource = true
         let resolver = Preferences.load().resolver(); currentResolver = resolver; cacheCurrent(resolver: resolver)
-        offset = 0; revision = UUID(); automaticState = parsed.isEmpty ? "unmatched" : "loaded"; enabled = true
+        offset = 0; revision = UUID(); automaticState = "loaded"; enabled = true
     }
     private func cacheCurrent(resolver: DanmakuResolver, ticket: MediaCache.Ticket? = nil) {
         guard let context = automaticContext, !comments.isEmpty else { return }
@@ -480,13 +482,20 @@ struct CatalogDanmakuSettingsView: View {
     private func resetSearch() {
         cancelWork(); animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
     }
-    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
+    private func perform(onSuccess: (@MainActor () -> Void)? = nil, _ operation: @escaping @MainActor () async throws -> Void) {
         cancelWork(); busy = true; error = nil
         let active = workGeneration
         work = Task { @MainActor in
-            do { try await operation() }
-            catch { if !Task.isCancelled, workGeneration == active { self.error = error.localizedDescription } }
-            if !Task.isCancelled, workGeneration == active { busy = false; work = nil }
+            defer { if workGeneration == active { busy = false; work = nil } }
+            do {
+                try Task.checkCancellation()
+                try await operation()
+                if !Task.isCancelled, workGeneration == active { onSuccess?() }
+            } catch {
+                if !Task.isCancelled, workGeneration == active, !(error is CancellationError), (error as? URLError)?.code != .cancelled {
+                    self.error = error.localizedDescription
+                }
+            }
         }
     }
     private func search() {
@@ -510,12 +519,14 @@ struct CatalogDanmakuSettingsView: View {
     }
     private func load(_ episode: CatalogDanmakuEpisode, anime: CatalogDanmakuAnime) {
         let address = searchServer
-        perform { try await model.load(episode, anime: anime, client: CatalogDanmakuClient(address: address), siblings: episodes); dismiss() }
+        perform(onSuccess: { dismiss() }) {
+            try await model.load(episode, anime: anime, client: CatalogDanmakuClient(address: address), siblings: episodes)
+        }
     }
     private func loadLink() {
         guard !busy else { return }
         let text = link.trimmingCharacters(in: .whitespacesAndNewlines), server = searchServer
         guard !text.isEmpty else { return }
-        perform { try await model.load(page: text, server: server); dismiss() }
+        perform(onSuccess: { dismiss() }) { try await model.load(page: text, server: server) }
     }
 }

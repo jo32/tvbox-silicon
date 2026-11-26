@@ -33,14 +33,15 @@ public enum GuideAddress: Hashable, Sendable {
         }
     }
 
-    /// A per-channel address for `name` on the day of `date`, in China's time zone as those servers keep it.
-    public func address(for name: String, on date: Date) -> URL? {
+    /// A per-channel address for `name` on the day of `date`, in China's time zone as those servers keep it (or the
+    /// source's own).
+    public func address(for name: String, on date: Date, timeZone: TimeZone = ProgramGuide.chinaTime) -> URL? {
         guard case let .perChannel(template) = self else { return nil }
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&+=?#")
         return URL(string: template
             .replacingOccurrences(of: "{name}", with: name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
-            .replacingOccurrences(of: "{date}", with: ProgramGuide.dayString(date)))
+            .replacingOccurrences(of: "{date}", with: ProgramGuide.dayString(date, timeZone: timeZone)))
     }
 }
 
@@ -169,23 +170,23 @@ public struct ProgramGuide: Sendable {
 
     // MARK: DIYP
 
-    static let chinaTime = TimeZone(identifier: "Asia/Shanghai")!
+    public static let chinaTime = TimeZone(identifier: "Asia/Shanghai")!
 
-    /// `2026-11-14` in China's time zone.
-    static func dayString(_ date: Date) -> String {
+    /// `2026-11-14` in China's time zone (or `timeZone`).
+    static func dayString(_ date: Date, timeZone: TimeZone = chinaTime) -> String {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = chinaTime
+        calendar.timeZone = timeZone
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
     }
 
     /// A DIYP answer, `{"epg_data": [{"start": "19:00", "end": "19:30", "title": "…"}]}`, for the day of `date` in
-    /// China's time zone.
-    public static func diyp(_ data: Data, on date: Date) -> [Programme] {
+    /// China's time zone (or `timeZone`, whose daylight-saving days are kept).
+    public static func diyp(_ data: Data, on date: Date, timeZone: TimeZone = chinaTime) -> [Programme] {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entries = object["epg_data"] as? [[String: Any]] else { return [] }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = chinaTime
+        calendar.timeZone = timeZone
         let midnight = calendar.startOfDay(for: date)
         func time(_ value: Any?) -> TimeInterval? {
             guard let text = value as? String else { return nil }
@@ -197,10 +198,16 @@ public struct ProgramGuide: Sendable {
         for entry in entries {
             guard let title = (entry["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
                   let start = time(entry["start"]) else { continue }
-            let from = midnight.addingTimeInterval(start)
-            var end = time(entry["end"]).map { midnight.addingTimeInterval($0) } ?? .distantFuture
+            // A wall-clock time of the day, also on a day that changes to or from daylight saving time.
+            func clock(_ value: TimeInterval) -> Date {
+                value == 86_400 ? calendar.date(byAdding: .day, value: 1, to: midnight) ?? midnight.addingTimeInterval(value)
+                    : calendar.date(bySettingHour: Int(value) / 3600, minute: Int(value) % 3600 / 60, second: 0, of: midnight)
+                        ?? midnight.addingTimeInterval(value)
+            }
+            let from = clock(start)
+            var end = time(entry["end"]).map(clock) ?? .distantFuture
             // A programme that runs past midnight ends "the next day" at an earlier time.
-            if end <= from { end = end.addingTimeInterval(86_400) }
+            if end <= from { end = calendar.date(byAdding: .day, value: 1, to: end) ?? end.addingTimeInterval(86_400) }
             list.append(Programme(title: title, start: from, end: end))
         }
         return closingGaps(list.sorted { $0.start < $1.start })
@@ -290,58 +297,72 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
 /// main thread.
 public actor ProgramGuides {
     public static let shared = ProgramGuides()
+    /// Kept by address and by the headers it was asked with (`GuideRequestContext`): a guide one account's
+    /// credentials asked for never serves another account, while playlists that ask a guide the same way share it.
+    /// A per-channel answer is kept per day too.
+    private struct Key: Hashable { let url: URL; let headers: [String: String]; var day = "" }
     private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date; let lookback: TimeInterval }
-    private var guides: [URL: Loaded] = [:]
-    private var loading: [URL: Task<Loaded, Error>] = [:]
-    private var days: [URL: (programmes: [Programme], at: Date)] = [:]
-    private let http = HTTPClient()
+    private var guides: [Key: Loaded] = [:]
+    private var loading: [Key: Task<Loaded, Error>] = [:]
+    private var days: [Key: (programmes: [Programme], at: Date)] = [:]
+    /// When a per-channel address that failed may be asked again.
+    private var failures: [Key: Date] = [:]
+    private let http: HTTPClient
     /// Guides list today and the next days; a few hours on, the programmes kept have moved on.
     private let lifetime: TimeInterval = 3 * 3600
 
-    /// The XMLTV guide at `url`, for `channels`.
-    public func guide(_ url: URL, for channels: [Channel]) async throws -> ProgramGuide {
+    init(http: HTTPClient = HTTPClient()) { self.http = http }
+
+    /// The XMLTV guide at `url`, for `channels`, asked with the headers `context` gives that address.
+    public func guide(_ url: URL, for channels: [Channel], context: GuideRequestContext = .init()) async throws -> ProgramGuide {
+        let headers = context.headers(for: url), key = Key(url: url, headers: headers)
         let wanted = ProgramGuide.wanted(channels)
         let lookback = ProgramCatchup.lookback(for: channels)
-        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback, Date().timeIntervalSince(loaded.at) < lifetime {
+        if let loaded = guides[key], loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback, Date().timeIntervalSince(loaded.at) < lifetime {
             return loaded.guide
         }
-        if let task = loading[url] {
+        if let task = loading[key] {
             let loaded = try await task.value
             if loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback { return loaded.guide }
         }
         // Another playlist sharing the guide asks for its channels too.
-        let union = guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.wanted.union(wanted) : wanted } ?? wanted
-        let history = max(lookback, guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.lookback : 3600 } ?? 3600)
+        let union = guides[key].map { Date().timeIntervalSince($0.at) < lifetime ? $0.wanted.union(wanted) : wanted } ?? wanted
+        let history = max(lookback, guides[key].map { Date().timeIntervalSince($0.at) < lifetime ? $0.lookback : 3600 } ?? 3600)
         let task = Task { [http] in
-            let (data, _) = try await http.get(url, limit: 60_000_000)
+            let (data, _) = try await http.get(url, headers: headers, limit: 60_000_000)
             let now = Date()
             let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-history), to: now.addingTimeInterval(30 * 3600))
             return Loaded(guide: guide, wanted: union, at: now, lookback: history)
         }
-        loading[url] = task
-        defer { loading[url] = nil }
+        loading[key] = task
+        defer { loading[key] = nil }
         let loaded = try await task.value
         if guides.count >= 4, let oldest = guides.min(by: { $0.value.at < $1.value.at })?.key { guides[oldest] = nil }
-        guides[url] = loaded
+        guides[key] = loaded
         return loaded.guide
     }
 
     /// Programmes on `date` (today by default) from a per-channel address; nil when the ask was cancelled. A failed
-    /// ask counts as no programmes, so the server isn't asked again for a while.
-    public func schedule(_ address: GuideAddress, name: String, on date: Date = Date()) async -> [Programme]? {
-        let now = Date()
-        if case let .perChannel(template) = address, !template.contains("{date}"),
-           ProgramGuide.dayString(date) != ProgramGuide.dayString(now) { return [] }
-        guard let url = address.address(for: name, on: date) else { return [] }
-        if let day = days[url], now.timeIntervalSince(day.at) < lifetime { return day.programmes }
-        let programmes: [Programme]
-        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: date) }
-        catch {
+    /// ask isn't repeated for a few minutes, and answers with the day's earlier programmes, if any, meanwhile.
+    public func schedule(_ address: GuideAddress, name: String, context: GuideRequestContext = .init(), on date: Date = Date()) async -> [Programme]? {
+        let now = Date(), zone = context.timeZone
+        let day = ProgramGuide.dayString(date, timeZone: zone)
+        if case let .perChannel(template) = address, !template.contains("{date}"), day != ProgramGuide.dayString(now, timeZone: zone) { return [] }
+        guard let url = address.address(for: name, on: date, timeZone: zone) else { return [] }
+        let headers = context.headers(for: url), key = Key(url: url, headers: headers, day: day + "|" + zone.identifier)
+        if let kept = days[key], now.timeIntervalSince(kept.at) < lifetime { return kept.programmes }
+        if let retry = failures[key], now < retry { return days[key]?.programmes ?? [] }
+        do {
+            let programmes = ProgramGuide.diyp(try await http.get(url, headers: headers).0, on: date, timeZone: zone)
+            failures[key] = nil
+            if days.count > 600 { days = days.filter { now.timeIntervalSince($0.value.at) < lifetime } }
+            days[key] = (programmes, now)
+            return programmes
+        } catch {
             if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { return nil }
-            programmes = []
+            if failures.count > 600 { failures = failures.filter { now < $0.value } }
+            failures[key] = now.addingTimeInterval(300)
+            return days[key]?.programmes ?? []
         }
-        if days.count > 600 { days = days.filter { now.timeIntervalSince($0.value.at) < lifetime } }
-        days[url] = (programmes, now)
-        return programmes
     }
 }
