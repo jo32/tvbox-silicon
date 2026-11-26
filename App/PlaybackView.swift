@@ -711,6 +711,9 @@ import IOKit.pwr_mgt
                 // A new item starts its own clock: its start is no jump.
                 self.clockMark = nil
                 self.subtitles.follow(self.player.currentItem)
+                #if !os(tvOS)
+                self.tracks.follow(self.player.currentItem)
+                #endif
                 self.queueMoved()
             }
         }
@@ -873,6 +876,10 @@ import IOKit.pwr_mgt
     let externalSubtitles = ExternalSubtitles()
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
     let subtitles = SubtitleCues()
+    #if !os(tvOS)
+    /// The item's audio and subtitle tracks with full `TrackLabel` names, for the iPhone, iPad and Mac menus (#884, #2204).
+    let tracks = MediaTracks()
+    #endif
     /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.
     private static func subtitleRules() -> [AVTextStyleRule] {
         AVTextStyleRule(textMarkupAttributes: SubtitleStyle.load().attributes).map { [$0] } ?? []
@@ -1497,6 +1504,9 @@ import IOKit.pwr_mgt
         catalogDanmaku.clear()
         externalSubtitles.stop()
         subtitles.follow(nil)
+        #if !os(tvOS)
+        tracks.follow(nil)
+        #endif
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
@@ -2236,6 +2246,91 @@ final class DisplayAwake {
                                        width: Int32(max(picture.width, 1)), height: Int32(max(picture.height, 1)),
                                        extensions: extensions as CFDictionary, formatDescriptionOut: &format)
         return format
+    }
+}
+#else
+/// The item's audio tracks and subtitles, named with `TrackLabel` (language, title and format) so tracks in the same
+/// language are told apart on iPhone, iPad and Mac (#884, #2204).
+@MainActor @Observable final class MediaTracks {
+    struct Group {
+        let group: AVMediaSelectionGroup
+        let options: [AVMediaSelectionOption]
+        /// The menu's names for them (`TrackLabel`): the language and what else is known, not just the language.
+        let names: [AVMediaSelectionOption: String]
+        init(group: AVMediaSelectionGroup, options: [AVMediaSelectionOption], titles: [String?], details: [String: TrackDetail]) {
+            self.group = group; self.options = options
+            let labels = TrackLabel.names(zip(options, titles).map { option, title in
+                let detail = title.flatMap { details[$0] }
+                let format = detail?.format ?? (detail == nil ? TrackLabel.format(subTypes: option.mediaSubTypes.map(\.uint32Value)) : nil)
+                return TrackLabel.Option(displayName: option.displayName, language: option.extendedLanguageTag ?? option.locale?.identifier,
+                                         title: detail?.title ?? title, format: format)
+            })
+            names = Dictionary(zip(options, labels)) { first, _ in first }
+        }
+        func name(_ option: AVMediaSelectionOption) -> String { names[option] ?? option.displayName }
+    }
+    private(set) var audio: Group?
+    private(set) var legible: Group?
+    /// Bumped by a selection (here or in AVKit's own controls on the Mac), so the menus show the new choice.
+    private var revision = 0
+    @ObservationIgnored private weak var item: AVPlayerItem?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var selectionObserver: NSObjectProtocol?
+
+    deinit {
+        if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+    }
+
+    func follow(_ item: AVPlayerItem?) {
+        guard item !== self.item else { return }
+        loadTask?.cancel(); loadTask = nil
+        if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver); self.selectionObserver = nil }
+        self.item = item; audio = nil; legible = nil
+        guard let item else { return }
+        selectionObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.mediaSelectionDidChangeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.revision += 1 }
+        }
+        loadTask = Task { [weak self, weak item] in
+            guard let self, let item else { return }
+            await self.load(item)
+        }
+    }
+
+    private func load(_ item: AVPlayerItem) async {
+        let asset = item.asset
+        let audible = try? await asset.loadMediaSelectionGroup(for: .audible)
+        let subtitles = try? await asset.loadMediaSelectionGroup(for: .legible)
+        guard !Task.isCancelled, self.item === item else { return }
+        // A repackaged file's tracks: their titles and formats, which the options don't carry.
+        let details = (asset as? AVURLAsset).map { Remux.trackDetails($0.url) } ?? (audio: [:], subtitles: [:])
+        let audioGroup = if let audible { await Self.makeGroup(audible, options: audible.options, details: details.audio) } else { Group?.none }
+        // Forced subtitles only translate foreign speech and come on by themselves; they aren't a choice.
+        let legibleGroup = if let subtitles {
+            await Self.makeGroup(subtitles, options: subtitles.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }, details: details.subtitles)
+        } else { Group?.none }
+        guard !Task.isCancelled, self.item === item else { return }
+        audio = audioGroup
+        legible = legibleGroup
+    }
+
+    private static func makeGroup(_ group: AVMediaSelectionGroup, options: [AVMediaSelectionOption], details: [String: TrackDetail]) async -> Group {
+        var titles: [String?] = []
+        titles.reserveCapacity(options.count)
+        for option in options {
+            let item = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first
+            titles.append(try? await item?.load(.stringValue))
+        }
+        return Group(group: group, options: options, titles: titles, details: details)
+    }
+
+    func selected(in group: Group) -> AVMediaSelectionOption? {
+        _ = revision
+        return item?.currentMediaSelection.selectedMediaOption(in: group.group)
+    }
+
+    func select(_ option: AVMediaSelectionOption?, in group: Group) {
+        item?.select(option, in: group.group)
+        revision += 1
     }
 }
 #endif

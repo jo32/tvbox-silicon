@@ -38,7 +38,6 @@ struct MobilePlayerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var decidedCacheOrientation = false
     @State private var clock = PlayerClock()
-    @State private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
@@ -249,7 +248,6 @@ struct MobilePlayerView: View {
             guard let old else { return .impact(weight: .light) }
             return new.locked != old.locked ? .impact(weight: .medium) : new.rate != old.rate ? .selection : nil
         }
-        .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
         // Full screen, the status bar stays hidden, controls or not: with it came the Dynamic Island's Now Playing
         // activity over the picture each time the controls showed (#1149). The controls have the time and battery of
@@ -862,57 +860,8 @@ struct MobilePlayerView: View {
                     if VideoEnhancement.canUpscale { Toggle(L10n.text("Sharper Picture"), isOn: $upscalesVideo) }
                 }
             }
-            if let audio = tracks.audio, audio.options.count > 1 {
-                Menu(L10n.text("Audio")) {
-                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
-                        ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
-                    }
-                    .pickerStyle(.inline)
-                }
-            }
-            // A file whose sound tracks AVFoundation offers no choice between (#428).
-            if session.audioChoices.count > 1 {
-                Menu(L10n.text("Audio")) {
-                    Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
-                        ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
-                    }
-                    .pickerStyle(.inline)
-                }
-            }
-            // The item's own subtitles, then subtitle files beside the video or added now (#576). A drive's transcoded
-            // copy has none of the file's: the menu says why (#1343).
-            Menu(L10n.text("Subtitles")) {
-                if let legible = tracks.legible, !legible.options.isEmpty {
-                    Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? tracks.selected(in: legible) : nil },
-                                                                      set: { tracks.select($0, in: legible); session.choseSubtitle($0); session.externalSubtitles.nativeChosen() })) {
-                        if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
-                        ForEach(legible.options, id: \.self) { Text(legible.name($0)).tag(Optional($0)) }
-                    }
-                    .pickerStyle(.inline)
-                } else if session.externalSubtitles.selected != nil {
-                    Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
-                }
-                ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
-                                     searchOnline: { searchesSubtitles = true })
-                if session.playsDriveCopy { Text(L10n.text(Self.driveCopyNote)) }
-            }
-            if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
-                // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
-                Menu(L10n.text("Subtitle Delay")) {
-                    Text(SubtitleDelay.title(session.subtitles.delay))
-                    Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
-                        SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
-                    }
-                    .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
-                    Button(String(format: "%+.1f s", SubtitleDelay.step)) {
-                        SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
-                    }
-                    .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
-                    if session.subtitles.delay != 0 {
-                        Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
-                    }
-                }
-            }
+            MediaTrackMenus(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                            searchOnline: { searchesSubtitles = true })
             // With a seek bar the speed has its own button beside it (`speedButton`).
             if !session.isLive, !session.hasTimeline {
                 Menu(L10n.text("Playback Speed")) {
@@ -951,7 +900,6 @@ struct MobilePlayerView: View {
     }
 
     private static let speeds: [Float] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
-    static let driveCopyNote = "The drive plays only a compressed copy of this video for this account, without its own subtitles. Use Search Online to add some."
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
     }
@@ -2132,58 +2080,6 @@ private struct BatteryGauge: View {
         let end = range.map { CMTimeRangeGetEnd($0).seconds } ?? 0
         let value = end.isFinite ? max(0, end) : 0
         if abs(value - buffered) >= 1 || (value == 0) != (buffered == 0) { buffered = value }
-    }
-}
-
-/// The item's audio tracks and subtitles, for the options menu.
-@MainActor @Observable final class MediaTracks {
-    struct Group {
-        let group: AVMediaSelectionGroup
-        let options: [AVMediaSelectionOption]
-        /// The menu's names for them (`TrackLabel`): the language and what else is known, not just the language.
-        let names: [AVMediaSelectionOption: String]
-        init(group: AVMediaSelectionGroup, options: [AVMediaSelectionOption], details: [String: TrackDetail]) {
-            self.group = group; self.options = options
-            let labels = TrackLabel.names(options.map { option in
-                let title = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first?.stringValue
-                let detail = title.flatMap { details[$0] }
-                return TrackLabel.Option(displayName: option.displayName, language: option.extendedLanguageTag ?? option.locale?.identifier,
-                                         title: detail?.title ?? title, format: detail?.format)
-            })
-            names = Dictionary(zip(options, labels)) { first, _ in first }
-        }
-        func name(_ option: AVMediaSelectionOption) -> String { names[option] ?? option.displayName }
-    }
-    private(set) var audio: Group?
-    private(set) var legible: Group?
-    /// Bumped by a selection, so the menus show the new choice.
-    private var revision = 0
-    @ObservationIgnored private weak var item: AVPlayerItem?
-
-    func load(_ item: AVPlayerItem?) async {
-        self.item = item; audio = nil; legible = nil
-        guard let item else { return }
-        let asset = item.asset
-        let audible = try? await asset.loadMediaSelectionGroup(for: .audible)
-        let subtitles = try? await asset.loadMediaSelectionGroup(for: .legible)
-        guard !Task.isCancelled, self.item === item else { return }
-        // A repackaged file's tracks: their titles and formats, which the options don't carry.
-        let details = (asset as? AVURLAsset).map { Remux.trackDetails($0.url) } ?? (audio: [:], subtitles: [:])
-        audio = audible.map { Group(group: $0, options: $0.options, details: details.audio) }
-        // Forced subtitles only translate foreign speech and come on by themselves; they aren't a choice.
-        legible = subtitles.map { group in
-            Group(group: group, options: group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }, details: details.subtitles)
-        }
-    }
-
-    func selected(in group: Group) -> AVMediaSelectionOption? {
-        _ = revision
-        return item?.currentMediaSelection.selectedMediaOption(in: group.group)
-    }
-
-    func select(_ option: AVMediaSelectionOption?, in group: Group) {
-        item?.select(option, in: group.group)
-        revision += 1
     }
 }
 

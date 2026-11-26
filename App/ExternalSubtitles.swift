@@ -415,6 +415,7 @@ import UniformTypeIdentifiers
     /// The kinds of file the import panels offer: subtitle files and ZIP archives of them.
     static let types: [UTType] = ["srt", "vtt", "ass", "ssa"].compactMap { UTType(filenameExtension: $0) } + [.zip, .plainText]
     static func handles(_ url: URL) -> Bool { ["srt", "vtt", "ass", "ssa", "zip"].contains(url.pathExtension.lowercased()) }
+    static let driveCopyNote = "The drive plays only a compressed copy of this video for this account, without its own subtitles. Use Search Online to add some."
 }
 
 

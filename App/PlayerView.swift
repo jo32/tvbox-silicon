@@ -1977,10 +1977,10 @@ private struct DesktopOptionsMenu: View, Equatable {
             if session.qualities.count > 1 {
                 Menu(L10n.text("Quality")) { QualityPicker(session: session) }
             }
-            Menu(L10n.text("Subtitle Files")) {
-                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
-                                 searchOnline: { searchesSubtitles = true })
-            }
+            // Audio and Subtitles with full TrackLabel details (language, title, format): AVPlayerView's own menu
+            // names options by language alone, so several Chinese tracks all read "中文" (#2204).
+            MediaTrackMenus(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                            searchOnline: { searchesSubtitles = true })
             Menu(L10n.text("Danmaku")) {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
@@ -2133,6 +2133,68 @@ struct QualityPicker: View {
             ForEach(session.qualities) { Text($0.label).tag($0.id) }
         }
         .pickerStyle(.inline)
+    }
+}
+
+/// Audio, Subtitles (the item's own tracks with `TrackLabel` details plus subtitle files) and Subtitle Delay, shared
+/// by the iPhone, iPad and Mac options menus (#884, #2204).
+struct MediaTrackMenus: View {
+    let session: PlaybackSession
+    let addFile: () -> Void
+    let addAddress: () -> Void
+    let searchOnline: () -> Void
+
+    var body: some View {
+        if let audio = session.tracks.audio, audio.options.count > 1 {
+            Menu(L10n.text("Audio")) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.tracks.selected(in: audio) }, set: { session.tracks.select($0, in: audio) })) {
+                    ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
+                }
+                .pickerStyle(.inline)
+            }
+        }
+        // A file whose sound tracks AVFoundation offers no choice between (#428).
+        if session.audioChoices.count > 1 {
+            Menu(L10n.text("Audio")) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                    ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .pickerStyle(.inline)
+            }
+        }
+        // The item's own subtitles, then subtitle files beside the video or added now (#576). A drive's transcoded
+        // copy has none of the file's: the menu says why (#1343).
+        Menu(L10n.text("Subtitles")) {
+            if let legible = session.tracks.legible, !legible.options.isEmpty {
+                Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? session.tracks.selected(in: legible) : nil },
+                                                                  set: { session.tracks.select($0, in: legible); session.choseSubtitle($0); session.externalSubtitles.nativeChosen() })) {
+                    if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
+                    ForEach(legible.options, id: \.self) { Text(legible.name($0)).tag(Optional($0)) }
+                }
+                .pickerStyle(.inline)
+            } else if session.externalSubtitles.selected != nil {
+                Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
+            }
+            ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: addFile, addAddress: addAddress, searchOnline: searchOnline)
+            if session.playsDriveCopy { Text(L10n.text(ExternalSubtitles.driveCopyNote)) }
+        }
+        if session.externalSubtitles.selected == nil, let legible = session.tracks.legible, !legible.options.isEmpty {
+            // A subtitle track that runs ahead of its picture (#599): each step holds it back half a second.
+            Menu(L10n.text("Subtitle Delay")) {
+                Text(SubtitleDelay.title(session.subtitles.delay))
+                Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
+                    SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
+                }
+                .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
+                Button(String(format: "%+.1f s", SubtitleDelay.step)) {
+                    SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
+                }
+                .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
+                if session.subtitles.delay != 0 {
+                    Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
+                }
+            }
+        }
     }
 }
 #endif

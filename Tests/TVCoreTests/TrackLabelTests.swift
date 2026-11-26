@@ -56,4 +56,32 @@ struct TrackLabelTests {
         #expect(details.audio["Commentary"] == TrackDetail(title: "Commentary", format: "AC-3 2.0"))
         #expect(details.subtitles.values.first == TrackDetail(title: "", format: "SRT"))
     }
+
+    /// Multiple tracks in the same language (e.g. six Chinese subtitles or Mandarin/Cantonese audio) are told apart
+    /// by title, format, and numbering instead of repeating the language name (#2204).
+    @Test func sameLanguageTracksShowTitleAndFormatDetails() {
+        let subtitles = [
+            Option(displayName: "中文", language: "zh", title: "简体", format: "ASS"),
+            Option(displayName: "中文", language: "zh", title: "繁体", format: "ASS"),
+            Option(displayName: "中文", language: "zh", title: "简英双语", format: "SRT"),
+            Option(displayName: "中文", language: "zh", title: "繁英双语", format: "SRT"),
+            Option(displayName: "中文", language: "zh", title: "", format: "PGS"),
+            Option(displayName: "中文", language: "zh", title: "", format: "PGS"),
+        ]
+        #expect(TrackLabel.names(subtitles) == [
+            "中文 · 简体 · ASS", "中文 · 繁体 · ASS",
+            "中文 · 简英双语 · SRT", "中文 · 繁英双语 · SRT",
+            "中文 · PGS", "中文 · PGS (2)",
+        ])
+        let audio = [
+            Option(displayName: "中文", language: "zh", title: "国语", format: "DTS 5.1"),
+            Option(displayName: "中文", language: "zh", title: "粤语", format: "DTS 5.1"),
+            Option(displayName: "中文", language: "zh", title: nil, format: TrackLabel.format(subTypes: [0x6163_2d33])),
+            Option(displayName: "中文", language: "zh", title: nil, format: TrackLabel.format(subTypes: [0x6161_6320])),
+        ]
+        #expect(TrackLabel.names(audio) == [
+            "中文 · 国语 · DTS 5.1", "中文 · 粤语 · DTS 5.1", "中文 · AC-3", "中文 · AAC",
+        ])
+        #expect(TrackLabel.format(subTypes: [0x7478_3367]) == nil)
+    }
 }
