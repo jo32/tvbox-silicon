@@ -1042,7 +1042,11 @@ import IOKit.pwr_mgt
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
-        } catch { Diagnostics.shared.failure("player", "audio session", error); self.error = error.localizedDescription }
+        } catch {
+            // Not a reason to stop: the item plays on, its sound once the session can start (AVAudioSession '!pla'
+            // when another app holds it). As an error it hid a playing video behind the error screen.
+            Diagnostics.shared.failure("player", "audio session", error)
+        }
         #endif
         if !url.isFileURL {
             note(L10n.text("Connecting to %@", Self.server(CloudStreams.transfer(for: url)?.host ?? Remux.transfer(for: url)?.host ?? url.host())))
@@ -1369,6 +1373,8 @@ import IOKit.pwr_mgt
                 #endif
                 if paused { self.clearBoost(); self.saveHistory() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
+                // A queued episode the queue moved to plays under the picture already on screen.
+                if playing, self.showsPicture { self.countPlay(.started) }
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .milliseconds(350))
@@ -2034,8 +2040,10 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        // A queued next episode is a point video, never live.
+        // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
+        attempt = PlayAttempt(live: false, address: channel.url)
+        if upcoming.item.status == .readyToPlay, player.timeControlStatus == .playing { countPlay(.started) }
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)
