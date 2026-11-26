@@ -116,8 +116,21 @@ public final class CloudDriveBridge implements AutoCloseable {
             } catch (Exception error) {
                 // Never print request URLs, credentials, or upstream exception messages.
                 System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
-                try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
+                try { exchange.sendResponseHeaders(failureStatus(error), -1); } catch (IOException ignored) { }
             } finally { exchange.close(); }
+    }
+
+    /**
+     * What a failed proxy request answers the player: the source's own 4xx (an expired or refused link, which asking
+     * again won't change), 504 when it took too long, otherwise 502 (the player asks a 502, 503 or 504 once more).
+     */
+    static int failureStatus(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof HttpDiagnostics.SourceHTTPException source && source.status >= 400 && source.status < 500) return source.status;
+            if (cause instanceof HttpDiagnostics.RequestStopped || cause instanceof java.net.SocketTimeoutException) return 504;
+            if (cause.getCause() == cause) break;
+        }
+        return 502;
     }
 
     /** Apple can invalidate sockets while the app is suspended without destroying its JVM. */
@@ -338,7 +351,7 @@ public final class CloudDriveBridge implements AutoCloseable {
                     bridge.relay(exchange, "media", method);
                 } catch (Exception error) {
                     System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
-                    try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
+                    try { exchange.sendResponseHeaders(failureStatus(error), -1); } catch (IOException ignored) { }
                 } finally { exchange.close(); }
             });
             // The dispatcher thread inherits daemon status from its starter; this server lives for

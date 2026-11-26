@@ -320,6 +320,39 @@ import TVCore
             if (item.error as NSError?)?.code == -12312 { LiveRepair.noteContradiction(live.channel.url); print("noted contradiction") }
             return
         }
+        if args[1] == "--hls-play" || args[1] == "--hls-proxy", args.count > 2, let address = URL(string: args[2]) {
+            // --hls-play <url> [seconds]: plays an HLS stream as the player does on iPhone and Apple TV: directly, then once
+            // more through the local proxy after a failure it gets past. --hls-proxy goes through the proxy at once (Mac).
+            setvbuf(stdout, nil, _IONBF, 0)
+            let seconds = args.count > 3 ? Double(args[3]) ?? 30 : 30
+            func play(_ url: URL) async -> Error? {
+                let item = AVPlayerItem(url: url)
+                item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
+                let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
+                let started = Date()
+                while Date().timeIntervalSince(started) < seconds, item.status != .failed, player.currentTime().seconds < 6 {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                print("after=\(Int(Date().timeIntervalSince(started)))s status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map(Diagnostics.describe) ?? "-")")
+                for event in item.errorLog()?.events ?? [] { print("  log \(event.errorStatusCode) \(event.errorComment ?? "-")") }
+                let played = player.currentTime().seconds > 1
+                player.pause(); player.replaceCurrentItem(with: nil)
+                return item.status == .failed ? item.error : played ? nil : URLError(.timedOut)
+            }
+            if args[1] == "--hls-play" {
+                print("direct \(address.absoluteString)")
+                guard let failure = await play(address) else { print("RESULT played direct"); return }
+                guard HLSProxy.recovers(failure) else { print("RESULT failed direct; not a failure the proxy gets past"); return }
+            }
+            let proxy = HLSProxy(headers: [:])
+            let local = try await proxy.start(url: address)
+            print("proxy \(local.absoluteString)")
+            let failure = await play(local)
+            print("repairs \(await proxy.repairs)")
+            print(failure == nil ? "RESULT played through proxy" : "RESULT failed through proxy")
+            await proxy.stop()
+            return
+        }
         if args[1] == "--plugin-call", args.count > 3 {
             // --plugin-call <pluginId> <method> [JSON payload]: one call into an installed live plugin, its reply as JSON.
             setvbuf(stdout, nil, _IONBF, 0)
