@@ -139,6 +139,10 @@ struct PlayerEpisodesSheet: View {
                 }
                 grid(shownPage.map { Array(items[pages[$0]]) } ?? items, tiles: tiles, labels: catalog.labels, details: catalog.details, current: current?.id)
             }
+            // The lines or the page tabs run past the sheet's edges, and that made the scroll view's content
+            // wider than the sheet: SwiftUI centres content wider than the view, so the grid sat 16 points to
+            // the left (#2203). The frame keeps the content the sheet's width, as the video page's details do.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
         }
         // At the episode playing, as the page's All sheet opens (#1173): `scrollTo` from onAppear came before the lazy
