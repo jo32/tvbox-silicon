@@ -188,7 +188,10 @@ public struct MangaSourceInfo: Sendable {
     public func text(_ key: String) -> String { translation[key] ?? key }
 
     init(_ value: Any?) throws {
-        guard let item = value as? [String: Any], let key = MangaValue.string(item["key"]) else { throw TVError.unsupported(L10n.text("This is not a Venera comic source.")) }
+        // The key becomes a file name (`<key>.js`) and a profile folder, so a key carrying a
+        // path separator would write outside the sources folder on install.
+        guard let item = value as? [String: Any], let key = MangaValue.string(item["key"]), !key.isEmpty,
+              !key.contains("/"), key != ".", key != ".." else { throw TVError.unsupported(L10n.text("This is not a Venera comic source.")) }
         self.key = key
         name = MangaValue.string(item["name"]) ?? key
         version = MangaValue.string(item["version"]) ?? ""

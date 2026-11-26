@@ -71,6 +71,11 @@ import Testing
     #expect(TelegramSource.embedAddress("https://bit.ly/example") == "https://bit.ly/example")
 }
 
+@Test func telegramPreviewPageLoadsOlderPostsBeforeAnId() {
+    #expect(TelegramSource.previewURL(channel: "RMDJ33", before: nil).absoluteString == "https://t.me/s/RMDJ33")
+    #expect(TelegramSource.previewURL(channel: "RMDJ33", before: 1175).absoluteString == "https://t.me/s/RMDJ33?before=1175")
+}
+
 private let telegramPreview = """
 <div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="RMDJ33/1175">
 <div class="tgme_widget_message_user"><a href="https://t.me/RMDJ33"><i class="tgme_widget_message_user_photo"><img src="https://cdn.example.com/avatar.jpg"></i></a></div>

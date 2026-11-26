@@ -28,7 +28,11 @@ extension Subscription {
     /// it: type 3, with the script's address as its api. Nil when `data` is neither.
     static func singleSpider(_ data: Data, origin: URL) -> Subscription? {
         let runtime: SourceRuntime
-        if Site.sniffedRuntime(data) == .python { runtime = .python }
+        // A file named `.py` is a Python spider, whatever it imports: a script that declares a bare
+        // `class Spider:` never imports base.spider, so its content says nothing, but the host runs it all the
+        // same (#2156).
+        if origin.pathExtension.lowercased() == "py", !data.starts(with: Data("PK".utf8)) { runtime = .python }
+        else if Site.sniffedRuntime(data) == .python { runtime = .python }
         else if Site.isJavaScriptSpider(data) { runtime = .javascript }
         else { return nil }
         let file = origin.deletingPathExtension().lastPathComponent
