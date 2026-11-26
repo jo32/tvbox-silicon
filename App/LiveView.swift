@@ -326,6 +326,7 @@ private struct TVChannelGuide: View {
     @Environment(LiveGuide.self) private var guide: LiveGuide?
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedChannel: String?
+    @FocusState private var searchFocused: Bool
     @State private var lastFocusedChannel: String?
     @State private var showingSearch = false
     private var groups: [String] { Array(Set(channels.map(\.group))).sorted() }
@@ -342,7 +343,7 @@ private struct TVChannelGuide: View {
                 Button { showingSearch = true } label: {
                     Label(query.isEmpty ? L10n.text("Search channels") : query, systemImage: "magnifyingglass")
                         .lineLimit(1)
-                }.controlButton()
+                }.controlButton().focused($searchFocused)
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark") }
                         .controlButton().accessibilityLabel(L10n.text("Clear search"))
@@ -351,7 +352,10 @@ private struct TVChannelGuide: View {
                     .controlButton().accessibilityLabel(L10n.text("Program Guide"))
                 Button(action: reload) { Image(systemName: "arrow.clockwise") }
                     .controlButton().disabled(refreshing).accessibilityLabel(L10n.text("Refresh"))
-            }.tvFocusSection()
+            }
+            .tvFocusSection()
+            // Up from below comes back to Search, where Down left, rather than the end of the bar.
+            .defaultFocus($searchFocused, true, priority: .userInitiated)
 
             if let channel = highlighted {
                 HStack(alignment: .center, spacing: 48) {
@@ -369,7 +373,11 @@ private struct TVChannelGuide: View {
                     TVGuideLogo(channel: channel, size: 112)
                         .frame(width: 350, height: 198)
                         .background(TVStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-                }.frame(minHeight: 218)
+                }
+                .frame(minHeight: 218)
+                // The full width is one section, so Down from anywhere in the top bar reaches Replay Programs (at the
+                // left, it was out of line with the search button) before the groups, and Up from the groups returns.
+                .tvFocusSection()
             }
 
             if !channels.isEmpty {
