@@ -49,6 +49,8 @@ import TVCore
                 #if os(macOS)
                 // History is written in the background; quitting waits for the last position to reach the disk.
                 .onAppear { [store] in PlaybackHistoryLifecycle.saveOnTermination { store.playbackHistory } }
+                // The main window comes back the size and place it was left at (#1060).
+                .background { MacWindowFrameAutosave() }
                 #endif
                 .task { await ErrorReports.shared.start() }
                 .task {
