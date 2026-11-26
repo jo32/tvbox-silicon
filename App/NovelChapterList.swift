@@ -236,53 +236,92 @@ struct NovelChapterList: View {
 
     private var listBody: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if query.isEmpty { header(proxy) }
-                    let shown = shown
-                    if shown.isEmpty, !query.isEmpty {
-                        ContentUnavailableView.search(text: query).padding(.top, 40)
-                    }
-                    ForEach(shown) { section in
-                        if let title = section.title { volume(title) }
-                        ForEach(section.rows) { row in
-                            Button { open(row.index) } label: { label(row) }
-                                .novelChapterButton()
-                                .id(row.index)
-                        }
-                    }
-                }
-                .padding(.horizontal, Layout.gutter)
-                .padding(.bottom, 30)
-                .frame(maxWidth: 820).frame(maxWidth: .infinity)
-                #if os(iOS)
-                .modifier(NovelContentFrameProbe())
-                #endif
+            #if os(macOS)
+            // Inline search instead of .searchable: in the reader's sheet on macOS 15, .searchable inside a
+            // NavigationStack sheet triggered an AppKit constraint-update loop (#2138, #2331).
+            VStack(spacing: 0) {
+                macSearchBar
+                    .padding(.horizontal, Layout.gutter)
+                    .padding(.top, 4).padding(.bottom, 8)
+                chapterScroll(proxy)
             }
-            .catalogSearchable(text: $query, prompt: L10n.text("Search Chapters"))
-            #if os(iOS)
-            .modifier(NovelScrollTracking(scroll: scroll))
-            // The handle is the list's scroll bar: with the system's as well there were two (#1927).
-            .scrollIndicators(count >= NovelChapterScrubber.minimumRows ? .hidden : .automatic)
-            .overlay(alignment: .trailing) {
-                if count >= NovelChapterScrubber.minimumRows {
-                    NovelChapterScrubber(rows: shown.flatMap(\.rows), scroll: scroll, colors: colors) { index in
-                        proxy.scrollTo(index, anchor: .top)
-                    }
-                }
-            }
+            #else
+            chapterScroll(proxy)
             #endif
-            .task(id: chapters.count) {
-                sections = NovelChapterNumbers.sections(chapters)
-                longestNumber = NovelChapterNumbers.longestNumber(sections)
-                guard !scrolled, let current else { return }
-                scrolled = true
-                await Task.yield()
-                proxy.scrollTo(current, anchor: .center)
-            }
         }
         .foregroundStyle(colors.text)
     }
+
+    private func chapterScroll(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if query.isEmpty { header(proxy) }
+                let shown = shown
+                if shown.isEmpty, !query.isEmpty {
+                    ContentUnavailableView.search(text: query).padding(.top, 40)
+                }
+                ForEach(shown) { section in
+                    if let title = section.title { volume(title) }
+                    ForEach(section.rows) { row in
+                        Button { open(row.index) } label: { label(row) }
+                            .novelChapterButton()
+                            .id(row.index)
+                    }
+                }
+            }
+            .padding(.horizontal, Layout.gutter)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 820).frame(maxWidth: .infinity)
+            #if os(iOS)
+            .modifier(NovelContentFrameProbe())
+            #endif
+        }
+        #if !os(macOS)
+        .catalogSearchable(text: $query, prompt: L10n.text("Search Chapters"))
+        #endif
+        #if os(iOS)
+        .modifier(NovelScrollTracking(scroll: scroll))
+        // The handle is the list's scroll bar: with the system's as well there were two (#1927).
+        .scrollIndicators(count >= NovelChapterScrubber.minimumRows ? .hidden : .automatic)
+        .overlay(alignment: .trailing) {
+            if count >= NovelChapterScrubber.minimumRows {
+                NovelChapterScrubber(rows: shown.flatMap(\.rows), scroll: scroll, colors: colors) { index in
+                    proxy.scrollTo(index, anchor: .top)
+                }
+            }
+        }
+        #endif
+        .task(id: chapters.count) {
+            sections = NovelChapterNumbers.sections(chapters)
+            longestNumber = NovelChapterNumbers.longestNumber(sections)
+            guard !scrolled, let current else { return }
+            scrolled = true
+            await Task.yield()
+            proxy.scrollTo(current, anchor: .center)
+        }
+    }
+
+    #if os(macOS)
+    private var macSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.subheadline)
+                .foregroundStyle(colors.text.opacity(0.5))
+            TextField(L10n.text("Search Chapters"), text: $query)
+                .textFieldStyle(.plain)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(colors.text.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("Clear"))
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .background(colors.text.opacity(0.07), in: Capsule())
+    }
+    #endif
 
     // MARK: Parts
 
