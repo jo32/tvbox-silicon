@@ -627,12 +627,15 @@ import IOKit.pwr_mgt
     /// application/octet-stream without an extension (drives' object storage, plugins' proxies), an MKV, FLV, AVI or
     /// MPEG-PS behind a name or type that says nothing or MP4, a DASH manifest. Its first bytes say what it is
     /// (`ContainerRescue`): AVPlayer is told the container, a manifest plays as HLS, FFmpeg repackages the rest. Twice at
-    /// most: told the container, then repackaged. A web page says it is one instead of failing as a player error.
-    private func retryUnopened(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+    /// most: told the container, then repackaged. A web page says it is one instead of failing as a player error; when
+    /// the bytes show nothing to try (a refused status, an image), the failure goes on through the rest of the chain
+    /// (`otherwise`: the loopback, drop, live and line recoveries).
+    private func retryUnopened(after failure: Error?, channel: Channel, url: URL, generation active: UUID,
+                               otherwise rest: @escaping @MainActor () -> Void) -> Bool {
         guard rescues < 2, ContainerRescue.refusedContainer(failure), ContainerRescue.handles(url) else { return false }
         rescues += 1
         let hinted = MediaTypeHint.mimeType(for: url) != nil, renewal = renewal(for: channel, length: nil, name: url.lastPathComponent)
-        detachItem(); observation = nil; loading = true
+        observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "unopened; reading its first bytes host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
         preparation = Task { [weak self] in
             let plan = await ContainerRescue.plan(for: url, headers: channel.headers, hinted: hinted, renewal: renewal)
@@ -657,13 +660,8 @@ import IOKit.pwr_mgt
                 return
             case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
             }
-            guard let next else {
-                Diagnostics.shared.record(.error, "player", "failed host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: nil))")
-                if self.tryNextLine(after: failure) { return }
-                self.loading = false; self.errorSymbol = "play.slash.fill"
-                self.error = failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
-                return
-            }
+            guard let next else { return rest() }
+            self.detachItem()
             self.configure(channel, url: next, generation: active)
             if next != url { self.externalSubtitles.playing(next); self.automatic = next }
         }
@@ -1357,19 +1355,24 @@ import IOKit.pwr_mgt
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.retryUnopened(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
-                    if self.retryLive(after: failure) { return }
-                    if self.tryNextLine(after: failure) { return }
-                    // A refused link is usually an expired one: say so in plain words rather than the system's.
-                    let expired = refused || [401, 403, 404, 410].contains(self.transfer.httpStatus ?? 0)
-                    self.loading = false
-                    self.errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
-                    self.error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
-                        : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
-                        : message ?? L10n.text("This media cannot be played. Try another channel or source.")
+                    // The rest of the chain; a link the container rescue finds nothing for comes back here.
+                    let rest: @MainActor () -> Void = { [weak self] in
+                        guard let self, self.generation == activeGeneration else { return }
+                        if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                        if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
+                        Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
+                        if self.retryLive(after: failure) { return }
+                        if self.tryNextLine(after: failure) { return }
+                        // A refused link is usually an expired one: say so in plain words rather than the system's.
+                        let expired = refused || [401, 403, 404, 410].contains(self.transfer.httpStatus ?? 0)
+                        self.loading = false
+                        self.errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
+                        self.error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
+                            : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
+                            : message ?? L10n.text("This media cannot be played. Try another channel or source.")
+                    }
+                    if self.retryUnopened(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: rest) { return }
+                    rest()
                 }
             }
         }

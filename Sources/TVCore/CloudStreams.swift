@@ -713,8 +713,11 @@ actor CloudByteStream {
                 return playable
             } catch let error as URLError where error.code != .cancelled && (attempt < 3 || TransientRetry.isTransient(error)) {
                 // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
-                // listens again on a new port: ask where (#485).
-                if error.code == .cannotConnectToHost, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""), await renew() { continue }
+                // listens again on a new port: ask where (#485). Only a new address is tried at once, and only in the
+                // first three tries: a refresh shared with other chunks answers its earlier outcome for a while, and
+                // a proxy that refuses on its new port too waits like any other dropped connection.
+                if error.code == .cannotConnectToHost, attempt < 3, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""),
+                   await renew(), source.url != current.url { continue }
                 guard let wait = transient.next() else { throw error }
                 Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue) kept=\(received()) in \(wait) s")
                 try await Task.sleep(for: .seconds(wait))

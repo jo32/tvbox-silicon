@@ -240,6 +240,22 @@ final class FlakyServer: URLProtocol, @unchecked Sendable {
         await stream.clear()
     }
 
+    /// A loopback proxy that moved and refuses on its new port too: the new port is tried once at once, then the read
+    /// waits like any dropped connection and gives up, instead of retrying on the shared refresh's outcome for 10 s.
+    @Test func aProxyRefusingOnItsNewPortIsNotRetriedInALoop() async throws {
+        let size = CloudByteStream.chunkSize
+        let refreshes = Counter()
+        let moved = CloudStreams.Source(url: URL(string: "http://127.0.0.1:2/proxy?id=1")!, headers: [:], length: size, name: "a.mkv")
+        let stream = CloudByteStream(source: .init(url: URL(string: "http://127.0.0.1:1/proxy?id=1")!, headers: [:], length: size, name: "a.mkv"),
+                                     session: FlakyServer.session, parallel: 1, rewritesSampleEntries: false,
+                                     refresh: { refreshes.add(); return moved })
+        let began = Date()
+        await #expect(throws: URLError.self) { _ = try await stream.read(at: 0, count: 16) }
+        #expect(Date().timeIntervalSince(began) < 5)
+        #expect(refreshes.value == 1)
+        await stream.clear()
+    }
+
     /// A gateway's 502s are tried again a little later instead of failing the read.
     @Test func aPassingGatewayErrorIsTriedAgain() async throws {
         let size = CloudByteStream.chunkSize + 100
