@@ -165,10 +165,11 @@ import TVCore
     @ObservationIgnored private var orderedCache: [Site]?
     @ObservationIgnored private var recommendationCache: [Site]?
     @ObservationIgnored private var groupsCache: [Bool: [SourceGroup]] = [:]
-    /// What the cached rows were built from: the merged subscription, which subscriptions are on, and the viewer's pins, hides, and order.
+    /// What the cached rows were built from: the merged subscription, which subscriptions are on and what they are
+    /// named (renaming one must refresh the source group's title, #2255), and the viewer's pins, hides, and order.
     private func currentSiteListStamp() -> String {
         let imported = subscription?.importedAt.timeIntervalSince1970 ?? 0
-        let entries = subscriptions.map { "\($0.address)=\($0.enabled)" }.joined(separator: "\n")
+        let entries = subscriptions.map { "\($0.address)=\($0.enabled)=\($0.name)" }.joined(separator: "\n")
         return "\(subscription?.origin.absoluteString ?? "")|\(imported)|\(subscription?.sites.count ?? 0)|\(entries)|\(pinnedSources.revision)|\(hiddenSources.revision)|\(sourceOrder.revision)"
     }
     private var persistsChanges: Bool { !Self.isolated(baseDefaults) }
