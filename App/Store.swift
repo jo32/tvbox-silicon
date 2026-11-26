@@ -467,7 +467,7 @@ import TVCore
             throw TVError.unsupported(L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue."))
         }
         let resolved = try await client.playback(source.episode)
-        return Channel(name: "\(context.videoName) · \(context.episodeName)", group: resolved.group, url: resolved.url, logo: resolved.logo,
+        return Channel(name: context.displayName, group: resolved.group, url: resolved.url, logo: resolved.logo,
                        headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
     }
 
@@ -1009,7 +1009,7 @@ import TVCore
     private func episodeChannel(_ resolved: Channel, video: Video, episode: Episode, client: CatalogClient,
                                 resumePosition: Double? = nil) -> Channel {
         let context = PlaybackHistoryContext(origin: client.origin, site: client.site, video: video, episode: episode)
-        return Channel(name: "\(video.name) · \(episode.name)", group: resolved.group, url: resolved.url,
+        return Channel(name: context.displayName, group: resolved.group, url: resolved.url,
                        logo: resolved.logo, headers: resolved.headers, skipScope: context.id,
                        historyContext: context, resumePosition: resumePosition, subtitles: resolved.subtitles, skips: resolved.skips,
                        bilibiliPart: client.site.isBilibili ? BilibiliAPI.Part(address: episode.address) : nil)
