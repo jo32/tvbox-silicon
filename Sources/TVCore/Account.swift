@@ -39,8 +39,13 @@ public struct Account: Codable, Sendable, Equatable {
             public var id: Int { number }
         }
         public var sent: Int
+        /// Reported bugs the developer fixed. Optional: accounts saved before the app read it have none.
+        public var fixed: Int?
+        /// Suggested ideas the developer adopted; fixed bugs are counted in `fixed`.
         public var adopted: Int
         public var declined: Int
+        /// Both kinds of feedback that were used, as the points page's Feedback Adopted counts them.
+        public var used: Int { (fixed ?? 0) + adopted }
         public var points: Int
         /// Pro days each adopted message gives; 0 when adopting gives none.
         public var rewardDays: Int
