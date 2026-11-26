@@ -11,6 +11,7 @@ import BackgroundTasks
 struct DownloadsView: View {
     @Environment(Store.self) private var store
     @State private var action: CachedShowAction?
+    @State private var confirmsDeleteAll = false
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
     /// How the downloaded shows are listed, and 倒序 (#653): the other way round.
@@ -127,6 +128,11 @@ struct DownloadsView: View {
             .menuStyle(.button).buttonStyle(.borderless).fixedSize()
             .help(L10n.text("Sort By"))
             ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+            Button(role: .destructive) { confirmsDeleteAll = true } label: {
+                Text(L10n.text("Delete All")).lineLimit(1).fixedSize()
+            }
+            .buttonStyle(.borderless).fixedSize()
+            .accessibilityIdentifier("downloads.deleteAll")
             #else
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
@@ -141,10 +147,20 @@ struct DownloadsView: View {
                     .accessibilityLabel(L10n.text("Sort By"))
                     // Filled while the list runs the other way round.
                     ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+                    Button(role: .destructive) { confirmsDeleteAll = true } label: {
+                        FittingLabel(title: L10n.text("Delete All"), symbol: "trash")
+                    }
+                    .controlButton()
+                    .accessibilityIdentifier("downloads.deleteAll")
                 }
             }
             .environment(\.glassControls, true)
             #endif
+        }
+        // One tap clears the whole offline cache, so it confirms first. As on the songs page, it also
+        // takes the downloads still on their way.
+        .confirmationDialog(L10n.text("Delete all cached videos?"), isPresented: $confirmsDeleteAll, titleVisibility: .visible) {
+            Button(L10n.text("Delete Cached Items"), role: .destructive) { library.remove(library.items.map(\.id)) }
         }
     }
 
