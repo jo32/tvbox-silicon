@@ -8,6 +8,7 @@ checks exercise plain XML/JSON over real loopback HTTP, not gzip inflation.
 import http.server
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import threading
@@ -87,7 +88,14 @@ enum WebAddress { static func resolve(_ text: String, relativeTo url: URL?) thro
     (root / 'Tests/TVCoreTests/ProgramGuideRequestTests.swift').symlink_to(ROOT / 'Tests/TVCoreTests/ProgramGuideRequestTests.swift')
     source = (ROOT / 'App/LiveGuide.swift').read_text()
     controller = source[source.index('@MainActor @Observable final class LiveGuide'):source.index('\n/// Redraws a programme line')]
-    (root / 'Tests/TVCoreTests/LiveGuideUnderTest.swift').write_text('import SwiftUI\nimport TVCore\n@MainActor @Observable final class Store { var guideAddresses: [String: String] = [:] }\n' + controller)
+    row_ids = re.findall(r'\.task\(id: (.+?)\) \{ await guide\?\.fetch\(channel\) \}', source)
+    if len(row_ids) != 2:
+        raise RuntimeError("Expected task identities for both guide rows")
+    rows = 'enum GuideRowFixture {\n' + ''.join(
+        f'@MainActor static func {row}(guide: LiveGuide?, channel: Channel) -> AnyHashable {{ {key} }}\n'
+        for row, key in zip(('now', 'next'), row_ids)
+    ) + '}\n'
+    (root / 'Tests/TVCoreTests/LiveGuideUnderTest.swift').write_text('import SwiftUI\nimport TVCore\n@MainActor @Observable final class Store { var guideAddresses: [String: String] = [:] }\n' + controller + rows)
     (root / 'Tests/TVCoreTests/LiveGuideRequest.swift').symlink_to(ROOT / 'Tests/TVCoreTests/Fixtures/LiveGuideRequest.swift')
     env = dict(os.environ, GUIDE_HTTP_FIXTURE=f'http://127.0.0.1:{server.server_port}')
     subprocess.run(['swift', 'test', '--package-path', str(root)], check=True, env=env)

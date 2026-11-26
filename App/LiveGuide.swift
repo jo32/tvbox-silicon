@@ -9,6 +9,16 @@ import TVCore
     private(set) var guide: ProgramGuide?
     private(set) var perChannel: [String: [Programme]] = [:]
     @ObservationIgnored private var asked: [String: Date] = [:]
+    private let rowOwner = UUID()
+
+    struct RowRequestID: Hashable {
+        let owner: UUID
+        let name: String
+    }
+
+    func rowRequestID(for channel: Channel) -> RowRequestID {
+        RowRequestID(owner: rowOwner, name: channel.name)
+    }
 
     init(address: GuideAddress, context: GuideRequestContext = .init()) { self.address = address; self.context = context }
 
@@ -77,7 +87,7 @@ struct NowOnText: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: guide?.rowRequestID(for: channel)) { await guide?.fetch(channel) }
     }
 }
 
@@ -103,7 +113,7 @@ struct NowAndNext: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: guide?.rowRequestID(for: channel)) { await guide?.fetch(channel) }
     }
 
     private func line(_ label: String, _ programme: Programme, emphasis: Bool) -> some View {
