@@ -306,6 +306,8 @@ import IOKit.pwr_mgt
     private var liveReopen = LiveReopen()
     private var liveReadyAt: ContinuousClock.Instant?
     private var liveRetrying = false
+    private var liveMaintenance: Task<Void, Never>?
+    private var liveResolution = UUID()
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
@@ -410,13 +412,26 @@ import IOKit.pwr_mgt
         if LiveCatalog.isRoom(url) {
             // A live quality is another stream address, fetched now; live has no position to keep.
             let active = generation
+            let request = UUID(); liveResolution = request
+            liveMaintenance?.cancel(); liveMaintenance = nil
+            let previousItem = player.currentItem
             Task {
+                defer {
+                    if self.generation == active, self.liveResolution == request,
+                       self.player.currentItem === previousItem, let previousItem {
+                        self.maintainLivePlaylist(previousItem, generation: active)
+                    }
+                }
                 guard let resolved = try? await LiveCatalog.resolve(Channel(name: channel.name, group: channel.group, url: url, logo: channel.logo)),
-                      self.generation == active else { return }
+                      self.generation == active, self.liveResolution == request else { return }
+                guard let prepared = try? await self.prepare(resolved.channel) else { return }
+                guard self.generation == active, self.liveResolution == request, !Task.isCancelled else { return Self.stopAdapter(prepared) }
                 self.detachItem()
+                self.useAdapter(prepared.adapter)
                 self.quality = resolved.current ?? quality
                 self.liveRoom = Channel(name: channel.name, group: channel.group, url: url, logo: channel.logo)
-                self.configure(resolved.channel, url: resolved.channel.url, generation: active)
+                self.configure(resolved.channel, url: prepared.url, generation: active)
+                self.automatic = prepared.url; self.playing = resolved.channel
             }
             return
         }
@@ -434,6 +449,50 @@ import IOKit.pwr_mgt
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
         sampler?.cancel(); sampler = nil
+        liveMaintenance?.cancel(); liveMaintenance = nil
+    }
+
+    /// Maintenance only changes the proxy's next root request. Failure here is
+    /// not a playback failure: the existing recovery path still owns retries.
+    private func maintainLivePlaylist(_ item: AVPlayerItem, generation active: UUID) {
+        liveMaintenance?.cancel()
+        guard isLive, liveRoom != nil, let adapter = proxy else { return }
+        liveMaintenance = Task { [weak self, weak item] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                guard let self, let item, self.generation == active, self.player.currentItem === item,
+                      self.proxy === adapter, let room = self.liveRoom else { return }
+                let resolution = self.liveResolution
+                guard !self.liveRetrying, !self.paused, self.error == nil,
+                      item.status == .readyToPlay, self.player.timeControlStatus == .playing,
+                      let expected = await adapter.renewableRoot() else { continue }
+                let selected = self.quality
+                var components = URLComponents(url: room.url, resolvingAgainstBaseURL: false)
+                var query = (components?.queryItems ?? []).filter { $0.name != "q" }
+                if let selected { query.append(URLQueryItem(name: "q", value: String(selected))) }
+                components?.queryItems = query
+                let request = Channel(name: room.name, group: room.group, url: components?.url ?? room.url, logo: room.logo)
+                do {
+                    let resolved = try await LiveCatalog.resolve(request)
+                    guard !Task.isCancelled, self.generation == active, self.player.currentItem === item,
+                          self.proxy === adapter, self.liveRoom?.url == room.url, self.quality == selected,
+                          self.liveResolution == resolution,
+                          !self.liveRetrying, self.error == nil,
+                          selected == nil || resolved.current == selected else { continue }
+                    let upstream = LiveRepair.sourceURL(for: resolved.channel.url) ?? resolved.channel.url
+                    let renewed = await adapter.renew(expected: expected, to: .init(url: upstream, headers: resolved.channel.headers))
+                    guard renewed, !Task.isCancelled, self.generation == active, self.player.currentItem === item,
+                          self.proxy === adapter, self.liveRoom?.url == room.url, self.quality == selected,
+                          self.liveResolution == resolution else { continue }
+                    self.playing = resolved.channel
+                } catch { /* Keep the healthy item, buffer, transport intent and existing root. */ }
+            }
+        }
+    }
+
+    private func useAdapter(_ adapter: HLSProxy?) {
+        if proxy !== adapter, let previous = proxy { Task { await previous.stop() } }
+        proxy = adapter
     }
 
     /// A live room that stopped asks its platform for a fresh address and plays on, instead of waiting for the viewer
@@ -449,16 +508,21 @@ import IOKit.pwr_mgt
         }
         detachItem(); observation = nil
         let active = generation
+        let resolution = UUID(); liveResolution = resolution
         Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString) played=\(played.map { "\(Int($0.components.seconds))s" } ?? "-")")
         note(L10n.text("The connection dropped. Reconnecting"))
         Task {
             do {
                 let resolved = try await LiveCatalog.resolve(room)
-                guard self.generation == active else { return }
+                guard self.generation == active, self.liveResolution == resolution else { return }
+                let prepared = try await self.prepare(resolved.channel)
+                guard self.generation == active, self.liveResolution == resolution, !Task.isCancelled else { return Self.stopAdapter(prepared) }
                 self.liveRetrying = false
-                self.configure(resolved.channel, url: resolved.channel.url, generation: active)
+                self.useAdapter(prepared.adapter)
+                self.configure(resolved.channel, url: prepared.url, generation: active)
+                self.automatic = prepared.url; self.playing = resolved.channel
             } catch {
-                guard self.generation == active else { return }
+                guard self.generation == active, self.liveResolution == resolution else { return }
                 self.liveRetrying = false
                 self.error = error.localizedDescription; self.loading = false
             }
@@ -580,6 +644,7 @@ import IOKit.pwr_mgt
                 self.error = error.localizedDescription; self.loading = false; return
             }
             guard self.generation == active, !Task.isCancelled, !prepared.matroska else { return Self.stopAdapter(prepared) }
+            self.useAdapter(prepared.adapter)
             self.configure(channel, url: prepared.url, generation: active)
             self.automatic = prepared.url
         }
@@ -912,9 +977,7 @@ import IOKit.pwr_mgt
     private var observation: NSKeyValueObservation?
     private var failureObserver: NSObjectProtocol?
     private var preparation: Task<Void, Never>?
-    #if os(macOS)
     private var proxy: HLSProxy?
-    #endif
     /// The session on screen, which casts from the Bilibili app control.
     static weak var current: PlaybackSession?
     func start(_ channel: Channel) {
@@ -995,9 +1058,7 @@ import IOKit.pwr_mgt
                 self.error = error.localizedDescription; self.loading = false; return
             }
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
-            #if os(macOS)
-            self.proxy = prepared.adapter
-            #endif
+            self.useAdapter(prepared.adapter)
             // Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: say so now, or
             // switch to the drive's transcoded line, instead of letting AVPlayer fail with a vague error.
             if prepared.matroska {
@@ -1049,9 +1110,10 @@ import IOKit.pwr_mgt
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
         // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
-        player.allowsExternalPlayback = !Remux.isRemuxed(url)
+        player.allowsExternalPlayback = !Remux.isRemuxed(url) && proxy == nil
         player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
+        maintainLivePlaylist(item, generation: activeGeneration)
         #if DEBUG
         // `-qaSpeed <rate>` plays at that speed, as picking it in the speed menu does.
         let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
@@ -1404,11 +1466,9 @@ import IOKit.pwr_mgt
         // A resource-loader stream's bytes never reach the access log.
         let cloud = automatic.flatMap { CloudStreams.transfer(for: $0) ?? Remux.transfer(for: $0) }
         if let cloud { next.received = max(next.received, cloud.received) }
-        #if os(macOS)
         // HLS goes through the local proxy, which sees upstream bytes as they arrive.
         let upstream = proxy?.stats.snapshot
         if let upstream { next.received = max(next.received, upstream.received) }
-        #endif
         history.append((now, next.received))
         history.removeAll { now.timeIntervalSince($0.date) > 5 }
         if let first = history.first, now.timeIntervalSince(first.date) >= 1 {
@@ -1424,16 +1484,14 @@ import IOKit.pwr_mgt
             let current = media > 0 && media.isFinite ? media / 8 : (indicated > 0 && indicated.isFinite ? indicated / 8 : nil)
             next.required = [current, transfer.required].compactMap { $0 }.min()
         }
-        // The Mac plays HLS through a local proxy; name the real server instead.
+        // A local HLS adapter stands for the real server.
         let segmentHost = events.last?.uri.flatMap { URL(string: $0)?.host() }
         next.host = segmentHost.flatMap { ["127.0.0.1", "localhost"].contains($0) ? nil : $0 } ?? cloud?.host ?? origin
-        #if os(macOS)
         if let upstream {
             next.host = upstream.host ?? next.host
             next.httpStatus = upstream.status.flatMap { (400..<600).contains($0) ? $0 : nil }
             next.failure = upstream.failure ?? upstream.status.map { "HTTP \($0)" }
         }
-        #endif
         if next.failure == nil, let error = item.errorLog()?.events.last, let date = error.date, now.timeIntervalSince(date) < 30 {
             // The loopback server behind the episode stopped listening: AVPlayer would keep trying it for 30 s.
             if error.errorDomain == NSURLErrorDomain,
@@ -1539,14 +1597,14 @@ import IOKit.pwr_mgt
             Diagnostics.shared.record(.info, "player", "stop at=\(seconds.isFinite ? Int(seconds) : -1)s")
         }
         generation = UUID()
+        liveResolution = UUID()
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
+        liveMaintenance?.cancel(); liveMaintenance = nil
         transfer = Transfer(); steps = []
-        #if os(macOS)
         if let proxy { Task { await proxy.stop() } }; proxy = nil
-        #endif
         observation = nil
         timeObservation = nil
         muteObservation = nil
@@ -1694,9 +1752,7 @@ extension PlaybackSession {
         var matroska = false
         /// Every byte passes through the plugin runtime.
         var pluginProxy = false
-        #if os(macOS)
         var adapter: HLSProxy?
-        #endif
     }
 
     fileprivate func prepare(_ channel: Channel) async throws -> Prepared {
@@ -1823,19 +1879,26 @@ extension PlaybackSession {
                 return prepared
             }
         }
+        let root = LiveRepair.sourceURL(for: address) ?? address
+        let liveHLS = liveRoom != nil && root.pathExtension.lowercased() == "m3u8" && ["http", "https"].contains(root.scheme)
         #if os(macOS)
-        if address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme), channel.url.scheme != DownloadLibrary.scheme {
-            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 })
-            do { prepared.url = try await adapter.start(url: address) }
+        let usesProxy = liveHLS || address.pathExtension.lowercased() == "m3u8" && ["http", "https"].contains(address.scheme) && channel.url.scheme != DownloadLibrary.scheme
+        #else
+        let usesProxy = liveHLS
+        #endif
+        if usesProxy {
+            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: root) ?? [:]) { $1 },
+                                   renewableLive: liveHLS, repairsDiscontinuities: address.scheme == LiveRepair.scheme)
+            do { prepared.url = try await adapter.start(url: root) }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.record(.error, "player", "proxy failed host=\(channel.url.host() ?? "-") \(Self.describe(error))") }
                 throw error
             }
             prepared.adapter = adapter
         }
-        #else
+        #if !os(macOS)
         // A video whose playlist carries spliced-in ads opens through the loader that cuts them (#567); any other plays as it is.
-        if prepared.url == address, address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme),
+        if !usesProxy, prepared.url == address, address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme),
            channel.url.scheme != DownloadLibrary.scheme,
            let routed = await AdSkip.route(address, headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 }) {
             prepared.url = routed
@@ -1885,9 +1948,7 @@ extension PlaybackSession {
     /// The local HLS adapter, or repackager, of a stream that won't play after all.
     fileprivate static func stopAdapter(_ prepared: Prepared) {
         Remux.stop(prepared.url)
-        #if os(macOS)
         if let adapter = prepared.adapter { Task { await adapter.stop() } }
-        #endif
     }
 }
 
@@ -2003,10 +2064,8 @@ extension PlaybackSession {
         // Let go of the finished episode's stream; the queued one's becomes the session's.
         if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
-        #if os(macOS)
         if let proxy { Task { await proxy.stop() } }
         proxy = upcoming.prepared.adapter
-        #endif
         detachItem(); observation = nil
         upcomingObservation = nil; upcomingTask = nil; self.upcoming = nil
         player.actionAtItemEnd = .pause

@@ -36,6 +36,16 @@ public enum LiveRepair {
         return components.url
     }
 
+    /// The source behind the repair route, for a playback-owned HTTP adapter.
+    public static func sourceURL(for url: URL) -> URL? { upstream(url) }
+
+    /// Keep the existing repair and sequence-address policy when a live input
+    /// uses a private HTTP adapter. Masters are routed by that adapter itself.
+    public static func repairedMediaPlaylist(_ text: String, origin: URL, identity: String) -> String {
+        guard !text.contains("#EXT-X-STREAM-INF") else { return text }
+        return steady(rewrite(text, origin: origin), playlist: identity)
+    }
+
     /// An asset for an address from `address`, or nil for any other address.
     public static func asset(for url: URL) -> AVURLAsset? {
         guard url.scheme == scheme || url.scheme == adScheme else { return nil }

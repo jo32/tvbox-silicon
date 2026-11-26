@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 import Network
 import TVCore
@@ -23,16 +22,26 @@ actor HLSProxy {
     nonisolated let stats = Stats()
     private let token = UUID().uuidString
     private let headers: [String: String]
+    private let renewableLive: Bool
+    private let repairsDiscontinuities: Bool
+    private let session: URLSession
     private let queue = DispatchQueue(label: "tvbox.hls")
     private var listener: NWListener?
-    private var routes: [String: URL] = [:]
+    private var routes: [String: LiveHLSRenewal.Endpoint] = [:]
     /// The key each upstream URL was given. A live playlist is fetched again every few seconds and
     /// must name its segments the same way each time; fresh names make AVPlayer fail (-12312).
     private var keys: [URL: String] = [:]
     private var base: URL?
     private var startup: CheckedContinuation<URL, Error>?
     private var firstURL: URL?
-    init(headers: [String: String]) { self.headers = headers }
+    private var rootKey: String?
+    private var rootIsDirectLive = false
+    private var generation = UUID()
+    private var renewal: UUID?
+    init(headers: [String: String], renewableLive: Bool = false, repairsDiscontinuities: Bool = false, session: URLSession = .shared) {
+        self.headers = headers; self.renewableLive = renewableLive
+        self.repairsDiscontinuities = repairsDiscontinuities; self.session = session
+    }
 
     func start(url: URL) async throws -> URL {
         firstURL = url
@@ -57,18 +66,55 @@ actor HLSProxy {
             guard let port = listener?.port, let firstURL else { return }
             base = URL(string: "http://127.0.0.1:\(port.rawValue)/\(token)/")!
             startup = nil
-            continuation.resume(returning: register(firstURL, playlist: true))
+            let root = register(firstURL, playlist: true)
+            rootKey = root.lastPathComponent
+            continuation.resume(returning: root)
         case .failed(let error): startup = nil; continuation.resume(throwing: error)
         case .cancelled: startup = nil; continuation.resume(throwing: CancellationError())
         default: break
         }
     }
-    func stop() { listener?.cancel(); listener = nil; routes.removeAll(); keys.removeAll() }
-    private func register(_ url: URL, playlist: Bool = false) -> URL {
-        if let key = keys[url] { return base!.appendingPathComponent(key) }
+    func stop() {
+        generation = UUID(); rootIsDirectLive = false; renewal = nil
+        listener?.cancel(); listener = nil; routes.removeAll(); keys.removeAll()
+    }
+    func renewableRoot() -> LiveHLSRenewal.Endpoint? {
+        guard renewableLive, rootIsDirectLive, listener != nil, let rootKey else { return nil }
+        return routes[rootKey]
+    }
+    /// Probe first, then change only the next root request. Each acquired segment
+    /// already captured its endpoint and headers, and its route remains valid.
+    func renew(expected: LiveHLSRenewal.Endpoint, to fresh: LiveHLSRenewal.Endpoint) async -> Bool {
+        guard renewableRoot() == expected, renewal == nil, LiveHLSRenewal.compatible(expected.url, fresh.url) else { return false }
+        let owner = generation, operation = UUID(); renewal = operation
+        defer { if renewal == operation { renewal = nil } }
+        do {
+            var request = URLRequest(url: fresh.url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+            fresh.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+            let (stream, reply) = try await session.bytes(for: request)
+            guard let response = reply as? HTTPURLResponse, (200..<300).contains(response.statusCode),
+                  LiveHLSRenewal.compatible(fresh.url, response.url ?? fresh.url) else { return false }
+            var data = Data()
+            for try await byte in stream {
+                guard data.count < 4 << 20 else { return false }
+                data.append(byte)
+            }
+            try Task.checkCancellation()
+            guard owner == generation, renewal == operation, renewableRoot() == expected,
+                  let text = String(data: data, encoding: .utf8), LiveHLSRenewal.directMedia(text), let rootKey else { return false }
+            routes[rootKey] = fresh
+            keys.removeValue(forKey: expected.url); keys[fresh.url] = rootKey
+            return true
+        } catch { return false }
+    }
+    private func register(_ url: URL, playlist: Bool = false, headers scopedHeaders: [String: String]? = nil) -> URL {
+        let endpoint = LiveHLSRenewal.Endpoint(url: url, headers: scopedHeaders ?? headers)
+        if let key = keys[url] {
+            return base!.appendingPathComponent(key)
+        }
         let extensionName = playlist || url.pathExtension.lowercased() == "m3u8" ? "m3u8" : "ts"
         let key = UUID().uuidString + "." + extensionName
-        routes[key] = url
+        routes[key] = endpoint
         keys[url] = key
         return base!.appendingPathComponent(key)
     }
@@ -91,11 +137,12 @@ actor HLSProxy {
         guard fields.count >= 2, fields[0] == "GET" || fields[0] == "HEAD" else { send(connection, code: 405, data: Data()); return }
         let path = String(fields[1]).components(separatedBy: "?")[0]
         let parts = path.split(separator: "/")
-        guard parts.count == 2, parts[0] == token, let url = routes[String(parts[1])] else { send(connection, code: 404, data: Data()); return }
+        guard parts.count == 2, parts[0] == token, let endpoint = routes[String(parts[1])] else { send(connection, code: 404, data: Data()); return }
+        let url = endpoint.url, owner = generation
         do {
             var upstream = URLRequest(url: url, timeoutInterval: 25)
-            headers.forEach { upstream.setValue($1, forHTTPHeaderField: $0) }
-            let (stream, reply) = try await URLSession.shared.bytes(for: upstream)
+            endpoint.headers.forEach { upstream.setValue($1, forHTTPHeaderField: $0) }
+            let (stream, reply) = try await session.bytes(for: upstream)
             guard let response = reply as? HTTPURLResponse else { send(connection, code: 502, data: Data()); return }
             guard (200..<300).contains(response.statusCode) else {
                 // Pass the real status on, so AVPlayer and the loading card can tell an expired link from a dead server.
@@ -113,13 +160,20 @@ actor HLSProxy {
             var data = raw
             var mime = response.mimeType ?? "application/octet-stream"
             if let playlist = String(data: raw, encoding: .utf8), playlist.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#EXTM3U") {
+                guard owner == generation, listener != nil else { send(connection, code: 404, data: Data()); return }
+                if String(parts[1]) == rootKey, routes[String(parts[1])] == endpoint {
+                    rootIsDirectLive = LiveHLSRenewal.directMedia(playlist)
+                }
                 mime = "application/vnd.apple.mpegurl"
                 var text = playlist
                 if AdSkip.enabled, let cleaned = AdSkip.clean(playlist, origin: response.url ?? url) {
                     Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
                     text = cleaned.text
                 }
-                data = Data(rewrite(text, origin: response.url ?? url).utf8)
+                if repairsDiscontinuities || renewableLive {
+                    text = LiveRepair.repairedMediaPlaylist(text, origin: response.url ?? url, identity: token + "/" + String(parts[1]))
+                }
+                data = Data(rewrite(text, origin: response.url ?? url, headers: endpoint.headers).utf8)
             } else { data = MediaPayload.transportStream(raw); if data.count != raw.count { mime = "video/mp2t" } }
             var extra = ""
             var code = 200
@@ -135,17 +189,17 @@ actor HLSProxy {
             send(connection, code: 502, data: Data())
         }
     }
-    private func rewrite(_ text: String, origin: URL) -> String {
+    private func rewrite(_ text: String, origin: URL, headers: [String: String]) -> String {
         text.components(separatedBy: .newlines).map { line in
             let value = line.trimmingCharacters(in: .whitespaces)
             if value.isEmpty { return line }
-            if !value.hasPrefix("#"), let url = URL(string: value, relativeTo: origin)?.absoluteURL { return register(url).absoluteString }
+            if !value.hasPrefix("#"), let url = URL(string: value, relativeTo: origin)?.absoluteURL { return register(url, headers: headers).absoluteString }
             guard let regex = try? NSRegularExpression(pattern: "URI=\"([^\"]+)\"") else { return line }
             var result = line
             for match in regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).reversed() {
                 guard let range = Range(match.range(at: 1), in: line), let url = URL(string: String(line[range]), relativeTo: origin)?.absoluteURL,
                       let target = Range(match.range(at: 1), in: result) else { continue }
-                result.replaceSubrange(target, with: register(url).absoluteString)
+                result.replaceSubrange(target, with: register(url, headers: headers).absoluteString)
             }
             return result
         }.joined(separator: "\n")
@@ -157,4 +211,3 @@ actor HLSProxy {
         connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
     }
 }
-#endif
