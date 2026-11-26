@@ -33,6 +33,7 @@ import UIKit
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var cleanup: Task<Void, Never>?
     @ObservationIgnored private var loading: Task<Void, Error>?
+    @ObservationIgnored private var controls: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var loadingTarget: DLNADevice?
     @ObservationIgnored private var operation = UUID()
     /// A seek just sent: the TV's old position isn't shown meanwhile, so the bar doesn't jump back.
@@ -139,11 +140,14 @@ import UIKit
     /// Queue cleanup independently of the canceled caller. A new load awaits this queue before it sends any SOAP.
     private func enqueueStop() -> (work: Task<Void, Never>, reached: Double?) {
         let target = device ?? loadingTarget, reached = device == nil ? nil : position
-        let previous = cleanup, load = loading
+        let previous = cleanup, load = loading, polling = poll
+        let commands = Array(controls.values)
         end()
         let work = Task { @MainActor in
             await previous?.value
             _ = await load?.result
+            await polling?.value
+            for command in commands { await command.value }
             await CastRelay.shared.stop()
             if let target { try? await DLNARenderer(target).stop() }
         }
@@ -159,6 +163,7 @@ import UIKit
     private func end() {
         operation = UUID()
         loading?.cancel(); loading = nil; loadingTarget = nil
+        for control in controls.values { control.cancel() }
         poll?.cancel(); poll = nil
         device = nil; relayed = false; failure = nil
         #if os(iOS)
@@ -167,9 +172,10 @@ import UIKit
     }
 
     private func act(_ action: @escaping @Sendable () async throws -> Void) {
-        let active = operation
-        Task {
-            guard operation == active else { return }
+        let active = operation, id = UUID()
+        controls[id] = Task {
+            defer { controls[id] = nil }
+            guard operation == active, !Task.isCancelled else { return }
             do { try await action(); if operation == active { failure = nil } }
             catch { if operation == active { failure = error.localizedDescription } }
         }
@@ -200,7 +206,7 @@ import UIKit
                         if resumeAt > 5, position < resumeAt - 5 {
                             self.heldUntil = Date().addingTimeInterval(3)
                             self.position = resumeAt
-                            try? await renderer.seek(to: resumeAt)
+                            act { try await renderer.seek(to: resumeAt) }
                         }
                     } else if !started, Date() > deadline { started = true }
                 } catch {

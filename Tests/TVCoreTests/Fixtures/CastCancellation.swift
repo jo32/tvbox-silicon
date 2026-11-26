@@ -82,14 +82,27 @@ final class Actions: @unchecked Sendable {
     private var connections: [NWConnection] = []
     private var holdPlay = false, holdCleanupStop = false
     private var cleanupStopAfter = 2
+    private var heldControl: String?
+    private var controlClosed = false
     private var held: [(NWConnection, Data)] = []
     var values: [(String, String)] { lock.withLock { entries } }
     func append(_ action: String, _ body: String) { lock.withLock { entries.append((action, body)) } }
     func keep(_ connection: NWConnection) { lock.withLock { connections.append(connection) } }
     func prepareCancellation() { lock.withLock { holdPlay = true; holdCleanupStop = true; cleanupStopAfter = entries.filter { $0.0 == "Stop" }.count + 2 } }
+    func prepareControl(_ action: String) { lock.withLock { heldControl = action; controlClosed = false } }
+    var controlWasClosed: Bool { lock.withLock { controlClosed } }
+    private func markControlClosed() { lock.withLock { controlClosed = true } }
     func holdResponse(_ connection: NWConnection, response: Data) -> Bool {
         lock.withLock {
             let action = entries.last?.0
+            if action == heldControl {
+                heldControl = nil
+                // A real cancelled URLSession request must close this held SOAP connection.
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] _, _, complete, error in
+                    if complete || error != nil { self?.markControlClosed(); connection.cancel() }
+                }
+                return true
+            }
             if action == "Play", holdPlay { holdPlay = false; held.append((connection, response)); return true }
             if action == "Stop", holdCleanupStop, entries.filter({ $0.0 == "Stop" }).count >= cleanupStopAfter { holdCleanupStop = false; held.append((connection, response)); return true }
             return false
@@ -161,6 +174,17 @@ enum CastStream {
         fixture.actions.releaseHeld()
         do { try await third.value; throw NSError(domain: "DLNACheck", code: 3) } catch is CancellationError {}
         try await fourth.value
+        // Controls belong to the same operation as the load. A TV withholding a Seek/Pause
+        // response must see that request closed when a replacement is cast.
+        for command in ["Seek", "Pause"] {
+            let previousControls = fixture.actions.values.filter { $0.0 == command }.count
+            fixture.actions.prepareControl(command)
+            if command == "Seek" { cast.seek(to: 200) } else { cast.togglePause() }
+            try await waitFor(fixture.actions, action: command, count: previousControls + 1)
+            try await cast.cast(Channel(url: URL(string: "https://cdn.example/after-\(command).mp4")!), title: "after control", from: nil, to: device)
+            for _ in 0..<100 { if fixture.actions.controlWasClosed { break }; try await Task.sleep(for: .milliseconds(10)) }
+            try check(fixture.actions.controlWasClosed, "replacement must cancel and drain the old pending \(command) transport")
+        }
         let detachStops = fixture.actions.values.filter { $0.0 == "Stop" }.count
         cast.detach()
         try await Task.sleep(for: .milliseconds(50))
@@ -181,7 +205,39 @@ enum CastStream {
         try check(!complete.value, "relay fixture must still be downloading")
         await relay.stop()
         do { _ = try await download.value; throw NSError(domain: "DLNACheck", code: 4) } catch is URLError {}
-        print("PASS: canceled and superseded loads serialize Stop; direct detach continues; relayed detach stops; pending relay transfer closes")
+        let partialAddress = try await relay.address(for: URL(string: "http://127.0.0.1:\(fixture.port)/movie.mp4")!, headers: [:], playlist: false, towards: nil)
+        let partial = NWConnection(host: NWEndpoint.Host(partialAddress.host!), port: NWEndpoint.Port(rawValue: UInt16(partialAddress.port!))!, using: .tcp)
+        partial.start(queue: DispatchQueue(label: "partial-client"))
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            partial.send(content: Data("GET \(partialAddress.path) HTTP/1.1\r\nHost: tv\r\n".utf8), completion: .contentProcessed { error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+            })
+        }
+        // Leave one complete request header buffered while the server is waiting for the final CRLF.
+        try await Task.sleep(for: .milliseconds(100))
+        await relay.stop()
+        let ended = Completed()
+        let responseBytes = ReceivedBytes()
+        partial.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, complete, error in
+            if let data { responseBytes.append(data) }
+            if complete || error != nil { ended.finish() }
+        }
+        partial.send(content: Data("\r\n".utf8), completion: .contentProcessed { _ in })
+        for _ in 0..<100 { if ended.value { break }; try await Task.sleep(for: .milliseconds(10)) }
+        try check(ended.value && responseBytes.value.isEmpty, "stop must close accepted half-header sockets, without serving their completed request")
+        partial.cancel()
+        let idleAddress = try await relay.address(for: URL(string: "http://127.0.0.1:\(fixture.port)/movie.mp4")!, headers: [:], playlist: false, towards: nil)
+        let idle = NWConnection(host: NWEndpoint.Host(idleAddress.host!), port: NWEndpoint.Port(rawValue: UInt16(idleAddress.port!))!, using: .tcp)
+        idle.start(queue: DispatchQueue(label: "idle-client"))
+        let idleEnded = Completed()
+        idle.receive(minimumIncompleteLength: 1, maximumLength: 4096) { _, _, complete, error in
+            if complete || error != nil { idleEnded.finish() }
+        }
+        for _ in 0..<120 { if idleEnded.value { break }; try await Task.sleep(for: .milliseconds(100)) }
+        try check(idleEnded.value, "accepted sockets that never send a request header must expire")
+        idle.cancel()
+        await relay.stop()
+        print("PASS: canceled/superseded loads and old Seek/Pause drained; direct/relayed detach; pending transfer and partial-header sockets closed; idle header deadline")
 
     }
     static func waitFor(_ actions: Actions, action: String, count: Int) async throws {
@@ -191,4 +247,11 @@ enum CastStream {
         }
         try check(false, "missing SOAP \(action) #\(count) after canceled load")
     }
+}
+
+final class ReceivedBytes: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bytes = Data()
+    var value: Data { lock.withLock { bytes } }
+    func append(_ data: Data) { lock.withLock { bytes.append(data) } }
 }

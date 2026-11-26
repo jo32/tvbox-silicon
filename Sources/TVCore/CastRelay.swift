@@ -28,6 +28,7 @@ public actor CastRelay {
     private var port: UInt16?
     private var connections: [UUID: NWConnection] = [:]
     private var transfers: [UUID: Task<Void, Never>] = [:]
+    private var headerDeadlines: [UUID: Task<Void, Never>] = [:]
     private let queue = DispatchQueue(label: "tvbox.cast.relay")
     private nonisolated let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -56,7 +57,8 @@ public actor CastRelay {
         listener?.cancel(); listener = nil; port = nil
         for connection in connections.values { connection.cancel() }
         for transfer in transfers.values { transfer.cancel() }
-        connections = [:]; transfers = [:]
+        for deadline in headerDeadlines.values { deadline.cancel() }
+        connections = [:]; transfers = [:]; headerDeadlines = [:]
         reset()
     }
 
@@ -65,7 +67,13 @@ public actor CastRelay {
         listener?.cancel(); listener = nil; port = nil
         let listener = try NWListener(using: .tcp)
         self.listener = listener
-        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        listener.newConnectionHandler = { [weak self, weak listener] connection in
+            guard let listener else { connection.cancel(); return }
+            Task {
+                guard let self else { connection.cancel(); return }
+                await self.accept(connection, listener: listener)
+            }
+        }
         let ready: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
             listener.stateUpdateHandler = { [weak listener] state in
@@ -157,43 +165,61 @@ public actor CastRelay {
 
     // MARK: Serving
 
-    private nonisolated func accept(_ connection: NWConnection) {
-        connection.start(queue: queue)
-        readHead(connection, buffer: Data())
-    }
-
-    private nonisolated func readHead(_ connection: NWConnection, buffer: Data) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 << 10) { [weak self] chunk, _, complete, error in
-            var buffer = buffer
-            if let chunk { buffer.append(chunk) }
-            if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
-                let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
-                Task { await self?.begin(connection, head: head) }
-                return
-            }
-            guard !complete, error == nil, buffer.count < 16 << 10 else { return connection.cancel() }
-            self?.readHead(connection, buffer: buffer)
-        }
-    }
-
-    private func begin(_ connection: NWConnection, head: String) {
+    private func accept(_ connection: NWConnection, listener: NWListener) {
+        // The listener may have stopped while its callback was waiting to enter this actor.
+        guard self.listener === listener else { connection.cancel(); return }
         let id = UUID()
         connections[id] = connection
-        let transfer = Task { [weak self] in
-            await self?.serve(connection, head: head)
-            await self?.finished(id)
-        }
-        transfers[id] = transfer
         connection.stateUpdateHandler = { @Sendable [weak self] state in
             switch state {
-            case .cancelled, .failed: Task { [weak self] in await self?.cancel(id) }
+            case .cancelled, .failed: Task { await self?.cancel(id) }
             default: break
             }
         }
+        headerDeadlines[id] = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            await self?.cancel(id)
+        }
+        connection.start(queue: queue)
+        readHead(id, buffer: Data())
     }
 
-    private func cancel(_ id: UUID) { transfers.removeValue(forKey: id)?.cancel(); connections[id] = nil }
-    private func finished(_ id: UUID) { transfers[id] = nil; connections[id] = nil }
+    private func readHead(_ id: UUID, buffer: Data) {
+        guard let connection = connections[id] else { return }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 << 10) { [weak self] chunk, _, complete, error in
+            Task { await self?.receivedHead(id, buffer: buffer, chunk: chunk, complete: complete, failed: error != nil) }
+        }
+    }
+
+    private func receivedHead(_ id: UUID, buffer: Data, chunk: Data?, complete: Bool, failed: Bool) {
+        guard connections[id] != nil else { return }
+        var buffer = buffer
+        if let chunk { buffer.append(chunk) }
+        guard buffer.count <= 16 << 10 else { cancel(id); return }
+        if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
+            let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
+            begin(id, head: head)
+        } else if complete || failed { cancel(id) }
+        else { readHead(id, buffer: buffer) }
+    }
+
+    private func begin(_ id: UUID, head: String) {
+        guard let connection = connections[id] else { return }
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers[id] = Task { [weak self] in
+            await self?.serve(connection, head: head)
+            await self?.finished(id)
+        }
+    }
+
+    private func cancel(_ id: UUID) {
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers.removeValue(forKey: id)?.cancel()
+        connections.removeValue(forKey: id)?.cancel()
+    }
+
+    // Some responses schedule their final send before returning. Retain the socket until its close callback.
+    private func finished(_ id: UUID) { transfers[id] = nil }
 
     private func serve(_ connection: NWConnection, head: String) async {
         let lines = head.components(separatedBy: "\r\n")
