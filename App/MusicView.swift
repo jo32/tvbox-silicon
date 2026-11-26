@@ -11,6 +11,8 @@ struct MusicView: View {
     /// something else clears it.
     @State private var autoPlayQuery: String?
     @State private var showsSettings = false
+    /// The searches this open profile ran, newest first, so the page can offer them again (#1362).
+    @AppStorage("musicSearchHistory", store: Profiles.shared.currentDefaults) private var historyData = Data()
     #if DEBUG
     /// `-qaMusicOpen 1` opens the first album or playlist found, for screenshots.
     @State private var qaOpened: MusicCollection?
@@ -20,6 +22,15 @@ struct MusicView: View {
     @State private var qaDownloads = UserDefaults.standard.bool(forKey: "qaMusicDownloads")
     #endif
 
+    private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
+
+    /// Notes a search the viewer asked for, newest first, once each, twenty deep: as on the video side.
+    private func remember(_ text: String) {
+        let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return }
+        historyData = (try? JSONEncoder().encode(Array(([keyword] + history.filter { $0 != keyword }).prefix(20)))) ?? Data()
+    }
+
     var body: some View {
         let search = store.musicSearch
         ScrollView {
@@ -27,7 +38,7 @@ struct MusicView: View {
                 #if os(tvOS)
                 let typed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !typed.isEmpty, typed != search.query {
-                    SearchQueryButton(query: typed) { search.search(typed, immediately: true) }
+                    SearchQueryButton(query: typed) { remember(typed); search.search(typed, immediately: true) }
                         .padding(.bottom, 12)
                 } else if typed.isEmpty {
                     MusicNowPlayingButton()
@@ -56,6 +67,7 @@ struct MusicView: View {
         }
         .onSubmit(of: .search) {
             autoPlayQuery = search.kind == .songs || search.kind == .top ? query.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+            remember(query)
             search.search(query, kind: Self.searchKind, immediately: true); playDirectHitIfReady()
         }
         .onChange(of: search.busy) {
