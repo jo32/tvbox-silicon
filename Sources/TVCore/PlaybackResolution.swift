@@ -4,14 +4,6 @@ public struct PlaybackChoice: Identifiable, Sendable {
     public let id: Int
     public let name: String
     public let address: String
-
-    /// Reordered qualities need a unique name in both plans; two single-choice plans need no name.
-    func renewed(in choices: [PlaybackChoice], from original: [PlaybackChoice]) -> PlaybackChoice? {
-        if original.count == 1 && choices.count == 1 { return choices[0] }
-        guard original.filter({ $0.name == name }).count == 1 else { return nil }
-        let matches = choices.filter { $0.name == name }
-        return matches.count == 1 ? matches[0] : nil
-    }
     static func parse(_ value: JSONValue?, prefix: String = "", fallbackName: String) -> [PlaybackChoice] {
         if let text = value?.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [PlaybackChoice(id: 0, name: fallbackName, address: prefix + text)]
@@ -41,8 +33,6 @@ public struct PlaybackChoice: Identifiable, Sendable {
 }
 
 public struct PlaybackPlan: Sendable {
-    /// Original source address, needed to resolve a fresh live CDN URL. Not a cached play result.
-    var sourceEpisode: Episode?
     public let choices: [PlaybackChoice]
     public let headers: [String: String]
     public let group: String

@@ -352,8 +352,6 @@ public struct ChannelLine: Codable, Hashable, Sendable {
 }
 
 public struct Channel: Identifiable, Codable, Hashable, Sendable {
-    /// Active catalog provenance for FLV renewal, never persisted in favorites/history.
-    public var flvSource: FLVLive.Source? = nil
     public let name: String
     public let group: String
     public let url: URL

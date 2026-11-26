@@ -842,6 +842,18 @@ import IOKit.pwr_mgt
         return renewal.renewal(length: length, name: name)
     }
 
+    /// A fresh address for `channel`, a catalog episode playing a live FLV stream, once its connection ends
+    /// (`FLVLive.Renew`): the episode resolved again by its source, as `renewal(for:)` does for a file. A Live TV room
+    /// asks its platform again in `retryLive` instead.
+    private func liveRenewal(for channel: Channel) -> FLVLive.Renew? {
+        guard renewLink != nil, channel.historyContext != nil, !LiveCatalog.isRoom(channel.url) else { return nil }
+        return { [weak self] in
+            guard let fresh = await self?.renewLink?(channel) else { return nil }
+            let address = (try? await EmbeddedJarHost.shared.recoverProxy(fresh.url)) ?? fresh.url
+            return (address, fresh.headers)
+        }
+    }
+
     /// The other line could not be resolved either: show why instead of loading forever.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
@@ -2066,7 +2078,7 @@ extension PlaybackSession {
                         // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
                         // Keep seekable FLV files on the file path and repackage live streams as local HLS.
                         do {
-                            prepared.url = try await FLVLive.open(address, headers: channel.headers, source: channel.flvSource)
+                            prepared.url = try await FLVLive.open(address, headers: channel.headers, renew: liveRenewal(for: channel))
                             return prepared
                         } catch is FLVLive.NotFLV {
                             // Let the normal file path report the original conversion failure below.
