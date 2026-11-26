@@ -23,6 +23,8 @@ import IOKit.pwr_mgt
     /// Keeps the Mac from dimming, starting the screen saver and locking while a video plays (#565).
     private let displayAwake = DisplayAwake()
     #endif
+    private let sleepFade = PlaybackSleepFade()
+    private var sleepFadeRevision: UUID?
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
     @ObservationIgnored var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
@@ -153,6 +155,7 @@ import IOKit.pwr_mgt
     #endif
 
     func beginEditingSkip() {
+        cancelSleepFade()
         editingSkip = true
         resumeAfterEditing = player.rate > 0
         player.pause()
@@ -213,7 +216,15 @@ import IOKit.pwr_mgt
         }
     }
 
-    var error: String?
+    var error: String? { didSet { if error != nil { countPlay(.failed) } } }
+    /// This play on its way to the first frame, counted for the play success rate (`PlayAttempt`).
+    private var attempt: PlayAttempt?
+    /// A retry rung is trying to save this play (a short constant such as "line"): if the picture then starts, the
+    /// play counts as recovered by it.
+    func retrying(via rung: String) { attempt?.retrying(rung) }
+    private func countPlay(_ outcome: PlayAttempt.Outcome) {
+        attempt?.resolve(outcome, playing: (player.currentItem?.asset as? AVURLAsset)?.url)
+    }
     var loading = true
     var looping = false { didSet { if looping { discardUpcoming() } } }
     var buffering = false
@@ -306,10 +317,16 @@ import IOKit.pwr_mgt
     private var liveReopen = LiveReopen()
     private var liveReadyAt: ContinuousClock.Instant?
     private var liveRetrying = false
-    private var liveMaintenance: Task<Void, Never>?
-    private var liveResolution = UUID()
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
+    /// How often a link AVPlayer refused to open was looked at again (`retryUnopened`).
+    private var rescues = 0
+    /// An episode resolved again by its source, for a fresh link when the one playing expires; set for catalog episodes.
+    var renewLink: (@MainActor (Channel) async -> Channel?)?
+    /// Fresh links for the episodes playing and queued (`LinkRenewal`), by address.
+    private var linkRenewals: [URL: LinkRenewal] = [:]
+    /// Whether the episode's link was read by this device after AVPlayer gave up on it, and how (`rescueLink`).
+    private var rescueAttempt = PlaybackRescue.Attempt()
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
     private var loopbackRecovered: ContinuousClock.Instant?
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
@@ -360,6 +377,7 @@ import IOKit.pwr_mgt
     private var volumeObservation: NSKeyValueObservation?
 
     func togglePlayback() {
+        cancelSleepFade()
         if player.timeControlStatus == .paused {
             if let item = player.currentItem, item.duration.seconds.isFinite,
                player.currentTime().seconds >= item.duration.seconds - 0.1 {
@@ -412,26 +430,13 @@ import IOKit.pwr_mgt
         if LiveCatalog.isRoom(url) {
             // A live quality is another stream address, fetched now; live has no position to keep.
             let active = generation
-            let request = UUID(); liveResolution = request
-            liveMaintenance?.cancel(); liveMaintenance = nil
-            let previousItem = player.currentItem
             Task {
-                defer {
-                    if self.generation == active, self.liveResolution == request,
-                       self.player.currentItem === previousItem, let previousItem {
-                        self.maintainLivePlaylist(previousItem, generation: active)
-                    }
-                }
                 guard let resolved = try? await LiveCatalog.resolve(Channel(name: channel.name, group: channel.group, url: url, logo: channel.logo)),
-                      self.generation == active, self.liveResolution == request else { return }
-                guard let prepared = try? await self.prepare(resolved.channel) else { return }
-                guard self.generation == active, self.liveResolution == request, !Task.isCancelled else { return Self.stopAdapter(prepared) }
+                      self.generation == active else { return }
                 self.detachItem()
-                self.useAdapter(prepared.adapter)
                 self.quality = resolved.current ?? quality
                 self.liveRoom = Channel(name: channel.name, group: channel.group, url: url, logo: channel.logo)
-                self.configure(resolved.channel, url: prepared.url, generation: active)
-                self.automatic = prepared.url; self.playing = resolved.channel
+                self.configure(resolved.channel, url: resolved.channel.url, generation: active)
             }
             return
         }
@@ -445,54 +450,11 @@ import IOKit.pwr_mgt
 
     /// Stops listening to the current item, before another replaces it in the same playback.
     private func detachItem() {
+        cancelSleepFade()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
         sampler?.cancel(); sampler = nil
-        liveMaintenance?.cancel(); liveMaintenance = nil
-    }
-
-    /// Maintenance only changes the proxy's next root request. Failure here is
-    /// not a playback failure: the existing recovery path still owns retries.
-    private func maintainLivePlaylist(_ item: AVPlayerItem, generation active: UUID) {
-        liveMaintenance?.cancel()
-        guard isLive, liveRoom != nil, let adapter = proxy else { return }
-        liveMaintenance = Task { [weak self, weak item] in
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(60)) } catch { return }
-                guard let self, let item, self.generation == active, self.player.currentItem === item,
-                      self.proxy === adapter, let room = self.liveRoom else { return }
-                let resolution = self.liveResolution
-                guard !self.liveRetrying, !self.paused, self.error == nil,
-                      item.status == .readyToPlay, self.player.timeControlStatus == .playing,
-                      let expected = await adapter.renewableRoot() else { continue }
-                let selected = self.quality
-                var components = URLComponents(url: room.url, resolvingAgainstBaseURL: false)
-                var query = (components?.queryItems ?? []).filter { $0.name != "q" }
-                if let selected { query.append(URLQueryItem(name: "q", value: String(selected))) }
-                components?.queryItems = query
-                let request = Channel(name: room.name, group: room.group, url: components?.url ?? room.url, logo: room.logo)
-                do {
-                    let resolved = try await LiveCatalog.resolve(request)
-                    guard !Task.isCancelled, self.generation == active, self.player.currentItem === item,
-                          self.proxy === adapter, self.liveRoom?.url == room.url, self.quality == selected,
-                          self.liveResolution == resolution,
-                          !self.liveRetrying, self.error == nil,
-                          selected == nil || resolved.current == selected else { continue }
-                    let upstream = LiveRepair.sourceURL(for: resolved.channel.url) ?? resolved.channel.url
-                    let renewed = await adapter.renew(expected: expected, to: .init(url: upstream, headers: resolved.channel.headers))
-                    guard renewed, !Task.isCancelled, self.generation == active, self.player.currentItem === item,
-                          self.proxy === adapter, self.liveRoom?.url == room.url, self.quality == selected,
-                          self.liveResolution == resolution else { continue }
-                    self.playing = resolved.channel
-                } catch { /* Keep the healthy item, buffer, transport intent and existing root. */ }
-            }
-        }
-    }
-
-    private func useAdapter(_ adapter: HLSProxy?) {
-        if proxy !== adapter, let previous = proxy { Task { await previous.stop() } }
-        proxy = adapter
     }
 
     /// A live room that stopped asks its platform for a fresh address and plays on, instead of waiting for the viewer
@@ -502,27 +464,22 @@ import IOKit.pwr_mgt
         if liveRetrying { return true } // The failed item's other report of the same failure.
         let played = liveReadyAt.map { ContinuousClock.now - $0 }
         guard let room = liveRoom, liveReopen.shouldReopen(after: failure, playedFor: played) else { return false }
-        liveRetrying = true; loading = true
+        liveRetrying = true; loading = true; retrying(via: "live")
         if failure.map({ ($0 as NSError).domain == "CoreMediaErrorDomain" && ($0 as NSError).code == -12312 }) == true {
             LiveRepair.noteContradiction((player.currentItem?.asset as? AVURLAsset)?.url)
         }
         detachItem(); observation = nil
         let active = generation
-        let resolution = UUID(); liveResolution = resolution
         Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString) played=\(played.map { "\(Int($0.components.seconds))s" } ?? "-")")
         note(L10n.text("The connection dropped. Reconnecting"))
         Task {
             do {
                 let resolved = try await LiveCatalog.resolve(room)
-                guard self.generation == active, self.liveResolution == resolution else { return }
-                let prepared = try await self.prepare(resolved.channel)
-                guard self.generation == active, self.liveResolution == resolution, !Task.isCancelled else { return Self.stopAdapter(prepared) }
+                guard self.generation == active else { return }
                 self.liveRetrying = false
-                self.useAdapter(prepared.adapter)
-                self.configure(resolved.channel, url: prepared.url, generation: active)
-                self.automatic = prepared.url; self.playing = resolved.channel
+                self.configure(resolved.channel, url: resolved.channel.url, generation: active)
             } catch {
-                guard self.generation == active, self.liveResolution == resolution else { return }
+                guard self.generation == active else { return }
                 self.liveRetrying = false
                 self.error = error.localizedDescription; self.loading = false
             }
@@ -535,32 +492,175 @@ import IOKit.pwr_mgt
     /// this for every episode nobody has opened lately. One more try, at once, does what Retry would.
     private func retryRange(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard !rangeRetried, Self.ignoredRange(failure) else { return false }
-        rangeRetried = true
+        rangeRetried = true; retrying(via: "range")
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "range retry host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
         configure(channel, url: url, generation: active)
         return true
     }
 
+    /// A stream AVPlayer gave up on opens once more another way, once per playback:
+    /// - a direct HLS stream it can't get past (`HLSProxy.recovers`: a first playlist that took 20 s, one it can't read)
+    ///   through the local proxy, which asks again, waits at most 30 s in all and repairs the playlist and segments;
+    /// - a plugin's loopback server that answered 502, 503 or 504 (the plugin's own fetch failed) is asked again.
+    /// Not a live room: its platform gives a fresh address sooner (`retryLive`). When the proxy can't get the playlist
+    /// either, `giveUp` reports the stream's own failure (with the proxy's reason) and moves on to the next line.
+    /// `gatewayOnly`: only the plugin-again rung, asked first in the failure chain (cheapest; nothing else matches 502-504).
+    private func retryThroughProxy(after failure: Error?, channel: Channel, url: URL, generation active: UUID, gatewayOnly: Bool = false,
+                                   otherwise giveUp: @escaping @MainActor (String?) -> Void) -> Bool {
+        guard !rungTried, proxy == nil, liveRoom == nil, ["http", "https"].contains(url.scheme), !Remux.isRemuxed(url),
+              !LocalMediaServer.shared.serves(url) else { return false }
+        let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+        let status = transfer.httpStatus ?? item?.errorLog()?.events.last?.errorStatusCode
+        let chosen: String
+        if !gatewayOnly, HLSProxy.recovers(failure) { chosen = "hls-proxy" }
+        else if loopback, HLSProxy.gatewayFailure(failure) || [502, 503, 504].contains(status ?? 0) { chosen = "plugin-again" }
+        else { return false }
+        rungTried = true; rung = chosen; retrying(via: chosen)
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "retry rung=\(chosen) host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        preparation = Task { [weak self] in
+            guard chosen == "hls-proxy" else {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.generation == active, !Task.isCancelled else { return }
+                self.configure(channel, url: url, generation: active)
+                return
+            }
+            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: url) ?? [:]) { $1 })
+            let address: URL
+            do { address = try await adapter.start(url: url, patience: .retry) }
+            catch {
+                guard let self, self.generation == active, !Task.isCancelled else { return }
+                Diagnostics.shared.record(.warning, "player", "retry rung=hls-proxy gave up host=\(url.host() ?? "-") \(error.localizedDescription)")
+                giveUp(error.localizedDescription)
+                return
+            }
+            guard let self, self.generation == active, !Task.isCancelled else { await adapter.stop(); return }
+            self.proxy = adapter; self.proxyOrigin = url
+            if self.automatic == url { self.automatic = address }
+            self.configure(channel, url: address, generation: active)
+        }
+        return true
+    }
+    /// The end of a playback that failed for good: the failure line for the reports (the stream's own failure; when the
+    /// proxy rung couldn't get past it either, its reason as the upstream one), then a live room's fresh address or
+    /// the next line, else the error on screen.
+    private func giveUp(_ failure: Error?, item: AVPlayerItem, channel: Channel, url: URL, refused: Bool, network: Bool, proxyReason: String?) {
+        rung = nil
+        let detail = failure.map(Self.describe) ?? "-"
+        // The proxy's own last failure when the once-a-second sample missed it (a lookup that failed at once).
+        let upstream = transfer.failure ?? proxy?.stats.snapshot.failure ?? proxyReason
+        Diagnostics.shared.record(.error, "player", "failed host=\(transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host() ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
+        if retryLive(after: failure) { return }
+        if tryNextLine(after: failure) { return }
+        // A refused link is usually an expired one: say so in plain words rather than the system's.
+        let expired = refused || [401, 403, 404, 410].contains(transfer.httpStatus ?? 0)
+        loading = false
+        errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
+        error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
+            : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
+            : failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+    }
+
+    /// The rung that got the stream playing, in the log: which one, and what the proxy repaired.
+    private func noteRungRecovered(_ url: URL) {
+        guard let rung else { return }
+        self.rung = nil
+        let proxy = proxy
+        Task {
+            let repairs = await proxy?.repairs ?? []
+            Diagnostics.shared.record(.warning, "player", "recovered rung=\(rung) host=\(proxy?.stats.snapshot.host ?? url.host() ?? "-") repairs=\(repairs.isEmpty ? "-" : repairs.joined(separator: ","))")
+        }
+    }
+
+    /// A link AVPlayer gave up on at once that this device can still read (`PlaybackRescue`): a server that still
+    /// ignores the byte range AVPlayer asks for first after `retryRange`'s one more try (-12939), or a certificate
+    /// AVPlayer refuses. Once per episode, before anything of it played, for a failure no other rung reopened yet. A
+    /// link that can't be rescued opens as it was, so it fails and is reported exactly as before.
+    private func rescueLink(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        let proxied = proxy?.serves(url) == true
+        let found = PlaybackRescue.trouble(failure) ?? (proxied && HLSProxy.certificate(proxy?.stats.snapshot.code) ? .insecure : nil)
+        guard !rescueAttempt.tried, !rescueAttempt.ready, !reopenedAfterDrop, loopbackRecovered == nil,
+              let trouble = found, trouble == .insecure || rangeRetried, ["http", "https"].contains(url.scheme),
+              !Remux.isRemuxed(url), !LocalMediaServer.shared.serves(url) else { return false }
+        // Through the HLS proxy (always on the Mac) a refused certificate reaches AVPlayer as 495: read the proxy's upstream.
+        let source = proxied && trouble == .insecure ? proxyOrigin ?? url : url
+        rescueAttempt.tried = true
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "rescue trouble=\(trouble.rawValue) host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        let began = ContinuousClock.now
+        preparation = Task { [weak self] in
+            var rescued: PlaybackRescue.Rescued?
+            do { rescued = try await PlaybackRescue.open(source, headers: channel.headers, trouble: trouble) }
+            catch { if !Task.isCancelled { Diagnostics.shared.record(.warning, "player", "rescue declined host=\(source.host() ?? "-") \(Self.describe(error))") } }
+            guard let self, self.generation == active, !Task.isCancelled else {
+                if let rescued { PlaybackRescue.stop(rescued.url) }
+                return
+            }
+            guard let rescued else { self.retrying(via: "rescue-origin"); return self.configure(channel, url: url, generation: active) }
+            self.rescueAttempt.address = rescued.url; self.rescueAttempt.rung = rescued.rung; self.rescueAttempt.origin = url
+            self.rescueAttempt.trouble = trouble; self.rescueAttempt.began = began; self.retrying(via: rescued.rung)
+            if self.automatic == url { self.automatic = rescued.url }
+            self.configure(channel, url: rescued.url, generation: active)
+        }
+        return true
+    }
+
+    /// A rescued address that failed before it played: the link opens as it was, so it fails and is reported exactly
+    /// as before. One that played, whose loopback iOS took back (-1004, -1005), or whose file AVPlayer refuses goes on
+    /// to the rungs after it instead (`recoverLoopback`, `resumeAfterDrop`, the audio converter), from where it was.
+    private func rescueFailed(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard let rung = rescueAttempt.rung, let origin = rescueAttempt.origin, url == rescueAttempt.address, !rescueAttempt.ready else { return false }
+        if let code = Self.urlErrorCode(failure), [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code) { return false }
+        if Self.unsupportedFormat(failure) || Self.refusedFile(failure) { return false }
+        Diagnostics.shared.record(.warning, "player", "rescue failed rung=\(rung) host=\(origin.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        detachItem(); observation = nil
+        stopRescue(); retrying(via: "rescue-origin")
+        if automatic == url { automatic = origin }
+        configure(channel, url: origin, generation: active)
+        return true
+    }
+
+    /// AVPlayer can't read the file it was given (AVFoundation -11828, -11829).
+    nonisolated static func refusedFile(_ error: Error?) -> Bool {
+        var current = error as NSError?
+        while let error = current {
+            if error.domain == AVFoundationErrorDomain, [-11828, -11829].contains(error.code) { return true }
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
+    /// Closes what the episode's rescue opened.
+    private func stopRescue() {
+        if let address = rescueAttempt.address { PlaybackRescue.stop(address) }
+        rescueAttempt.address = nil; rescueAttempt.rung = nil
+    }
+
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file, a plugin's proxy or a saved download refusing (-1004) and gives
-    /// up 30 s later.
+    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy or a saved download refusing
+    /// (-1004) and gives up 30 s later.
     /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
     /// a server that stays down shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true || PlaybackRescue.owns(url),
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
-        loopbackRecovered = .now
+        loopbackRecovered = .now; retrying(via: "loopback")
         let position = player.currentTime().seconds
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
+        let adapter = proxy.flatMap { $0.serves(url) ? $0 : nil }
         preparation = Task { [weak self] in
             var fresh: URL?, failure: Error?
             do {
-                fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
-                    : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
-                    : try await EmbeddedJarHost.shared.recoverProxy(url)
+                if let adapter { fresh = try await adapter.relisten(url) }
+                else {
+                    fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
+                        : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
+                        : PlaybackRescue.owns(url) ? try await PlaybackRescue.relisten(url)
+                        : try await EmbeddedJarHost.shared.recoverProxy(url)
+                }
             }
             catch { failure = error }
             guard let self, self.generation == active, !Task.isCancelled else { return }
@@ -570,6 +670,7 @@ import IOKit.pwr_mgt
             }
             if position.isFinite, position > 0 { self.pendingResume = position }
             if self.automatic == url { self.automatic = fresh }
+            if self.rescueAttempt.address == url { self.rescueAttempt.address = fresh }
             self.configure(channel, url: fresh, generation: active)
         }
         return true
@@ -584,7 +685,7 @@ import IOKit.pwr_mgt
         let current = player.currentTime().seconds
         let position = pendingResume ?? (current.isFinite ? current : 0)
         guard let delay = dropRecovery.delay(after: failure, position: position) else { return false }
-        reopenedAfterDrop = true
+        reopenedAfterDrop = true; retrying(via: "drop")
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "dropped host=\(transfer.host ?? url.host() ?? "-") at=\(Int(position))s attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening")
         note(L10n.text("The connection dropped. Reconnecting"))
@@ -624,6 +725,7 @@ import IOKit.pwr_mgt
         let captured = Self.screenCaptured
         guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
         if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
+        retrying(via: "hdr-sdr")
         #if os(tvOS)
         Self.refusedMatching = HDRDisplay.matching
         #endif
@@ -644,7 +746,6 @@ import IOKit.pwr_mgt
                 self.error = error.localizedDescription; self.loading = false; return
             }
             guard self.generation == active, !Task.isCancelled, !prepared.matroska else { return Self.stopAdapter(prepared) }
-            self.useAdapter(prepared.adapter)
             self.configure(channel, url: prepared.url, generation: active)
             self.automatic = prepared.url
         }
@@ -656,6 +757,7 @@ import IOKit.pwr_mgt
     /// work either, the channel's next line, or the error.
     private func retryConvertingAudio(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard Self.unsupportedFormat(failure), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return false }
+        retrying(via: "audio")
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "format refused; repackaging host=\(url.host() ?? "-") \(Self.describe(failure!))")
         note(L10n.text("Repackaging the video for this device"))
@@ -680,6 +782,76 @@ import IOKit.pwr_mgt
             self.automatic = remuxed
         }
         return true
+    }
+
+    /// A link AVPlayer can't open (-11828 "Cannot Open") or calls damaged (-11829): an MP4 served as
+    /// application/octet-stream without an extension (drives' object storage, plugins' proxies), an MKV, FLV, AVI or
+    /// MPEG-PS behind a name or type that says nothing or MP4, a DASH manifest. Its first bytes say what it is
+    /// (`ContainerRescue`): AVPlayer is told the container, a manifest plays as HLS, FFmpeg repackages the rest. Twice at
+    /// most: told the container, then repackaged. A web page says it is one instead of failing as a player error; when
+    /// the bytes show nothing to try (a refused status, an image), the failure goes on through the rest of the chain
+    /// (`otherwise`: the loopback, drop, live and line recoveries).
+    private func retryUnopened(after failure: Error?, channel: Channel, url: URL, generation active: UUID,
+                               otherwise rest: @escaping @MainActor () -> Void) -> Bool {
+        guard rescues < 2, ContainerRescue.refusedContainer(failure), ContainerRescue.handles(url) else { return false }
+        rescues += 1
+        let hinted = MediaTypeHint.mimeType(for: url) != nil, renewal = renewal(for: channel, length: nil, name: url.lastPathComponent)
+        observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "unopened; reading its first bytes host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        preparation = Task { [weak self] in
+            let plan = await ContainerRescue.plan(for: url, headers: channel.headers, hinted: hinted, renewal: renewal)
+            guard let self, self.generation == active, !Task.isCancelled else {
+                if case .repackage(let source) = plan { await source.close() }
+                return
+            }
+            var next: URL?
+            switch plan {
+            case .mimeType(let type): MediaTypeHint.set(type, for: url); next = url
+            case .dash(let master): next = master
+            case .live(let stream): next = stream
+            case .repackage(let source):
+                self.note(L10n.text("Repackaging the video for this device"))
+                next = try? await Self.remux(source, channel: channel)
+                guard self.generation == active, !Task.isCancelled else { if let next { Remux.stop(next) }; return }
+            case .webPage:
+                Diagnostics.shared.record(.warning, "player.webpage", "a web page, not a video host=\(url.host() ?? "-") source=\(channel.historyContext?.sourceKey ?? "-")")
+                if self.tryNextLine(after: failure) { return }
+                self.loading = false; self.errorSymbol = "safari"
+                self.error = L10n.text("This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.")
+                return
+            case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
+            }
+            guard let next else { return rest() }
+            self.retrying(via: "container")
+            self.detachItem()
+            self.configure(channel, url: next, generation: active)
+            if next != url { self.externalSubtitles.playing(next); self.automatic = next }
+        }
+        return true
+    }
+
+    /// Fresh links to the file of `channel`, a catalog episode playing or queued, once its link expires (`LinkRenewal`).
+    private func renewal(for channel: Channel, length: Int?, name: String) -> (@Sendable () async -> CloudStreams.Source?)? {
+        guard renewLink != nil, channel.historyContext != nil, !LiveCatalog.isRoom(channel.url) else { return nil }
+        let renewal = linkRenewals[channel.url] ?? LinkRenewal { [weak self] in
+            guard let fresh = await self?.renewLink?(channel) else { return nil }
+            return (fresh.url, fresh.headers)
+        }
+        if linkRenewals.count > 4 { linkRenewals.removeAll() }
+        linkRenewals[channel.url] = renewal
+        return renewal.renewal(length: length, name: name)
+    }
+
+    /// A fresh address for `channel`, a catalog episode playing a live FLV stream, once its connection ends
+    /// (`FLVLive.Renew`): the episode resolved again by its source, as `renewal(for:)` does for a file. A Live TV room
+    /// asks its platform again in `retryLive` instead.
+    private func liveRenewal(for channel: Channel) -> FLVLive.Renew? {
+        guard renewLink != nil, channel.historyContext != nil, !LiveCatalog.isRoom(channel.url) else { return nil }
+        return { [weak self] in
+            guard let fresh = await self?.renewLink?(channel) else { return nil }
+            let address = (try? await EmbeddedJarHost.shared.recoverProxy(fresh.url)) ?? fresh.url
+            return (address, fresh.headers)
+        }
     }
 
     /// The other line could not be resolved either: show why instead of loading forever.
@@ -977,7 +1149,13 @@ import IOKit.pwr_mgt
     private var observation: NSKeyValueObservation?
     private var failureObserver: NSObjectProtocol?
     private var preparation: Task<Void, Never>?
+    /// The local HLS proxy the stream plays through: always on the Mac, elsewhere after a direct failure (`retryThroughProxy`).
     private var proxy: HLSProxy?
+    /// The retry rung this playback took (`retryThroughProxy`), until it plays or fails.
+    private var rung: String?
+    /// What `proxy` fetches: the stream's own address, for `rescueLink` when the proxy answered 495 for its certificate.
+    private var proxyOrigin: URL?
+    private var rungTried = false
     /// The session on screen, which casts from the Bilibili app control.
     static weak var current: PlaybackSession?
     func start(_ channel: Channel) {
@@ -1006,7 +1184,11 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.warning, "player", "line \(line + 1)/\(lines.count) \(failure.map(Self.describe) ?? "not ready"); trying line \(next + 1)")
         let failed = line
         line = next; triedLines.insert(next)
+        // The same play goes on, on another line: one attempt, not one per line.
+        let carried = attempt?.outcome == nil ? attempt : nil; attempt = nil
         open(lines[next])
+        if let carried { attempt = carried }
+        retrying(via: "line")
         note(L10n.text("Line %@ didn't play. Trying line %@.", "\(failed + 1)", "\(next + 1)"))
         return true
     }
@@ -1014,10 +1196,13 @@ import IOKit.pwr_mgt
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
-        let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        let live = channel.replay == nil && (LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live"))
         begin(channel, live: live)
         isLive = live
-        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
+        // Live: a live room, or a channel of a live playlist (only on-demand episodes have a history context).
+        attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
+        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false; rescues = 0
+        stopRescue(); rescueAttempt = PlaybackRescue.Attempt()
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
@@ -1058,7 +1243,9 @@ import IOKit.pwr_mgt
                 self.error = error.localizedDescription; self.loading = false; return
             }
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
-            self.useAdapter(prepared.adapter)
+            #if os(macOS)
+            self.proxy = prepared.adapter; self.proxyOrigin = prepared.adapterOrigin
+            #endif
             // Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: say so now, or
             // switch to the drive's transcoded line, instead of letting AVPlayer fail with a vague error.
             if prepared.matroska {
@@ -1087,7 +1274,11 @@ import IOKit.pwr_mgt
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
-        } catch { Diagnostics.shared.failure("player", "audio session", error); self.error = error.localizedDescription }
+        } catch {
+            // Not a reason to stop: the item plays on, its sound once the session can start (AVAudioSession '!pla'
+            // when another app holds it). As an error it hid a playing video behind the error screen.
+            Diagnostics.shared.failure("player", "audio session", error)
+        }
         #endif
         if !url.isFileURL {
             note(L10n.text("Connecting to %@", Self.server(CloudStreams.transfer(for: url)?.host ?? Remux.transfer(for: url)?.host ?? url.host())))
@@ -1107,13 +1298,13 @@ import IOKit.pwr_mgt
     }
 
     private func attach(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
+        cancelSleepFade()
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
-        // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
-        player.allowsExternalPlayback = !Remux.isRemuxed(url) && !(isLive && proxy != nil)
+        // A repackaged file, or a rescued link, is served on this device's loopback, which an AirPlay receiver can't reach.
+        player.allowsExternalPlayback = !Remux.isRemuxed(url) && !PlaybackRescue.owns(url)
         player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
-        maintainLivePlaylist(item, generation: activeGeneration)
         #if DEBUG
         // `-qaSpeed <rate>` plays at that speed, as picking it in the speed menu does.
         let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
@@ -1141,7 +1332,8 @@ import IOKit.pwr_mgt
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
         let asset = CloudStreams.asset(for: url) ?? CENCStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
-            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers))
+            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers)
+                .merging(MediaTypeHint.mimeType(for: url).map { [AVURLAssetOverrideMIMETypeKey: $0] } ?? [:]) { $1 })
         let item = AVPlayerItem(asset: asset)
         if url.scheme == CloudStreams.scheme {
             // The duration sets how far ahead the file is read, on this device and for this bitrate (#702).
@@ -1196,7 +1388,7 @@ import IOKit.pwr_mgt
     /// Hongguo's ByteVC2 (#957, read clear through its decrypting stream). It opens again repackaged as HLS (`Remux.showsPicture`) and resumes where it was asked to. When it
     /// can't be repackaged, the sound plays on as before.
     private func repackage(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
-        player.pause(); loading = true
+        player.pause(); loading = true; retrying(via: "repackage")
         note(L10n.text("Repackaging the video for this device"))
         Diagnostics.shared.record(.warning, "player", "no picture; repackaging host=\(url.host() ?? "-")")
         preparation = Task { [weak self] in
@@ -1279,6 +1471,7 @@ import IOKit.pwr_mgt
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
+        retrying(via: "segments")
         note(L10n.text("Repackaging the video for this device"))
         Remux.screenCaptured = Self.screenCaptured
         preparation = Task { [weak self] in
@@ -1310,8 +1503,6 @@ import IOKit.pwr_mgt
             let status = item.status
             let timeline = status == .readyToPlay && item.duration.isNumeric
             let failure = item.error
-            let message = failure?.localizedDescription
-            let detail = failure.map(Self.describe) ?? "-"
             let refused = Self.refusedLink(failure, log: item.errorLog())
             let network = Self.networkFailure(failure)
             Task { @MainActor [weak self] in
@@ -1320,6 +1511,7 @@ import IOKit.pwr_mgt
                 if status == .readyToPlay {
                     if self.isLive { self.liveReadyAt = .now }
                     self.lineReadyAt = .now; self.lineWatch?.cancel(); self.lineWatch = nil
+                    self.noteRungRecovered(url)
                     if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
                     Task { [weak self] in
                         let choices = await UngroupedAudio.choices(item)
@@ -1339,6 +1531,10 @@ import IOKit.pwr_mgt
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
                     Diagnostics.shared.record(.info, "player", "ready host=\(self.transfer.host ?? channel.url.host() ?? "-")")
+                    if !self.rescueAttempt.ready, url == self.rescueAttempt.address, let rung = self.rescueAttempt.rung, let began = self.rescueAttempt.began {
+                        Diagnostics.shared.record(.warning, "player", "rescued rung=\(rung) trouble=\(self.rescueAttempt.trouble?.rawValue ?? "-") host=\(self.rescueAttempt.origin?.host() ?? "-") after=\(began.duration(to: .now).components.seconds)s")
+                    }
+                    self.rescueAttempt.ready = true
                     Task { [weak self] in
                         let refused = await Self.recordVideoFormat(item)
                         guard let self, self.generation == activeGeneration, self.item === item, self.checkingPicture else { return }
@@ -1350,21 +1546,26 @@ import IOKit.pwr_mgt
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
                 if status == .failed {
+                    if self.rescueFailed(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.retryThroughProxy(after: failure, channel: channel, url: url, generation: activeGeneration, gatewayOnly: true, otherwise: { _ in }) { return }
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.rescueLink(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
-                    if self.retryLive(after: failure) { return }
-                    if self.tryNextLine(after: failure) { return }
-                    // A refused link is usually an expired one: say so in plain words rather than the system's.
-                    let expired = refused || [401, 403, 404, 410].contains(self.transfer.httpStatus ?? 0)
-                    self.loading = false
-                    self.errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
-                    self.error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
-                        : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
-                        : message ?? L10n.text("This media cannot be played. Try another channel or source.")
+                    let giveUp = { @MainActor [weak self] (reason: String?) -> Void in
+                        guard let self else { return }
+                        self.giveUp(failure, item: item, channel: channel, url: url, refused: refused, network: network, proxyReason: reason)
+                    }
+                    // The rest of the chain; a link the container rescue finds nothing for comes back here. One tail: `giveUp`.
+                    let rest: @MainActor () -> Void = { [weak self] in
+                        guard let self, self.generation == activeGeneration else { return }
+                        if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                        if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
+                        if self.retryThroughProxy(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: giveUp) { return }
+                        giveUp(nil)
+                    }
+                    if self.retryUnopened(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: rest) { return }
+                    rest()
                 }
             }
         }
@@ -1390,6 +1591,7 @@ import IOKit.pwr_mgt
                     _ = SleepTimer.shared.itemEnded()
                     return
                 }
+                if self.sleepFadeRevision != nil { self.saveHistory(completed: true); return }
                 // The queue plays the next episode by itself; `queueMoved` takes over from here.
                 if self.upcoming != nil { return }
                 self.saveHistory(completed: true)
@@ -1405,6 +1607,7 @@ import IOKit.pwr_mgt
             let playing = player.timeControlStatus == .playing
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
+                if playing, !self.sleepFade.isActive, self.sleepFadeRevision != nil { self.cancelSleepFade() }
                 self.buffering = waiting
                 self.paused = paused
                 // No plugin conversion ahead of time while a video plays or loads: it ran a core flat out (#1428).
@@ -1414,11 +1617,14 @@ import IOKit.pwr_mgt
                 #endif
                 if paused { self.clearBoost(); self.saveHistory() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
+                // A queued episode the queue moved to plays under the picture already on screen.
+                if playing, self.showsPicture { self.countPlay(.started) }
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .milliseconds(350))
                         guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing, !self.showsPicture else { return }
                         self.showsPicture = true
+                        self.countPlay(.started)
                         // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
                         let seconds = self.player.currentTime().seconds
                         Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", Date().timeIntervalSince(self.openedAt) - 0.35))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
@@ -1466,7 +1672,7 @@ import IOKit.pwr_mgt
         // A resource-loader stream's bytes never reach the access log.
         let cloud = automatic.flatMap { CloudStreams.transfer(for: $0) ?? Remux.transfer(for: $0) }
         if let cloud { next.received = max(next.received, cloud.received) }
-        // HLS goes through the local proxy, which sees upstream bytes as they arrive.
+        // HLS through the local proxy: it sees upstream bytes as they arrive.
         let upstream = proxy?.stats.snapshot
         if let upstream { next.received = max(next.received, upstream.received) }
         history.append((now, next.received))
@@ -1484,7 +1690,7 @@ import IOKit.pwr_mgt
             let current = media > 0 && media.isFinite ? media / 8 : (indicated > 0 && indicated.isFinite ? indicated / 8 : nil)
             next.required = [current, transfer.required].compactMap { $0 }.min()
         }
-        // A local HLS adapter stands for the real server.
+        // The Mac plays HLS through a local proxy; name the real server instead.
         let segmentHost = events.last?.uri.flatMap { URL(string: $0)?.host() }
         next.host = segmentHost.flatMap { ["127.0.0.1", "localhost"].contains($0) ? nil : $0 } ?? cloud?.host ?? origin
         if let upstream {
@@ -1561,6 +1767,8 @@ import IOKit.pwr_mgt
         return text
     }
     func stop() {
+        countPlay(.abandoned); attempt = nil
+        cancelSleepFade()
         #if os(macOS)
         displayAwake.hold(false)
         #endif
@@ -1574,6 +1782,7 @@ import IOKit.pwr_mgt
         upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
+        stopRescue()
         #if os(tvOS)
         HDRDisplay.reset()
         #endif
@@ -1597,12 +1806,10 @@ import IOKit.pwr_mgt
             Diagnostics.shared.record(.info, "player", "stop at=\(seconds.isFinite ? Int(seconds) : -1)s")
         }
         generation = UUID()
-        liveResolution = UUID()
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
-        liveMaintenance?.cancel(); liveMaintenance = nil
         transfer = Transfer(); steps = []
         if let proxy { Task { await proxy.stop() } }; proxy = nil
         observation = nil
@@ -1752,7 +1959,11 @@ extension PlaybackSession {
         var matroska = false
         /// Every byte passes through the plugin runtime.
         var pluginProxy = false
+        #if os(macOS)
         var adapter: HLSProxy?
+        /// The address `adapter` fetches.
+        var adapterOrigin: URL?
+        #endif
     }
 
     fileprivate func prepare(_ channel: Channel) async throws -> Prepared {
@@ -1782,7 +1993,9 @@ extension PlaybackSession {
         if let media = await EmbeddedJarHost.shared.directMedia(address) {
             try Task.checkCancellation()
             let proxied = address
-            address = CloudStreams.register(media) { await EmbeddedJarHost.shared.directMedia(proxied) }
+            address = CloudStreams.register(media, renewal: renewal(for: channel, length: media.length, name: media.name)) {
+                await EmbeddedJarHost.shared.directMedia(proxied)
+            }
             prepared.url = address
             Diagnostics.shared.record(.info, "player", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
         } else if let media = await CatPawOpen.proxiedMedia(address, headers: channel.headers) {
@@ -1791,13 +2004,17 @@ extension PlaybackSession {
                 try Task.checkCancellation()
                 // A drive file whose link the bundle's proxy reveals streams straight from the drive, like the plugins'
                 // (above): through the bundle, a 4K file filled the heap of the phone's Node until it stopped (#530).
-                address = CloudStreams.register(direct) { await CatPawOpen.renewedDirectMedia(media) }
+                address = CloudStreams.register(direct, renewal: renewal(for: channel, length: direct.length, name: direct.name)) {
+                    await CatPawOpen.renewedDirectMedia(media)
+                }
                 Diagnostics.shared.record(.info, "player", "catpaw direct host=\(direct.url.host() ?? "-") length=\(direct.length)")
             } else {
                 // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
                 // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
                 // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
-                address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
+                address = CloudStreams.register(media, parallel: 2, renewal: renewal(for: channel, length: media.length, name: media.name)) {
+                    await CatPawOpen.relocated(media)
+                }
                 Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
             }
             prepared.url = address
@@ -1836,7 +2053,7 @@ extension PlaybackSession {
         // A plugin's own loopback server names no file (`/chunk?…`), so its first bytes say whether it is an MKV
         // or the like to repackage (#776); anything else goes to AVPlayer as before.
         if !prepared.pluginProxy, channel.url.scheme == "http", Remux.hidesName(address),
-           let source = await Remux.sniffedSource(address, headers: channel.headers) {
+           let source = await Remux.sniffedSource(address, headers: channel.headers, renewal: renewal(for: channel, length: nil, name: address.lastPathComponent)) {
             if Task.isCancelled { await source.close(); throw CancellationError() }
             note(L10n.text("Repackaging the video for this device"))
             Diagnostics.shared.record(.info, "player", "plugin server sends a file to repackage")
@@ -1854,13 +2071,14 @@ extension PlaybackSession {
             let source: RemuxSource?
             if address.isFileURL { source = try? Remux.fileSource(address) }
             else {
-                do { source = try await Remux.httpSource(address, headers: channel.headers) }
+                do { source = try await Remux.httpSource(address, headers: channel.headers, renewal: renewal(for: channel, length: nil, name: address.lastPathComponent)) }
                 catch {
-                    if FLVLive.names(address), error is Remux.NoByteRanges {
+                    // A stream that answers no byte ranges is live: an FLV one, whatever its name, plays as live HLS.
+                    if error is Remux.NoByteRanges {
                         // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
                         // Keep seekable FLV files on the file path and repackage live streams as local HLS.
                         do {
-                            prepared.url = try await FLVLive.open(address, headers: channel.headers)
+                            prepared.url = try await FLVLive.open(address, headers: channel.headers, renew: liveRenewal(for: channel))
                             return prepared
                         } catch is FLVLive.NotFLV {
                             // Let the normal file path report the original conversion failure below.
@@ -1879,26 +2097,28 @@ extension PlaybackSession {
                 return prepared
             }
         }
-        let root = LiveRepair.sourceURL(for: address) ?? address
-        let liveHLS = liveRoom != nil && root.pathExtension.lowercased() == "m3u8" && ["http", "https"].contains(root.scheme)
+        if address.pathExtension.lowercased() == "mpd", ["http", "https"].contains(address.scheme),
+           let master = await ContainerRescue.dashManifest(address, headers: channel.headers) {
+            try Task.checkCancellation()
+            prepared.url = master
+            return prepared
+        }
         #if os(macOS)
-        let usesProxy = liveHLS || address.pathExtension.lowercased() == "m3u8" && ["http", "https"].contains(address.scheme) && channel.url.scheme != DownloadLibrary.scheme
-        #else
-        let usesProxy = liveHLS
-        #endif
-        if usesProxy {
-            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: root) ?? [:]) { $1 },
-                                   renewableLive: liveHLS, repairsDiscontinuities: address.scheme == LiveRepair.scheme)
-            do { prepared.url = try await adapter.start(url: root) }
+        if address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme), channel.url.scheme != DownloadLibrary.scheme {
+            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 })
+            do { prepared.url = try await adapter.start(url: address); prepared.adapter = adapter; prepared.adapterOrigin = address }
+            catch let failure as HLSProxy.Failure {
+                // Not a playlist (an .m3u8 address that sends MPEG-TS, say): AVPlayer gets it as it is, as on iPhone.
+                Diagnostics.shared.record(.info, "player", "hls proxy skipped host=\(channel.url.host() ?? "-") \(failure.localizedDescription)")
+            }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.record(.error, "player", "proxy failed host=\(channel.url.host() ?? "-") \(Self.describe(error))") }
                 throw error
             }
-            prepared.adapter = adapter
         }
-        #if !os(macOS)
+        #else
         // A video whose playlist carries spliced-in ads opens through the loader that cuts them (#567); any other plays as it is.
-        if !usesProxy, prepared.url == address, address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme),
+        if prepared.url == address, address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme),
            channel.url.scheme != DownloadLibrary.scheme,
            let routed = await AdSkip.route(address, headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 }) {
             prepared.url = routed
@@ -1948,7 +2168,9 @@ extension PlaybackSession {
     /// The local HLS adapter, or repackager, of a stream that won't play after all.
     fileprivate static func stopAdapter(_ prepared: Prepared) {
         Remux.stop(prepared.url)
+        #if os(macOS)
         if let adapter = prepared.adapter { Task { await adapter.stop() } }
+        #endif
     }
 }
 
@@ -1982,7 +2204,7 @@ extension PlaybackSession {
             let queued = self.makeItem(next, url: prepared.url)
             guard self.player.canInsert(queued, after: item) else { return Self.release(next, prepared) }
             self.player.insert(queued, after: item)
-            self.player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
+            self.player.actionAtItemEnd = SleepTimer.shared.endsWithItem || self.sleepFadeRevision != nil ? .pause : .advance
             self.upcoming = Upcoming(channel: next, item: queued, prepared: prepared)
             Diagnostics.shared.record(.info, "player", "upcoming queued name=\(next.name) left=\(Int(length - item.currentTime().seconds))s")
             // The next episode starts past its intro when that is skipped, rather than jumping there once it plays.
@@ -2034,19 +2256,30 @@ extension PlaybackSession {
 
     /// The Sleep Timer ran out: the sound fades away and the video pauses.
     private func sleepTimerFired() {
-        guard player.rate != 0 else { return }
-        SleepTimer.fadeOut(player) { [weak self] in self?.player.pause() }
+        guard sleepFadeRevision != SleepTimer.shared.revision else { return }
+        sleepFadeRevision = SleepTimer.shared.revision
+        player.actionAtItemEnd = .pause
+        sleepFade.start(player) { [weak self] in self?.player.pause() }
+    }
+
+    private func cancelSleepFade() {
+        sleepFade.cancel(); sleepFadeRevision = nil
+        followSleepTimer()
     }
 
     /// With End of Episode set, the player pauses at the end instead of moving on to the queued episode.
     private func followSleepTimer() {
+        if let revision = sleepFadeRevision, revision != SleepTimer.shared.revision {
+            sleepFade.cancel(); sleepFadeRevision = nil
+        }
         guard upcoming != nil else { return }
-        player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
+        player.actionAtItemEnd = SleepTimer.shared.endsWithItem || sleepFadeRevision != nil ? .pause : .advance
     }
 
     /// Plays the queued next episode now (the Next Episode button); false when none is queued yet.
     func playUpcoming() -> Bool {
         guard let upcoming, upcoming.item.status != .failed, player.currentItem === item else { return false }
+        cancelSleepFade()
         skipsToUpcoming = true
         player.advanceToNextItem()
         player.play()
@@ -2064,8 +2297,14 @@ extension PlaybackSession {
         // Let go of the finished episode's stream; the queued one's becomes the session's.
         if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
+        stopRescue(); rescueAttempt = PlaybackRescue.Attempt()
+        rescueAttempt.ready = upcoming.item.status == .readyToPlay
         if let proxy { Task { await proxy.stop() } }
-        proxy = upcoming.prepared.adapter
+        #if os(macOS)
+        proxy = upcoming.prepared.adapter; proxyOrigin = upcoming.prepared.adapterOrigin
+        #else
+        proxy = nil
+        #endif
         detachItem(); observation = nil
         upcomingObservation = nil; upcomingTask = nil; self.upcoming = nil
         player.actionAtItemEnd = .pause
@@ -2074,8 +2313,10 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        // A queued next episode is a point video, never live.
+        // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
+        attempt = PlayAttempt(live: false, address: channel.url)
+        if upcoming.item.status == .readyToPlay, player.timeControlStatus == .playing { countPlay(.started) }
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)

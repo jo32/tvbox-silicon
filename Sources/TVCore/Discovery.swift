@@ -57,7 +57,8 @@ public enum GlobalSearch {
                               onResult: @escaping @Sendable (SearchSourceResult) async -> Void) async {
         let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { return }
-        let eligible = sites.filter { $0.searchable && $0.canBrowse(jarURL: jarURL) }
+        var seen = Set<String>()
+        let eligible = sites.filter { $0.searchable && $0.canBrowse(jarURL: jarURL) && seen.insert($0.id).inserted }
         let began = ContinuousClock.now
         Diagnostics.shared.record(.info, "search", "begin sources=\(eligible.count) plugins=\(eligible.filter { !$0.native }.count) skipped=\(sites.count - eligible.count)")
         defer { Diagnostics.shared.record(.info, "search", "end elapsed=\(began.duration(to: .now)) cancelled=\(Task.isCancelled)") }

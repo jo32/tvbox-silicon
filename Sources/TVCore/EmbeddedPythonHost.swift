@@ -7,7 +7,9 @@ private func pythonRequest(_ resources: UnsafePointer<CChar>, _ request: UnsafeP
 /// Python sources on iOS and tvOS. One CPython embedded in the app (`ApplePython.c`) runs the same
 /// `host.py` and `base/` as the Mac's sandboxed Python process. Each source keeps its own spider,
 /// profile and media proxy; a spider answers one request at a time, and sources run side by side.
-/// Running Python can't be interrupted: a request past its deadline is abandoned, as the JVM's are.
+/// A cancelled or overdue request stops where the source waits on the host: an HTTP call through requests or
+/// its own `time.sleep` (Runtime/PythonHost/cancellation.py). Other code runs to its end; the worker keeps the
+/// execution slot until Python returns.
 public actor EmbeddedPythonHost {
     public static let shared = EmbeddedPythonHost()
     /// Only builds that embedded `Scripts/build-apple-python.sh`'s output have Python.
@@ -16,7 +18,14 @@ public actor EmbeddedPythonHost {
               Bundle.main.url(forResource: "host", withExtension: "py", subdirectory: "PythonHost") != nil else { return false }
         return FileManager.default.fileExists(atPath: frameworks.appendingPathComponent("Python.framework/Python").path)
     }()
-    private let worker = SerializedPluginWorker(timeout: 150, width: EmbeddedJarHost.searchWidth) { resources, json in
+    private let worker = SerializedPluginWorker(timeout: 150, width: EmbeddedJarHost.searchWidth, abandon: { resources, id in
+        let json = "{\"command\":\"cancel\",\"request\":\"\(id)\"}"
+        resources.withCString { resources in
+            json.withCString { json in
+                if let output = pythonRequest(resources, json) { free(output) }
+            }
+        }
+    }) { resources, json in
         resources.withCString { resources in
             json.withCString { json in
                 guard let output = pythonRequest(resources, json) else {
@@ -56,12 +65,14 @@ public actor EmbeddedPythonHost {
             "profile": .string(root.appendingPathComponent("Profiles/" + profileKey).path),
             "api": .string(scriptURL.absoluteString), "key": .string(site.sourceKey), "ext": .string(ext),
             "params": .object(params.mapValues(JSONValue.string)),
+            "timeoutSeconds": .number(140),
         ]
         let json = String(decoding: try encoder.encode(input), as: UTF8.self)
         let kind = EmbeddedJarHost.kind(params)
         let started = ContinuousClock.now
         Diagnostics.shared.record(.info, "jar.request", "source=\(site.key) python \(kind) begin")
         let response = try await worker.request(resources: resources, json: json, search: params["wd"] != nil)
+        try Task.checkCancellation()
         let envelope = try JSONDecoder().decode([String: JSONValue].self, from: Data(response.utf8))
         if let message = PluginFailure.message(envelope) {
             Diagnostics.shared.record(.error, "jar.request", "source=\(site.key) python \(kind) failed duration=\(started.duration(to: .now)) error=\(message)")

@@ -14,13 +14,16 @@ public enum LiveRepair {
     /// The same loader for a video's playlist whose ad segments are cut (`AdSkip`).
     public static let adScheme = "tvbox-ad-skip"
     nonisolated(unsafe) private static var hostHeaders: [String: [String: String]] = [:]
+    /// Added to either scheme for a playlist given over plain HTTP: the loader asks it the same way. The address
+    /// carries it, so one plain playlist doesn't make its host's other playlists plain.
+    static let plainSuffix = "-http"
     private static let lock = NSLock()
 
     /// The address AVPlayer opens for one of these playlists; the server's playlists are asked for with `headers`.
     static func address(_ url: URL, headers: [String: String]? = nil, skipsAds: Bool = false) -> URL {
         if let headers, let host = url.host()?.lowercased() { lock.withLock { hostHeaders[host] = headers } }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.scheme = skipsAds ? adScheme : scheme
+        components?.scheme = (skipsAds ? adScheme : scheme) + (url.scheme?.lowercased() == "http" ? plainSuffix : "")
         return components?.url ?? url
     }
 
@@ -31,30 +34,33 @@ public enum LiveRepair {
 
     /// The playlist on the server behind an address from `address`.
     static func upstream(_ url: URL) -> URL? {
-        guard url.scheme == scheme || url.scheme == adScheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        components.scheme = "https"
+        guard loads(url), var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        components.scheme = url.scheme?.hasSuffix(plainSuffix) == true ? "http" : "https"
         return components.url
     }
 
-    /// The source behind the repair route, for a playback-owned HTTP adapter.
-    public static func sourceURL(for url: URL) -> URL? { upstream(url) }
-
-    public static func repairedMediaPlaylist(_ text: String, identity: String?, rewriteLine: (String) -> String) -> String {
-        var lines = text.components(separatedBy: .newlines)
-        if text.contains("#EXT-X-STREAM-INF") { return lines.map(rewriteLine).joined(separator: "\n") }
-        let first = sequenceStart(lines)
-        lines = droppingInitialDiscontinuity(lines, first: first)
-        guard let identity, !text.contains("#EXT-X-ENDLIST") else { return lines.map(rewriteLine).joined(separator: "\n") }
-        return stableLines(lines, first: first, playlist: identity, rewriteLine: rewriteLine)
-    }
-
-    /// An asset for an address from `address`, or nil for any other address.
+    /// An asset for an address from `address`, or nil for any other address. The segments and keys its playlists
+    /// name load from their CDN with the source's headers too: without its Referer or User-Agent, a CDN that wants
+    /// them refuses every segment (HTTP 403).
     public static func asset(for url: URL) -> AVURLAsset? {
-        guard url.scheme == scheme || url.scheme == adScheme else { return nil }
-        let asset = AVURLAsset(url: url)
+        guard loads(url) else { return nil }
+        let headers = headers(for: url)
+        var options: [String: Any] = [:]
+        if !headers.isEmpty {
+            options["AVURLAssetHTTPHeaderFieldsKey"] = headers
+            if let agent = headers.first(where: { $0.key.lowercased() == "user-agent" })?.value, !agent.isEmpty { options[AVURLAssetHTTPUserAgentKey] = agent }
+        }
+        let asset = AVURLAsset(url: url, options: options)
         asset.resourceLoader.setDelegate(RepairedPlaylistLoader.shared, queue: RepairedPlaylistLoader.shared.queue)
         return asset
     }
+
+    /// Whether `url` is an address from `address`.
+    static func loads(_ url: URL) -> Bool { repairs(url) || skipsAds(url) }
+    /// Whether `url` is an address from `address` for a live playlist to repair.
+    static func repairs(_ url: URL) -> Bool { [scheme, scheme + plainSuffix].contains(url.scheme ?? "") }
+    /// Whether `url` is an address from `address` for a playlist whose ads are cut.
+    static func skipsAds(_ url: URL) -> Bool { [adScheme, adScheme + plainSuffix].contains(url.scheme ?? "") }
 
     nonisolated(unsafe) private static var segmentNames: [String: [Int: String]] = [:]
     private static let hostsKey = "liveRepairHosts"
@@ -81,26 +87,9 @@ public enum LiveRepair {
     /// `playlist` names the playlist across its reloads.
     static func steady(_ text: String, playlist: String) -> String {
         guard !text.contains("#EXT-X-STREAM-INF"), !text.contains("#EXT-X-ENDLIST") else { return text }
-        let lines = text.components(separatedBy: "\n")
-        return stableLines(lines, first: sequenceStart(lines), playlist: playlist) { $0 }
-    }
-
-    private static func sequenceStart(_ lines: [String]) -> Int {
+        var lines = text.components(separatedBy: "\n")
         let sequenceTag = "#EXT-X-MEDIA-SEQUENCE:"
-        return lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
-    }
-
-    private static func droppingInitialDiscontinuity(_ lines: [String], first: Int) -> [String] {
-        guard first == 0 else { return lines }
-        let boundary = lines.firstIndex { $0.hasPrefix("#EXTINF") } ?? lines.endIndex
-        return lines[..<boundary].filter { $0.trimmingCharacters(in: .whitespaces) != "#EXT-X-DISCONTINUITY" } + lines[boundary...]
-    }
-
-    private static func stableLines(_ input: [String], first: Int, playlist: String, rewriteLine: (String) -> String) -> String {
-        var lines = input
-        for index in lines.indices where lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("#") {
-            lines[index] = rewriteLine(lines[index])
-        }
+        let first = lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
         return lock.withLock {
             if segmentNames[playlist] == nil, segmentNames.count >= 16 { segmentNames.removeAll() }
             var names = segmentNames[playlist] ?? [:]
@@ -111,10 +100,7 @@ public enum LiveRepair {
             for index in lines.indices {
                 let value = lines[index].trimmingCharacters(in: .whitespaces)
                 guard !value.isEmpty, !value.hasPrefix("#") else { continue }
-                if let known = names[number] { lines[index] = known } else {
-                    lines[index] = rewriteLine(value)
-                    names[number] = lines[index]
-                }
+                if let known = names[number] { lines[index] = known } else { names[number] = value }
                 number += 1
             }
             segmentNames[playlist] = names
@@ -136,9 +122,14 @@ public enum LiveRepair {
             return (master ? address(url, skipsAds: skipsAds) : url).absoluteString
         }
         let lines = text.components(separatedBy: .newlines)
-        return droppingInitialDiscontinuity(lines, first: sequenceStart(lines)).map { line in
+        let firstSegment = lines.firstIndex { $0.hasPrefix("#EXTINF") } ?? lines.endIndex
+        let sequenceTag = "#EXT-X-MEDIA-SEQUENCE:"
+        let sequence = lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
+        return lines.indices.compactMap { index -> String? in
+            let line = lines[index]
             let value = line.trimmingCharacters(in: .whitespaces)
             if value.isEmpty { return line }
+            if value == "#EXT-X-DISCONTINUITY", sequence == 0, index < firstSegment { return nil }
             if !value.hasPrefix("#") { return resolve(value) }
             guard let match = line.firstMatch(of: /URI="([^"]+)"/) else { return line }
             return line.replacingCharacters(in: match.1.startIndex..<match.1.endIndex, with: resolve(String(match.1)))
@@ -164,8 +155,8 @@ private final class RepairedPlaylistLoader: NSObject, AVAssetResourceLoaderDeleg
                 let (data, response) = try await URLSession.shared.data(for: fetch)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard (200..<300).contains(status) else { throw TVError.http(status) }
-                let playlist = LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: url.scheme == LiveRepair.adScheme)
-                result = .success(Data((url.scheme == LiveRepair.scheme ? LiveRepair.steady(playlist, playlist: url.absoluteString) : playlist).utf8))
+                let playlist = LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: LiveRepair.skipsAds(url))
+                result = .success(Data((LiveRepair.repairs(url) ? LiveRepair.steady(playlist, playlist: url.absoluteString) : playlist).utf8))
             } catch {
                 if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "repaired playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
                 result = .failure(error)

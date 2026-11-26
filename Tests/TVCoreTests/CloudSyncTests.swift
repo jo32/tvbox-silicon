@@ -256,6 +256,27 @@ import Testing
     #expect(ledger?.records["a"]?.value == "Alpha")
 }
 
+/// The second account's copy is left as it is while this build cannot read it: the old account's items stay on
+/// the device instead of being pushed over it, and are replaced once its own copy can be read (#2347).
+@Test @MainActor func anotherICloudAccountWithAnUnreadableCopyIsNotOverwritten() {
+    let cloud = MemoryCloud()
+    let tv = Device(cloud, names: ["a": "Alpha"])
+    tv.sync.flush(now: Date(timeIntervalSince1970: 1_000_000))
+    let unreadable = Data("not a ledger".utf8)
+    cloud.values["sync.names"] = unreadable
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    #expect(cloud.values["sync.names"] == unreadable)
+    #expect(tv.names == ["a": "Alpha"])
+    // Another device of the second account writes a copy this build can read.
+    cloud.values = [:]
+    let phone = Device(cloud, names: ["b": "Beta"])
+    phone.sync.flush(now: Date(timeIntervalSince1970: 1_000_100))
+    tv.sync.flush(now: Date(timeIntervalSince1970: 1_000_200))
+    #expect(tv.names == ["b": "Beta"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.records["a"] == nil)
+}
+
 /// Coming back to the front asks iCloud for what changed while the app was away; what it brings, another
 /// account's copy included, merges when the store's notification arrives (#584). Before `start()` nothing
 /// happens, so the first merge still waits for the saved subscriptions.

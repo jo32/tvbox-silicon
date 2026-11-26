@@ -1,4 +1,6 @@
 import Foundation
+import Network
+import os
 import Testing
 @testable import TVCore
 
@@ -106,4 +108,129 @@ struct FLVLiveTests {
         let avc = Self.video(0, key: true)
         #expect(FLVSegmenter.enhanced(avc) == avc)
     }
+}
+
+// MARK: Going on from a fresh address
+
+extension FLVLiveTests {
+    @Test func aResumedStreamSkipsPicturesAlreadyPlayed() throws {
+        var first = FLVSegmenter()
+        _ = first.add(Tag(type: 9, time: 0, body: Self.avcConfig))
+        for time: UInt32 in [0, 2000, 4000] { _ = first.add(Self.video(time, key: true)) }
+        _ = first.add(Self.video(4040, key: false))
+        // The connection ended: the run under way is kept.
+        let finished = first.finish()
+        let tail = try #require(finished)
+        #expect(tail.start == 4000 && abs(tail.duration - 0.041) < 0.0001 && !tail.discontinuity)
+        #expect(first.lastEnd == 4041)
+        // The new connection begins at pictures the server still had.
+        var resumed = FLVSegmenter.resuming(after: first.lastEnd)
+        _ = resumed.add(Tag(type: 9, time: 0, body: Self.avcConfig))
+        for time: UInt32 in [2000, 4000, 6000] {
+            let closed = resumed.add(Self.video(time, key: true))
+            #expect(closed == nil)
+        }
+        let closed = resumed.add(Self.video(8000, key: true))
+        let run = try #require(closed)
+        #expect(run.start == 6000 && run.duration == 2 && run.discontinuity)
+        // A clock that began again plays on.
+        var reset = FLVSegmenter.resuming(after: 200_000)
+        _ = reset.add(Tag(type: 9, time: 0, body: Self.avcConfig))
+        _ = reset.add(Self.video(0, key: true))
+        let restarted = reset.add(Self.video(2000, key: true))
+        let again = try #require(restarted)
+        #expect(again.start == 0 && again.discontinuity)
+        var empty = FLVSegmenter()
+        let nothing = empty.finish()
+        #expect(nothing == nil)
+    }
+
+    @Test func aStreamWhoseConnectionEndsGoesOnFromAFreshAddress() async throws {
+        let stream = try Data(contentsOf: try #require(Bundle.module.url(forResource: "live-h264-aac", withExtension: "flv", subdirectory: "Fixtures")))
+        // The first address stops halfway, as one that expired does; the fresh one gives the stream from its start
+        // again, as a CDN begins at a picture it still has. After that there is no fresh address, and the stream ends.
+        let server = try await LiveServer.start(["/first.flv": stream.prefix(stream.count / 2), "/fresh.flv": stream])
+        defer { server.stop() }
+        let port = server.port
+        let asked = OSAllocatedUnfairLock(initialState: 0)
+        let session = FLVLiveSession(url: URL(string: "http://127.0.0.1:\(port)/first.flv")!, headers: [:], device: RemuxSession.device()) {
+            let count = asked.withLock { $0 += 1; return $0 }
+            return count == 1 ? (URL(string: "http://127.0.0.1:\(port)/fresh.flv")!, ["X-Renewed": "1"]) : nil
+        }
+        defer { session.close() }
+        try await session.start()
+        var playlist = ""
+        for _ in 0..<80 where !playlist.contains("#EXT-X-ENDLIST") {
+            playlist = await session.playlist(0) ?? ""
+            if !playlist.contains("#EXT-X-ENDLIST") { try await Task.sleep(for: .milliseconds(250)) }
+        }
+        #expect(playlist.contains("#EXT-X-ENDLIST"))
+        #expect(asked.withLock { $0 } == 2)
+        #expect(server.headers("/fresh.flv")["x-renewed"] == "1")
+        let lines = playlist.components(separatedBy: "\n")
+        // One playlist throughout: the fresh connection's runs follow a discontinuity, and nothing plays twice (the
+        // stream lasts 6 s; a little at the cut may be lost, never repeated).
+        #expect(lines.filter { $0 == "#EXT-X-DISCONTINUITY" }.count == 1)
+        let total = lines.filter { $0.hasPrefix("#EXTINF:") }.compactMap { Double($0.dropFirst(8).dropLast()) }.reduce(0, +)
+        #expect(total > 4.5 && total < 6.3, "listed \(total) s")
+        for name in lines where name.hasSuffix(".m4s") {
+            let index = try #require(Int(name.dropFirst(2).dropLast(4)))
+            let media = try await session.segment(track: 0, index: index)
+            #expect(!media.isEmpty)
+        }
+    }
+}
+
+/// A live stream's server: each address gives its bytes and then ends the connection, as one that expired does.
+private final class LiveServer: @unchecked Sendable {
+    let port: UInt16
+    private let listener: NWListener
+    private let requests: OSAllocatedUnfairLock<[String: [String: String]]>
+
+    private init(listener: NWListener, port: UInt16, requests: OSAllocatedUnfairLock<[String: [String: String]]>) {
+        self.listener = listener; self.port = port; self.requests = requests
+    }
+
+    static func start(_ bodies: [String: Data]) async throws -> LiveServer {
+        let listener = try NWListener(using: .tcp)
+        let queue = DispatchQueue(label: "live.server")
+        let requests = OSAllocatedUnfairLock<[String: [String: String]]>(initialState: [:])
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: queue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
+                let head = String(decoding: data ?? Data(), as: UTF8.self).components(separatedBy: "\r\n")
+                let path = head.first?.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
+                var headers: [String: String] = [:]
+                for line in head.dropFirst() {
+                    guard let colon = line.firstIndex(of: ":") else { continue }
+                    headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                }
+                let asked = headers
+                requests.withLock { $0[path] = asked }
+                guard let body = bodies[path] else {
+                    return connection.send(content: Data("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".utf8), isComplete: true,
+                                           completion: .contentProcessed { _ in connection.cancel() })
+                }
+                // No length: the stream lasts until the server ends it.
+                let header = "HTTP/1.1 200 OK\r\nContent-Type: video/x-flv\r\nConnection: close\r\n\r\n"
+                connection.send(content: Data(header.utf8) + body, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
+            final class Flag: @unchecked Sendable { var done = false }
+            let resumed = Flag()
+            listener.stateUpdateHandler = { state in
+                guard !resumed.done else { return }
+                if case .ready = state, let port = listener.port?.rawValue { resumed.done = true; continuation.resume(returning: port) }
+                if case .failed(let error) = state { resumed.done = true; continuation.resume(throwing: error) }
+            }
+            listener.start(queue: queue)
+        }
+        return LiveServer(listener: listener, port: port, requests: requests)
+    }
+
+    /// The headers the last request for `path` came with.
+    func headers(_ path: String) -> [String: String] { requests.withLock { $0[path] ?? [:] } }
+
+    func stop() { listener.cancel() }
 }

@@ -179,12 +179,26 @@ enum QALaunch {
         }
         // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say); with `-qaResume <seconds>`,
         // from there, as a saved position resumes. `-qaSubtitleURLs <a,b,...>` are its source's subtitle files, as a
-        // cloud-drive plugin's `subs` would be (#576).
+        // cloud-drive plugin's `subs` would be (#576). `-qaPlayHeaders <JSON object>` are its source's request headers.
         if let address = UserDefaults.standard.string(forKey: "qaPlayURL"), let url = URL(string: address) {
             let resume = UserDefaults.standard.double(forKey: "qaResume")
             let subtitles = (UserDefaults.standard.string(forKey: "qaSubtitleURLs") ?? "").split(separator: ",").compactMap { URL(string: String($0)) }
                 .map { ExternalSubtitle(name: $0.lastPathComponent, url: $0) }
-            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, resumePosition: resume > 0 ? resume : nil, subtitles: subtitles)
+            // A launch argument that looks like a property list arrives as a dictionary; JSON arrives as text.
+            let headers = UserDefaults.standard.dictionary(forKey: "qaPlayHeaders") as? [String: String]
+                ?? UserDefaults.standard.string(forKey: "qaPlayHeaders").flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) } ?? [:]
+            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, headers: headers, resumePosition: resume > 0 ? resume : nil, subtitles: subtitles)
+        }
+        // `-qaLiveCheck 1` loads every live playlist of the subscription, as the Live tab does, and logs each result.
+        if UserDefaults.standard.bool(forKey: "qaLiveCheck") {
+            for source in store.liveSources where !source.isBuiltIn {
+                do {
+                    let playlist = try await HTTPClient().playlist(source)
+                    Diagnostics.shared.record(.info, "qa", "live-check \(source.name): \(playlist.channels.count) channels, first=\(playlist.channels.first?.name ?? "-")")
+                } catch {
+                    Diagnostics.shared.record(.warning, "qa", "live-check \(source.name): \(error.localizedDescription)")
+                }
+            }
         }
         // `-qaPlayChannel <index>` plays that channel of the subscription's first live playlist, picked from its list as
         // the Live tab does: Previous and Next Channel and the channel list go through the playlist (#1010).
@@ -193,7 +207,9 @@ enum QALaunch {
             do {
                 let playlist = try await HTTPClient().playlist(source)
                 let channels = playlist.channels
-                let guide = LiveGuide.address(for: source, playlist: playlist.guide, in: store).map(LiveGuide.init)
+                let guide = LiveGuide.address(for: source, playlist: playlist.guide, in: store).map {
+                    LiveGuide(address: $0, context: GuideRequestContext(sourceID: source.id, origin: source.url, headers: source.headers))
+                }
                 if let guide { Task { await guide.load(channels) } }
                 if channels.indices.contains(index) {
                     store.watch(channels[index], in: LiveLineup(title: source.name, channels: channels), guide: guide)

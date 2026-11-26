@@ -282,7 +282,8 @@ struct ChannelListView: View {
     /// Uses the guide the viewer typed in, the subscription names or the playlist names, and loads it if it's XMLTV.
     private func applyGuide() {
         let address = LiveGuide.address(for: source, playlist: playlistGuide, in: store)
-        if address != guide?.address { guide = address.map(LiveGuide.init) }
+        let context = GuideRequestContext(sourceID: source.id, origin: source.url, headers: source.headers)
+        if address != guide?.address || context != guide?.context { guide = address.map { LiveGuide(address: $0, context: context) } }
         if let guide, !channels.isEmpty, case .xmltv = guide.address {
             let channels = channels
             Task { await guide.load(channels) }
@@ -302,7 +303,9 @@ struct ChannelListView: View {
         catch is CancellationError { }
         catch {
             guard !Task.isCancelled else { return }
-            Diagnostics.shared.failure("live", "playlist host=\(source.url.host() ?? "-")", error)
+            // A loopback playlist says which kind it is (`LoopbackPlaylist.label`), never its address.
+            let route = LoopbackPlaylist.label(source.url).map { " " + $0 } ?? ""
+            Diagnostics.shared.failure("live", "playlist host=\(source.url.host() ?? "-")\(route)", error)
             self.error = error.localizedDescription
         }
     }
@@ -321,14 +324,17 @@ private struct TVChannelGuide: View {
     let reload: () -> Void
     let editGuide: () -> Void
     @Environment(Store.self) private var store
+    @Environment(LiveGuide.self) private var guide: LiveGuide?
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedChannel: String?
+    @FocusState private var searchFocused: Bool
+    @State private var lastFocusedChannel: String?
     @State private var showingSearch = false
     private var groups: [String] { Array(Set(channels.map(\.group))).sorted() }
     private var filtered: [Channel] {
         channels.filter { (group == nil || $0.group == group) && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)) }
     }
-    private var highlighted: Channel? { filtered.first { $0.id == focusedChannel } ?? filtered.first }
+    private var highlighted: Channel? { filtered.first { $0.id == (focusedChannel ?? lastFocusedChannel) } ?? filtered.first }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
@@ -338,7 +344,7 @@ private struct TVChannelGuide: View {
                 Button { showingSearch = true } label: {
                     Label(query.isEmpty ? L10n.text("Search channels") : query, systemImage: "magnifyingglass")
                         .lineLimit(1)
-                }.controlButton()
+                }.controlButton().focused($searchFocused)
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark") }
                         .controlButton().accessibilityLabel(L10n.text("Clear search"))
@@ -347,7 +353,10 @@ private struct TVChannelGuide: View {
                     .controlButton().accessibilityLabel(L10n.text("Program Guide"))
                 Button(action: reload) { Image(systemName: "arrow.clockwise") }
                     .controlButton().disabled(refreshing).accessibilityLabel(L10n.text("Refresh"))
-            }.tvFocusSection()
+            }
+            .tvFocusSection()
+            // Up from below comes back to Search, where Down left, rather than the end of the bar.
+            .defaultFocus($searchFocused, true, priority: .userInitiated)
 
             if let channel = highlighted {
                 HStack(alignment: .center, spacing: 48) {
@@ -360,11 +369,16 @@ private struct TVChannelGuide: View {
                             if store.isFavorite(channel) { Image(systemName: "heart.fill") }
                         }.font(.system(size: 24)).foregroundStyle(.secondary)
                         NowAndNext(channel: channel).font(.system(size: 24))
+                        ProgrammeCatchupButton(channel: channel, play: watch).controlButton()
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     TVGuideLogo(channel: channel, size: 112)
                         .frame(width: 350, height: 198)
                         .background(TVStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-                }.frame(minHeight: 218)
+                }
+                .frame(minHeight: 218)
+                // The full width is one section, so Down from anywhere in the top bar reaches Replay Programs (at the
+                // left, it was out of line with the search button) before the groups, and Up from the groups returns.
+                .tvFocusSection()
             }
 
             if !channels.isEmpty {
@@ -409,6 +423,7 @@ private struct TVChannelGuide: View {
         .padding(.horizontal, Layout.gutter).padding(.top, 24).padding(.bottom, 24)
         .screenBackdrop()
         .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: focusedChannel) { _, channel in if let channel { lastFocusedChannel = channel } }
         .fullScreenCover(isPresented: $showingSearch) {
             NavigationStack {
                 ScrollView {
@@ -436,13 +451,13 @@ private struct TVChannelGuide: View {
     }
 
     private func category(_ title: String, value: String?) -> some View {
-        Button { group = value; focusedChannel = nil } label: { Text(title) }
+        Button { group = value; focusedChannel = nil; lastFocusedChannel = nil } label: { Text(title) }
             .buttonStyle(TVGuideCategoryStyle(selected: group == value))
             .accessibilityAddTraits(group == value ? [.isSelected] : [])
     }
 
     /// Plays a channel with the whole playlist to switch through in the player (#1010).
-    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels)) }
+    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels), guide: guide) }
 
     private func channelRow(_ channel: Channel) -> some View {
         Button { watch(channel) } label: {
@@ -864,6 +879,10 @@ struct ChannelCard: View {
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
             }.rowCardButton()
+            ProgrammeCatchupButton(channel: channel) { replay in
+                if let play { play(replay) } else { store.playing = replay }
+            }
+            .labelStyle(.iconOnly).buttonStyle(.plain).frame(width: 44, height: 44)
             Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)

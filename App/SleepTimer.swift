@@ -21,9 +21,7 @@ import TVCore
     static let changed = Notification.Name("SleepTimerChanged")
     /// The choices, in minutes.
     static let durations = [15, 30, 45, 60, 90]
-    /// How long the sound takes to fade out.
-    static let fadeLength: Double = 6
-
+    private(set) var revision = UUID()
     private(set) var mode: Mode = .off
     @ObservationIgnored private var task: Task<Void, Never>?
 
@@ -50,6 +48,7 @@ import TVCore
 
     private func set(_ new: Mode, minutes: Int?) {
         task?.cancel(); task = nil
+        revision = UUID()
         mode = new; self.minutes = minutes
         Diagnostics.shared.record(.info, "sleep", "timer \(Self.describe(new))")
         NotificationCenter.default.post(name: Self.changed, object: self)
@@ -76,8 +75,9 @@ import TVCore
     private func fire() {
         Diagnostics.shared.record(.info, "sleep", "timer fired")
         task = nil; mode = .off; minutes = nil
-        NotificationCenter.default.post(name: Self.changed, object: self)
+        // Players consume the event before Off can re-enable automatic queue advancement.
         NotificationCenter.default.post(name: Self.fired, object: self)
+        NotificationCenter.default.post(name: Self.changed, object: self)
     }
 
     /// Time left, for the label: "23:41" or "1:05:00".
@@ -113,21 +113,6 @@ import TVCore
         case .off: "off"
         case .at(let date): "at +\(Int(date.timeIntervalSinceNow))s"
         case .endOfItem: "end of item"
-        }
-    }
-
-    /// Lowers a player's sound to nothing, pauses it, then gives the sound back for the next time it plays.
-    static func fadeOut(_ player: AVPlayer, pause: @escaping @MainActor () -> Void) {
-        let start = player.volume, steps = 30
-        Task { @MainActor in
-            for step in 1...steps {
-                try? await Task.sleep(for: .seconds(fadeLength / Double(steps)))
-                // Someone paused, or picked something else, meanwhile: the fade has nothing left to do.
-                if player.rate == 0 { break }
-                player.volume = start * Float(steps - step) / Float(steps)
-            }
-            pause()
-            player.volume = start
         }
     }
 }

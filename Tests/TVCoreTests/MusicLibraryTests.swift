@@ -153,6 +153,33 @@ private struct FakeLyrics: MusicLyricsSource {
     #expect(MusicLibrary(file: file).resumePoint == nil)
 }
 
+@MainActor @Test func shuffleStateSurvivesRelaunch() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: "music-library-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let library = MusicLibrary(file: file)
+    let a = song("A", "a"), b = song("B", "b"), c = song("C", "c")
+    // Playing shuffled: the queue is [b, c, a] while the original order was [a, b, c] (#1728).
+    let point = MusicResumePoint(queue: MusicQueue(tracks: [b, c, a], start: 0, source: "Album"), position: 12.5, savedAt: Date(timeIntervalSince1970: 4), shuffled: true, unshuffled: [a, b, c])
+    library.saveResumePoint(point)
+    library.flush()
+    let reopened = MusicLibrary(file: file)
+    #expect(reopened.resumePoint == point)
+    #expect(reopened.resumePoint?.shuffled == true && reopened.resumePoint?.unshuffled == [a, b, c])
+    #expect(reopened.resumePoint?.queue.current == b)
+}
+
+@Test func resumePointWithoutShuffleDecodesAsNotShuffled() throws {
+    // Points saved before #1728 have no `shuffled`/`unshuffled` keys; they must still load.
+    let a = song("A", "a"), b = song("B", "b")
+    let point = MusicResumePoint(queue: MusicQueue(tracks: [b, a], start: 0, source: "Album"), position: 10, savedAt: Date(timeIntervalSince1970: 4), shuffled: true, unshuffled: [a, b])
+    let data = try JSONEncoder().encode(point)
+    var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    json.removeValue(forKey: "shuffled"); json.removeValue(forKey: "unshuffled")
+    let decoded = try JSONDecoder().decode(MusicResumePoint.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(decoded.shuffled == false && decoded.unshuffled == nil)
+    #expect(decoded.queue == point.queue && decoded.position == point.position)
+}
+
 private struct FakeCollections: MusicCatalogSource, MusicCollectionSource {
     let platform: MusicPlatform
     let found: [MusicCollection]

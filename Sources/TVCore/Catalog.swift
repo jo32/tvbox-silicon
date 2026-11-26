@@ -263,6 +263,9 @@ public struct CatalogPage: Sendable {
     public let categories: [Category]
     public let videos: [Video]
     public let pageCount: Int
+    init(videos: [Video], pageCount: Int = 1) {
+        categories = []; self.videos = videos; self.pageCount = pageCount
+    }
     public init(json: [String: JSONValue], origin: URL) {
         let filters = CategoryFilter.all(json["filters"])
         categories = (json["class"]?.array ?? []).compactMap {
@@ -336,6 +339,17 @@ public struct CatalogClient: Sendable {
             throw error
         }
     }
+    /// The source's JAR spider's answer to a query on Android TVBox's local proxy (`do=live&…`), which a
+    /// subscription's live playlists can point at (`LoopbackPlaylist`). FongMi hands these to the archive's
+    /// `Proxy.proxy`, and to the spider's own `proxy` for `do=jar`; the plugin runtime does the same.
+    func spiderProxy(_ query: String) async throws -> LoopbackPlaylist.Answer {
+        guard site.runtime == .jar, EmbeddedJarHost.available, let archive = try site.pluginURL(origin: origin, fallback: jarURL) else {
+            throw LoopbackPlaylist.needsPlugin
+        }
+        let json = try await EmbeddedJarHost.shared.request(site: site, jarURL: archive, params: ["proxy": query], http: http, configurationOrigin: origin)
+        return try LoopbackPlaylist.Answer(json)
+    }
+
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }
@@ -414,7 +428,7 @@ public struct CatalogClient: Sendable {
             }
         }
         let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
-        do { return try JSONDecoder().decode([String: JSONValue].self, from: data) }
+        do { return try await CatalogResponseParser.decode(data) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
             let start = String(decoding: data.prefix(512), as: UTF8.self).lowercased()
@@ -484,7 +498,10 @@ public struct CatalogClient: Sendable {
             params["ac"] = "detail"; params["t"] = category
             params.merge(Self.filterParameters(choices, siteType: site.type)) { _, new in new }
         }
-        return CatalogPage(json: try await request(params), origin: origin)
+        var json = try await request(params)
+        // Search never shows category/filter catalogs, including filters encoded as another JSON string.
+        if !query.isEmpty { json["class"] = nil; json["filters"] = nil }
+        return CatalogPage(json: json, origin: origin)
     }
 
     /// A category's filter choices as the source reads them, leaving out empty ("全部") values: as other TVBox clients
