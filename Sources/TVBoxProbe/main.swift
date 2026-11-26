@@ -997,7 +997,8 @@ import TVCore
             return
         }
         if args[1] == "--live-check" {
-            let origin = URL(string: "https://raw.githubusercontent.com/qist/tvbox/master/fty.json")!
+            // `--live-check [<subscription>]`: every live playlist of that subscription.
+            let origin = try args.count > 2 ? WebAddress.resolve(args[2]) : URL(string: "https://raw.githubusercontent.com/qist/tvbox/master/fty.json")!
             let config = try await HTTPClient().subscription(origin)
             print("Subscription: \(config.sites.count) sites, \(config.lives.count) live lists")
             await withTaskGroup(of: String.self) { group in
