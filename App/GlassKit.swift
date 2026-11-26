@@ -1211,9 +1211,18 @@ struct PosterImage: View {
         .task(id: resource) {
             bitmap = nil
             guard let resource else { return }
-            if let image = try? await PosterLoader.shared.load(resource), !Task.isCancelled {
+            // A cover that failed once usually loads on a second try: the CDN hiccuped, or the card came on
+            // screen before its source was ready. Ask again after a moment, once, instead of leaving the
+            // placeholder until the viewer scrolls away and back (#1432).
+            for attempt in 0...1 {
+                if attempt > 0 {
+                    try? await Task.sleep(for: .seconds(2))
+                    if Task.isCancelled { return }
+                }
+                guard let image = try? await PosterLoader.shared.load(resource), !Task.isCancelled else { continue }
                 bitmap = image
                 aspect?.wrappedValue = CGFloat(image.image.width) / CGFloat(max(image.image.height, 1))
+                return
             }
         }
     }

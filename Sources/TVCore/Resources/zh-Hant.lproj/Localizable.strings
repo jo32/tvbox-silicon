@@ -2410,3 +2410,5 @@
 "Date" = "日期";
 "No programs to replay on this date." = "這一天沒有可以回看的節目。";
 "This program can no longer be replayed." = "這個節目已過了回看期限。";
+
+"Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";

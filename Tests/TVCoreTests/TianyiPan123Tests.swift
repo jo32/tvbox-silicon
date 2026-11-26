@@ -98,8 +98,30 @@ import Testing
         #expect(files.map(\.name) == ["庆余年", "第1集.mkv"])
         let call = try #require(Pan123Stub.calls.first)
         #expect(call.contains("/b/api/file/list/new?") && call.contains("parentFileId=0") && call.contains("-"))
+        // A plain folder listing still asks for the drive's own page size, not the search size.
+        #expect(call.contains("limit=100"))
         await #expect(throws: CloudFilesError.signInRequired(L10n.text("123pan"))) {
             try await Pan123Files(session: Pan123Stub.session, account: { "old" }).list("0")
+        }
+    }
+
+    @Test func pan123SearchUsesTheCallersPageSize() async throws {
+        Pan123SearchStub.reset()
+        let files = Pan123Files(session: Pan123SearchStub.session, account: { "ok" })
+        // 51 results at 50 a page: the first page is full, the second holds one.
+        let first = try await files.search("庆余年", page: 1, size: 50)
+        #expect(first.files.count == 50 && first.total == 51)
+        #expect(first.files.map(\.name).first == "搜到的第1个.mkv" && first.files.map(\.name).last == "搜到的第50个.mkv")
+        let second = try await files.search("庆余年", page: 2, size: 50)
+        #expect(second.files.count == 1 && second.total == 51)
+        #expect(second.files.map(\.name) == ["搜到的第51个.mkv"])
+        // Both pages asked for the caller's size, the right page, and the keyword.
+        let calls = Pan123SearchStub.calls
+        #expect(calls.count == 2)
+        for (index, call) in calls.enumerated() {
+            let query = URLComponents(string: call)?.queryItems ?? []
+            let value = { (name: String) in query.first { $0.name == name }?.value }
+            #expect(value("Page") == "\(index + 1)" && value("limit") == "50" && value("SearchData") == "庆余年", "\(call)")
         }
     }
 
@@ -156,6 +178,40 @@ final class TianyiStub: URLProtocol, @unchecked Sendable {
         } else {
             answer = ["res_code": "InvalidSessionKey", "res_message": "InvalidSessionKey"]
         }
+        client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: answer))
+        client.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+/// 123pan search: 51 results, served a page at a time at the limit the request asks for.
+final class Pan123SearchStub: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var log: [String] = []
+    static var calls: [String] { lock.withLock { log } }
+    static func reset() { lock.withLock { log = [] } }
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Pan123SearchStub.self]
+        return URLSession(configuration: configuration)
+    }()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "yun.123pan.com" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url, let client else { return }
+        Self.lock.withLock { Self.log.append(url.absoluteString) }
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let value = { (name: String) in query.first { $0.name == name }?.value }
+        let limit = Int(value("limit") ?? "") ?? 100
+        let page = Int(value("Page") ?? "") ?? 1
+        let total = 51
+        let start = (page - 1) * limit
+        let end = min(start + limit, total)
+        let items = (start..<end).map { index in
+            ["FileId": index + 1, "FileName": "搜到的第\(index + 1)个.mkv", "Type": 0, "Size": 10, "Etag": "e", "S3KeyFlag": "f"] as [String: Any]
+        }
+        let answer: [String: Any] = ["code": 0, "message": "ok", "data": ["Next": end >= total ? "-1" : "0", "Total": total, "InfoList": items]]
         client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
         client.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: answer))
         client.urlProtocolDidFinishLoading(self)

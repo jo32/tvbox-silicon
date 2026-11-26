@@ -207,7 +207,9 @@ enum QALaunch {
             do {
                 let playlist = try await HTTPClient().playlist(source)
                 let channels = playlist.channels
-                let guide = LiveGuide.address(for: source, playlist: playlist.guide, in: store).map(LiveGuide.init)
+                let guide = LiveGuide.address(for: source, playlist: playlist.guide, in: store).map {
+                    LiveGuide(address: $0, context: GuideRequestContext(sourceID: source.id, origin: source.url, headers: source.headers))
+                }
                 if let guide { Task { await guide.load(channels) } }
                 if channels.indices.contains(index) {
                     store.watch(channels[index], in: LiveLineup(title: source.name, channels: channels), guide: guide)

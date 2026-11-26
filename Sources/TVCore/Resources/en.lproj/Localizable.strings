@@ -2410,3 +2410,5 @@
 "Date" = "Date";
 "No programs to replay on this date." = "No programs to replay on this date.";
 "This program can no longer be replayed." = "This program can no longer be replayed.";
+
+"Search results reached the memory limit. Try a more specific search." = "Search results reached the memory limit. Try a more specific search.";
