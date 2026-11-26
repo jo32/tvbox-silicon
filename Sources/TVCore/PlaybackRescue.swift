@@ -9,10 +9,10 @@ import Foundation
 ///   cut into live HLS (`TSLive`, `FLVLive`); an MKV and the like is repackaged (`Remux`); a file is served by the
 ///   relay with byte ranges, from a copy kept as it downloads when its server answers none.
 /// - A server whose certificate AVPlayer refuses (NSURLErrorDomain -1200 to -1204: expired, self-signed, made out
-///   to another host): the same ways, with the certificate of this media's own hosts accepted. Nothing else the
-///   app connects to is affected.
+///   to another host): the same ways, with the certificate of the link's own host accepted (and an older TLS on
+///   it). Every other host, those its playlists name included, is checked as usual.
 ///
-/// Each episode tries this once (`Attempt`); a link that still fails is reported as it was.
+/// Each episode tries this once (`Attempt`), within `budget`; a link that still fails is reported as it was.
 public enum PlaybackRescue {
     /// Why AVPlayer gave up on a link.
     public enum Trouble: String, Sendable {
@@ -25,11 +25,20 @@ public enum PlaybackRescue {
     /// Whether an episode tried this already, and how it plays now.
     public struct Attempt: Sendable {
         public var tried = false
-        /// The way the rescued address plays (`Rescued.rung`), and the link it stands for.
+        /// An item of the episode became ready: a failure after that is no failure to open.
+        public var ready = false
+        /// The address AVPlayer opens instead, the way it was made (`Rescued.rung`), the link it stands for, why,
+        /// and when the rescue began.
+        public var address: URL?
         public var rung: String?
         public var origin: URL?
+        public var trouble: Trouble?
+        public var began: ContinuousClock.Instant?
         public init() {}
     }
+
+    /// How long reading a link and opening what it sends may take, all of it.
+    public static let budget: Duration = .seconds(20)
 
     /// What AVPlayer opens instead, and which way it was made (for the logs): `rescue-hls`, `rescue-ts`, `rescue-flv`, `rescue-remux`, `rescue-file`.
     public struct Rescued: Sendable {
@@ -67,6 +76,7 @@ public enum PlaybackRescue {
         if text.hasPrefix("#EXTM3U") { return .playlist }
         if bytes.count >= 3, bytes[0] == 0x46, bytes[1] == 0x4C, bytes[2] == 0x56 { return .flv }
         if transportStream(bytes) { return .transportStream }
+        if transportStream(bytes, packet: 192, sync: 4) { return .container } // M2TS: a Blu-ray file, repackaged
         if Remux.handles(Data(bytes)) { return .container }
         let lower = text.prefix(256).lowercased()
         if lower.hasPrefix("<!doctype") || lower.hasPrefix("<html") || lower.hasPrefix("<?xml") || lower.hasPrefix("{") || lower.hasPrefix("<head") {
@@ -75,10 +85,10 @@ public enum PlaybackRescue {
         return .file
     }
 
-    /// MPEG-TS packets: sync bytes 188 apart, at least three of them.
-    static func transportStream(_ bytes: [UInt8]) -> Bool {
-        guard let first = bytes.prefix(188).firstIndex(of: 0x47) else { return false }
-        let positions = Array(stride(from: first, to: bytes.count, by: 188))
+    /// MPEG-TS packets: sync bytes 188 apart, at least three of them (or, for M2TS, 192 apart behind a 4-byte time).
+    static func transportStream(_ bytes: [UInt8], packet: Int = 188, sync: Int? = nil) -> Bool {
+        guard let first = sync ?? bytes.prefix(packet).firstIndex(of: 0x47) else { return false }
+        let positions = Array(stride(from: first, to: bytes.count, by: packet))
         return positions.count >= 3 && positions.allSatisfy { bytes[$0] == 0x47 }
     }
 
@@ -95,8 +105,21 @@ public enum PlaybackRescue {
     }
 
     /// Opens `url` the way its first bytes ask for, and returns what AVPlayer opens instead. Throws when the link
-    /// answers with an error, sends a web page, or can't be read either.
+    /// answers with an error, sends a web page or an endless sound, can't be read either, or takes over `budget`.
     public static func open(_ url: URL, headers: [String: String], trouble: Trouble) async throws -> Rescued {
+        try await withThrowingTaskGroup(of: Rescued?.self) { group in
+            group.addTask { try await openNow(url, headers: headers, trouble: trouble) }
+            group.addTask { try await Task.sleep(for: budget); return nil }
+            defer { group.cancelAll() }
+            if let rescued = try await group.next() ?? nil { return rescued }
+            group.cancelAll()
+            // What the cancelled try still opened is closed again.
+            while let late = try? await group.next() { if let late { stop(late.url) } }
+            throw TVError.unsupported("no answer within \(budget)")
+        }
+    }
+
+    private static func openNow(_ url: URL, headers: [String: String], trouble: Trouble) async throws -> Rescued {
         let trusting = trouble == .insecure
         let session = RelaySession(origin: url, headers: headers, trusting: trusting)
         let head: Data, response: HTTPURLResponse
@@ -108,21 +131,24 @@ public enum PlaybackRescue {
             switch body {
             case .playlist:
                 let address = try await MediaRelay.shared.add(session, entry: url, kind: .playlist, fileExtension: "m3u8")
-                return remember(Rescued(url: address, rung: "rescue-hls"), session: session.id)
+                return remember(Rescued(url: address, rung: "rescue-hls"), Entry(session: session.id))
             case .transportStream:
                 session.close()
-                return remember(Rescued(url: try await TSLive.open(url, headers: headers, trusting: trusting), rung: "rescue-ts"), session: nil)
+                return remember(Rescued(url: try await TSLive.open(url, headers: headers, trusting: trusting), rung: "rescue-ts"), Entry())
             case .flv:
                 session.close()
-                return remember(Rescued(url: try await FLVLive.open(url, headers: headers, trusting: trusting), rung: "rescue-flv"), session: nil)
+                return remember(Rescued(url: try await FLVLive.open(url, headers: headers, trusting: trusting), rung: "rescue-flv"), Entry())
             case .container:
                 let address = try await MediaRelay.shared.add(session, entry: url, kind: .media, fileExtension: url.pathExtension.isEmpty ? "bin" : url.pathExtension)
                 let source = try await Remux.httpSource(address, headers: [:])
                 let remuxed = try await Remux.open(source, headers: headers)
-                return remember(Rescued(url: remuxed, rung: "rescue-remux"), session: session.id)
+                return remember(Rescued(url: remuxed, rung: "rescue-remux"), Entry(session: session.id, relay: address))
             case .file:
-                let address = try await MediaRelay.shared.add(session, entry: url, kind: .media, fileExtension: fileExtension(head, original: url.pathExtension))
-                return remember(Rescued(url: address, rung: "rescue-file"), session: session.id)
+                let name = fileExtension(head, original: url.pathExtension)
+                // Radio: AVPlayer can't take a sound with no end from a server that answers no range, nor can a copy.
+                if response.expectedContentLength < 0, ["mp3", "aac"].contains(name) { throw TVError.unsupported("an endless sound") }
+                let address = try await MediaRelay.shared.add(session, entry: url, kind: .media, fileExtension: name)
+                return remember(Rescued(url: address, rung: "rescue-file"), Entry(session: session.id))
             case .page:
                 throw TVError.unsupported("the link sends a web page")
             }
@@ -139,26 +165,43 @@ public enum PlaybackRescue {
     /// Closes what `open` opened for `url`; any other address is left alone.
     public static func stop(_ url: URL) {
         guard let entry = lock.withLock({ opened.removeValue(forKey: url) }) else { return }
-        if let session = entry { MediaRelay.shared.remove(session) }
+        if let session = entry.session { MediaRelay.shared.remove(session) }
         Remux.stop(url)
     }
 
-    /// The address of `url` once the relay listens again, on a new port (iOS takes back a suspended app's sockets);
-    /// nil when it was closed. A repackaged stream relistens through `Remux.relisten`.
+    /// The address of `url` once what serves it listens again (iOS takes back a suspended app's sockets); nil when
+    /// it was closed. A repackaged stream relistens through `Remux.relisten`, after the relay it reads from, which
+    /// has to come back on its own port, as the repackager keeps its address.
     public static func relisten(_ url: URL) async throws -> URL? {
-        guard owns(url) else { return nil }
-        if Remux.isRemuxed(url) { return try await Remux.relisten(url) }
-        guard let fresh = try await MediaRelay.shared.relisten(url) else { return nil }
+        guard let entry = lock.withLock({ opened[url] }) else { return nil }
+        let fresh: URL?
+        if Remux.isRemuxed(url) {
+            if let relay = entry.relay {
+                guard try await MediaRelay.shared.relisten(relay) == relay else {
+                    Diagnostics.shared.record(.warning, "rescue", "relay came back on another port; the repackaged stream ends")
+                    return nil
+                }
+            }
+            fresh = try await Remux.relisten(url)
+        } else {
+            fresh = try await MediaRelay.shared.relisten(url)
+        }
+        guard let fresh else { return nil }
         lock.withLock { if let entry = opened.removeValue(forKey: url) { opened[fresh] = entry } }
         return fresh
     }
 
-    private static let lock = NSLock()
-    /// The addresses `open` returned, with the relay session behind each.
-    nonisolated(unsafe) private static var opened: [URL: String?] = [:]
+    /// What is behind an address `open` returned: the relay session, and the relay address a repackager reads.
+    struct Entry: Sendable {
+        var session: String?
+        var relay: URL?
+    }
 
-    private static func remember(_ rescued: Rescued, session: String?) -> Rescued {
-        lock.withLock { opened[rescued.url] = .some(session) }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var opened: [URL: Entry] = [:]
+
+    private static func remember(_ rescued: Rescued, _ entry: Entry) -> Rescued {
+        lock.withLock { opened[rescued.url] = entry }
         return rescued
     }
 }

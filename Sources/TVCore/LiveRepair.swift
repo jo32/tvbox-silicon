@@ -14,20 +14,16 @@ public enum LiveRepair {
     /// The same loader for a video's playlist whose ad segments are cut (`AdSkip`).
     public static let adScheme = "tvbox-ad-skip"
     nonisolated(unsafe) private static var hostHeaders: [String: [String: String]] = [:]
-    /// Hosts whose playlists were given over plain HTTP: the loader asks them the same way.
-    nonisolated(unsafe) private static var plainHosts: Set<String> = []
+    /// Added to either scheme for a playlist given over plain HTTP: the loader asks it the same way. The address
+    /// carries it, so one plain playlist doesn't make its host's other playlists plain.
+    static let plainSuffix = "-http"
     private static let lock = NSLock()
 
     /// The address AVPlayer opens for one of these playlists; the server's playlists are asked for with `headers`.
     static func address(_ url: URL, headers: [String: String]? = nil, skipsAds: Bool = false) -> URL {
-        if let host = url.host()?.lowercased() {
-            lock.withLock {
-                if let headers { hostHeaders[host] = headers }
-                if url.scheme?.lowercased() == "http" { plainHosts.insert(host) }
-            }
-        }
+        if let headers, let host = url.host()?.lowercased() { lock.withLock { hostHeaders[host] = headers } }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.scheme = skipsAds ? adScheme : scheme
+        components?.scheme = (skipsAds ? adScheme : scheme) + (url.scheme?.lowercased() == "http" ? plainSuffix : "")
         return components?.url ?? url
     }
 
@@ -38,9 +34,8 @@ public enum LiveRepair {
 
     /// The playlist on the server behind an address from `address`.
     static func upstream(_ url: URL) -> URL? {
-        guard url.scheme == scheme || url.scheme == adScheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        let plain = lock.withLock { plainHosts.contains(url.host()?.lowercased() ?? "") }
-        components.scheme = plain ? "http" : "https"
+        guard loads(url), var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        components.scheme = url.scheme?.hasSuffix(plainSuffix) == true ? "http" : "https"
         return components.url
     }
 
@@ -48,7 +43,7 @@ public enum LiveRepair {
     /// name load from their CDN with the source's headers too: without its Referer or User-Agent, a CDN that wants
     /// them refuses every segment (HTTP 403).
     public static func asset(for url: URL) -> AVURLAsset? {
-        guard url.scheme == scheme || url.scheme == adScheme else { return nil }
+        guard loads(url) else { return nil }
         let headers = headers(for: url)
         var options: [String: Any] = [:]
         if !headers.isEmpty {
@@ -59,6 +54,13 @@ public enum LiveRepair {
         asset.resourceLoader.setDelegate(RepairedPlaylistLoader.shared, queue: RepairedPlaylistLoader.shared.queue)
         return asset
     }
+
+    /// Whether `url` is an address from `address`.
+    static func loads(_ url: URL) -> Bool { repairs(url) || skipsAds(url) }
+    /// Whether `url` is an address from `address` for a live playlist to repair.
+    static func repairs(_ url: URL) -> Bool { [scheme, scheme + plainSuffix].contains(url.scheme ?? "") }
+    /// Whether `url` is an address from `address` for a playlist whose ads are cut.
+    static func skipsAds(_ url: URL) -> Bool { [adScheme, adScheme + plainSuffix].contains(url.scheme ?? "") }
 
     nonisolated(unsafe) private static var segmentNames: [String: [Int: String]] = [:]
     private static let hostsKey = "liveRepairHosts"
@@ -153,8 +155,8 @@ private final class RepairedPlaylistLoader: NSObject, AVAssetResourceLoaderDeleg
                 let (data, response) = try await URLSession.shared.data(for: fetch)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard (200..<300).contains(status) else { throw TVError.http(status) }
-                let playlist = LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: url.scheme == LiveRepair.adScheme)
-                result = .success(Data((url.scheme == LiveRepair.scheme ? LiveRepair.steady(playlist, playlist: url.absoluteString) : playlist).utf8))
+                let playlist = LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: LiveRepair.skipsAds(url))
+                result = .success(Data((LiveRepair.repairs(url) ? LiveRepair.steady(playlist, playlist: url.absoluteString) : playlist).utf8))
             } catch {
                 if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "repaired playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
                 result = .failure(error)

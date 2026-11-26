@@ -368,11 +368,12 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
         wake()
     }
 
-    /// A link AVPlayer refused over its certificate is read anyway, when `trusting`.
+    /// A link AVPlayer refused over its certificate is read anyway, when `trusting`, from its own host.
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // Only the link's own host: a redirect elsewhere is checked as usual.
         if trusting, challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
+           challenge.protectionSpace.host.lowercased() == url.host()?.lowercased(), let trust = challenge.protectionSpace.serverTrust {
             completionHandler(.useCredential, URLCredential(trust: trust))
         } else {
             completionHandler(.performDefaultHandling, nil)

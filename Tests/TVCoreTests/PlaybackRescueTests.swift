@@ -36,6 +36,9 @@ struct PlaybackRescueTests {
         #expect(PlaybackRescue.sniff(Data(Array(TS.packets(count: 4).dropFirst(100)))) == .transportStream)
         #expect(PlaybackRescue.sniff(Data([0x46, 0x4C, 0x56, 0x01, 0x05, 0, 0, 0, 9])) == .flv)
         #expect(PlaybackRescue.sniff(Data([0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81])) == .container)
+        // M2TS: each packet behind a 4-byte time, so its sync bytes are 192 apart.
+        let m2ts = (0..<4).flatMap { _ in [UInt8]([0x00, 0x12, 0x34, 0x56]) + TS.packet(pid: 0x100, start: false, payload: [1, 2, 3]) }
+        #expect(PlaybackRescue.sniff(Data(m2ts)) == .container)
         #expect(PlaybackRescue.sniff(Data([0, 0, 0, 0x20]) + Data("ftypisom".utf8) + Data(count: 32)) == .file)
         #expect(PlaybackRescue.sniff(Data("<!DOCTYPE html><html><body>404</body></html>".utf8)) == .page)
         #expect(PlaybackRescue.sniff(Data("\n<html>".utf8)) == .page)
@@ -120,12 +123,13 @@ struct PlaybackRescueTests {
         #expect(session.register(URL(string: "http://iptv.example.com/s/100.ts")!, kind: .media, fileExtension: "ts") == first)
     }
 
-    @Test func acceptsCertificatesOnlyOfTheMediasOwnHostsWhenTrusting() {
+    @Test func acceptsTheCertificateOnlyOfTheLinksOwnHostWhenTrusting() {
         let trusting = RelaySession(origin: URL(string: "https://media.example.com/a.m3u8")!, headers: [:], trusting: true)
         #expect(trusting.trusts("media.example.com") && trusting.trusts("MEDIA.example.com"))
         #expect(!trusting.trusts("cdn.example.net"))
+        // A host its playlist names (a tampered one could name any) is checked as usual.
         _ = trusting.register(URL(string: "https://cdn.example.net/s0.ts")!, kind: .media, fileExtension: "ts")
-        #expect(trusting.trusts("cdn.example.net"))
+        #expect(!trusting.trusts("cdn.example.net"))
         let strict = RelaySession(origin: URL(string: "https://media.example.com/a.m3u8")!, headers: [:], trusting: false)
         #expect(!strict.trusts("media.example.com"))
     }
@@ -195,9 +199,16 @@ struct PlaybackRescueTests {
     @Test func aPlainHTTPPlaylistStaysPlainThroughTheLoader() {
         let url = URL(string: "http://plain-\(UUID().uuidString.prefix(8)).example.com/v/index.m3u8?t=1")!
         let address = LiveRepair.address(url, headers: ["Referer": "http://site.example.com/"], skipsAds: true)
-        #expect(address.scheme == LiveRepair.adScheme)
+        #expect(LiveRepair.skipsAds(address) && !LiveRepair.repairs(address))
         #expect(LiveRepair.upstream(address) == url)
         #expect(LiveRepair.headers(for: address) == ["Referer": "http://site.example.com/"])
+        // The same host's HTTPS playlists stay HTTPS: the address carries the scheme, not the host.
+        let secure = URL(string: "https://\(url.host()!)/v/other.m3u8")!
+        #expect(LiveRepair.upstream(LiveRepair.address(secure, skipsAds: true)) == secure)
+        let live = URL(string: "http://\(url.host()!)/live/a.m3u8")!
+        let repaired = LiveRepair.address(live)
+        #expect(LiveRepair.repairs(repaired) && LiveRepair.upstream(repaired) == live)
+        #expect(LiveRepair.asset(for: repaired) != nil)
     }
 }
 

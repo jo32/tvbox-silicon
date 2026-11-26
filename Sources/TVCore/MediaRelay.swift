@@ -37,6 +37,8 @@ actor MediaRelay {
         guard serves(url), parts.count == 3, store.session(parts[parts.startIndex + 1]) != nil else { return nil }
         if starting == nil, address == nil || address?.port == url.port {
             listener?.cancel(); listener = nil; address = nil
+            // Its own port first: a repackager reading from the relay keeps the address it was given.
+            if let port = url.port, let fresh = try? await base(port: port) { return fresh == base(of: url) ? url : nil }
         }
         let fresh = try await base()
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -44,11 +46,13 @@ actor MediaRelay {
         return components?.url
     }
 
-    private func base() async throws -> URL {
+    private nonisolated func base(of url: URL) -> URL? { URL(string: "http://127.0.0.1:\(url.port ?? 0)/\(token)/") }
+
+    private func base(port: Int? = nil) async throws -> URL {
         if let address, listener?.state == .ready { return address }
         if let starting { return try await starting.value }
         listener?.cancel(); listener = nil; address = nil
-        let task = Task { try await self.listen() }
+        let task = Task { try await self.listen(port: port) }
         starting = task
         defer { starting = nil }
         let value = try await task.value
@@ -56,9 +60,10 @@ actor MediaRelay {
         return value
     }
 
-    private func listen() async throws -> URL {
+    private func listen(port: Int?) async throws -> URL {
         let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        parameters.allowLocalEndpointReuse = true
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: port.flatMap { NWEndpoint.Port(rawValue: UInt16($0)) } ?? .any)
         let server = try NWListener(using: parameters)
         listener = server
         let token = token, store = store
@@ -128,18 +133,17 @@ final class RelaySession: @unchecked Sendable {
 
     let id = UUID().uuidString.lowercased()
     let headers: [String: String]
-    /// The certificates of this media's hosts are accepted whatever they are.
+    /// The certificate of the link's own host is accepted whatever it is, and an older TLS on it.
     let trusting: Bool
+    /// The link's own host: the one AVPlayer refused, the only one `trusting` applies to.
+    let host: String?
     private let lock = NSLock()
     private var routes: [String: Route] = [:]
     private var keys: [URL: String] = [:]
-    /// The hosts this media was reached on: the link's own, those its playlists name and those it redirected to.
-    private var hosts: Set<String> = []
     private var closed = false
 
     init(origin: URL, headers: [String: String], trusting: Bool) {
-        self.headers = headers; self.trusting = trusting
-        if let host = origin.host()?.lowercased() { hosts.insert(host) }
+        self.headers = headers; self.trusting = trusting; host = origin.host()?.lowercased()
     }
 
     static let configuration: URLSessionConfiguration = {
@@ -165,7 +169,6 @@ final class RelaySession: @unchecked Sendable {
             let key = "\(routes.count).\(fileExtension)"
             routes[key] = Route(url: url, kind: kind, mime: Self.mime(fileExtension))
             keys[url] = key
-            if let host = url.host()?.lowercased() { hosts.insert(host) }
             return key
         }
     }
@@ -178,15 +181,12 @@ final class RelaySession: @unchecked Sendable {
         spools.forEach { $0.close() }
     }
 
-    func trusts(_ host: String) -> Bool { trusting && lock.withLock { hosts.contains(host.lowercased()) } }
+    /// Whether a certificate `host` presents is accepted whatever it is: only the link's own host's, and only for a
+    /// link AVPlayer refused over it. A host its playlists name or it redirects to is checked as usual.
+    func trusts(_ host: String) -> Bool { trusting && host.lowercased() == self.host }
 
-    private func followed(_ url: URL) {
-        guard trusting, let host = url.host()?.lowercased() else { return }
-        lock.withLock { _ = hosts.insert(host) }
-    }
-
-    private func request(_ url: URL, range: String? = nil) -> URLRequest {
-        var request = URLRequest(url: url, timeoutInterval: 30)
+    private func request(_ url: URL, range: String? = nil, timeout: TimeInterval = 30) -> URLRequest {
+        var request = URLRequest(url: url, timeoutInterval: timeout)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         if let range { request.setValue(range, forHTTPHeaderField: "Range") }
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
@@ -194,14 +194,14 @@ final class RelaySession: @unchecked Sendable {
     }
 
     private func open(_ request: URLRequest) async throws -> RelayUpstream {
-        try await RelayUpstream.open(request, configuration: trusting ? Self.trustingConfiguration : Self.configuration,
-                                     trusts: { [weak self] in self?.trusts($0) ?? false },
-                                     redirected: { [weak self] in self?.followed($0) })
+        let own = request.url?.host()?.lowercased() == host
+        return try await RelayUpstream.open(request, configuration: trusting && own ? Self.trustingConfiguration : Self.configuration,
+                                            trusts: { [weak self] in self?.trusts($0) ?? false })
     }
 
     /// The link's first bytes, as it answers a plain request.
     func probe(_ url: URL) async throws -> (Data, HTTPURLResponse) {
-        let upstream = try await open(request(url))
+        let upstream = try await open(request(url, timeout: 10))
         defer { upstream.close() }
         guard let response = upstream.response, (200..<300).contains(response.statusCode) else { throw TVError.http(upstream.status) }
         var head = Data()
@@ -361,9 +361,15 @@ final class RelaySession: @unchecked Sendable {
     }
 
     private func answer(_ route: Route, from spool: RelaySpool, range: String?, head: Bool, to connection: NWConnection) async {
+        let length: Int64
+        do { length = try await spool.totalLength() }
+        catch {
+            // A copy that can't be made is an error AVPlayer reports, not a connection that drops.
+            Diagnostics.shared.record(.warning, "rescue", "copy host=\(route.url.host() ?? "-") \(Diagnostics.describe(error))")
+            return RelayHTTP.send(connection, status: 502)
+        }
         defer { connection.cancel() }
         do {
-            let length = try await spool.totalLength()
             guard let span = Self.span(range, length: length) else {
                 return RelayHTTP.send(connection, status: 416, fields: [("Content-Range", "bytes */\(length)")])
             }
@@ -424,16 +430,12 @@ final class RelayUpstream: NSObject, URLSessionDataDelegate, @unchecked Sendable
     private var waiter: CheckedContinuation<Void, Never>?
     private(set) var response: HTTPURLResponse?
     private let trusts: @Sendable (String) -> Bool
-    private let redirected: @Sendable (URL) -> Void
 
-    private init(trusts: @escaping @Sendable (String) -> Bool, redirected: @escaping @Sendable (URL) -> Void) {
-        self.trusts = trusts; self.redirected = redirected
-    }
+    private init(trusts: @escaping @Sendable (String) -> Bool) { self.trusts = trusts }
 
     /// The response to `request`, once its headers arrived.
-    static func open(_ request: URLRequest, configuration: URLSessionConfiguration, trusts: @escaping @Sendable (String) -> Bool,
-                     redirected: @escaping @Sendable (URL) -> Void) async throws -> RelayUpstream {
-        let upstream = RelayUpstream(trusts: trusts, redirected: redirected)
+    static func open(_ request: URLRequest, configuration: URLSessionConfiguration, trusts: @escaping @Sendable (String) -> Bool) async throws -> RelayUpstream {
+        let upstream = RelayUpstream(trusts: trusts)
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let session = URLSession(configuration: configuration, delegate: upstream, delegateQueue: nil)
@@ -543,12 +545,6 @@ final class RelayUpstream: NSObject, URLSessionDataDelegate, @unchecked Sendable
         session.finishTasksAndInvalidate()
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-        if let url = request.url, let host = task.currentRequest?.url?.host(), trusts(host) { redirected(url) }
-        completionHandler(request)
-    }
-
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
@@ -563,8 +559,11 @@ final class RelayUpstream: NSObject, URLSessionDataDelegate, @unchecked Sendable
 /// A file whose server ignores byte ranges, downloaded once to a temporary file that answers ranges as far as it
 /// got. A jump ahead waits for the download to get there, as it would in a player that can't ask for ranges either.
 final class RelaySpool: @unchecked Sendable {
-    /// A file is copied up to this size.
-    static let limit: Int64 = 4 << 30
+    /// A file is copied up to this size, with this much room left on the disk.
+    static let limit: Int64 = 4 << 30, margin: Int64 = 1 << 30
+    /// A file whose server names no length is copied only when it is small, and all of it arrives soon: until then
+    /// nothing can be answered (AVPlayer needs the length), and an endless stream never ends.
+    static let unknownLimit: Int64 = 64 << 20, unknownTime: Duration = .seconds(20)
     let file: URL
     private let lock = NSLock()
     private let upstream: RelayUpstream
@@ -577,8 +576,11 @@ final class RelaySpool: @unchecked Sendable {
 
     init(_ upstream: RelayUpstream) throws {
         guard upstream.length <= Self.limit else { throw TVError.unsupported("file too large to copy") }
+        if let room = Self.room(), max(upstream.length, Self.unknownLimit) + Self.margin > room { throw TVError.unsupported("no room for a copy") }
         self.upstream = upstream
         declared = upstream.length > 0 ? upstream.length : nil
+        let cap = declared == nil ? Self.unknownLimit : Self.limit
+        let deadline: ContinuousClock.Instant? = declared == nil ? .now + Self.unknownTime : nil
         file = FileManager.default.temporaryDirectory.appending(path: "rescue-\(UUID().uuidString).bin")
         guard FileManager.default.createFile(atPath: file.path, contents: nil) else { throw TVError.unsupported("no room for a copy") }
         let writer = try FileHandle(forWritingTo: file)
@@ -589,12 +591,23 @@ final class RelaySpool: @unchecked Sendable {
                     try writer.write(contentsOf: data)
                     guard let self else { throw CancellationError() }
                     let total = self.grew(by: data.count)
-                    if total > Self.limit { throw TVError.unsupported("file too large to copy") }
+                    if total > cap { throw TVError.unsupported("file too large to copy") }
+                    if let deadline, ContinuousClock.now > deadline { throw TVError.unsupported("a file of no length still arriving") }
                 }
             } catch { failure = error }
             try? writer.close()
             self?.finish(failure)
         }
+    }
+
+    /// The free space where the copy goes.
+    private static func room() -> Int64? {
+        let folder = FileManager.default.temporaryDirectory
+        #if os(tvOS)
+        return (try? folder.resourceValues(forKeys: [.volumeAvailableCapacityKey]))?.volumeAvailableCapacity.map(Int64.init)
+        #else
+        return (try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage
+        #endif
     }
 
     private func grew(by count: Int) -> Int64 {
