@@ -18,8 +18,9 @@ public enum FLVLive {
 
     /// Starts reading the stream and returns the address of its HLS master playlist once its first run is
     /// repackaged. Throws when the stream answers with an error, isn't FLV (`NotFLV`), or carries no H.264/HEVC picture.
-    public static func open(_ url: URL, headers: [String: String]) async throws -> URL {
-        let session = FLVLiveSession(url: url, headers: headers, device: RemuxSession.device())
+    /// `trusting` accepts the server's certificate whatever it is (`PlaybackRescue`).
+    public static func open(_ url: URL, headers: [String: String], trusting: Bool = false) async throws -> URL {
+        let session = FLVLiveSession(url: url, headers: headers, device: RemuxSession.device(), trusting: trusting)
         RemuxStore.shared.add(session)
         do {
             try await session.start()
@@ -197,7 +198,7 @@ struct FLVSegmenter {
     }
 }
 
-/// One live FLV stream played as HLS (`FLVLive`).
+/// One live stream played as HLS: FLV (`FLVLive`), or MPEG-TS (`TSLive`), cut by its `LiveCutter`.
 final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @unchecked Sendable {
     struct Segment {
         var index: Int
@@ -221,8 +222,11 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     private let headers: [String: String]
     private let device: RemuxPlan.Device
     private let lock = NSLock()
-    private var reader = FLVTagReader()
-    private var segmenter = FLVSegmenter()
+    private var cutter: any LiveCutter
+    /// What the log lines call the stream: `flv` or `ts`.
+    private let kind: String
+    /// The server's certificate is accepted whatever it is (`PlaybackRescue`).
+    private let trusting: Bool
     private var segments: [Segment] = []
     private var next = 0
     private var discontinuities = 0
@@ -241,8 +245,9 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     private var response: CheckedContinuation<Void, Error>?
     private var watchdog: Task<Void, Never>?
 
-    init(url: URL, headers: [String: String], device: RemuxPlan.Device) {
+    init(url: URL, headers: [String: String], device: RemuxPlan.Device, cutter: any LiveCutter = FLVCutter(), trusting: Bool = false) {
         self.url = url; self.headers = headers; self.device = device
+        self.cutter = cutter; kind = cutter.name; self.trusting = trusting
     }
 
     /// Connects, then waits for the first run's repackaging, which describes the master playlist.
@@ -267,14 +272,14 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
         let first = try await firstSegment()
         let output = try await first.output.value
         describe(output, at: first.index)
-        Diagnostics.shared.record(.info, "remux", "flv live open host=\(url.host() ?? "-") video=\(output.video) audio=\(output.audio ?? "-") size=\(output.width)x\(output.height) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        Diagnostics.shared.record(.info, "remux", "\(kind) live open host=\(url.host() ?? "-") video=\(output.video) audio=\(output.audio ?? "-") size=\(output.width)x\(output.height) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         watchdog = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
                 guard let self else { return }
                 let idle = self.lock.withLock { Date().timeIntervalSince(self.asked) }
                 if idle > Self.idle {
-                    Diagnostics.shared.record(.info, "remux", "flv live idle; closing")
+                    Diagnostics.shared.record(.info, "remux", "\(self.kind) live idle; closing")
                     RemuxStore.shared.remove(self.id)?.close()
                     return
                 }
@@ -335,14 +340,13 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let runs: [FLVSegmenter.Run]
         do {
-            let tags = try lock.withLock { () throws -> [FLVTagReader.Tag] in
+            runs = try lock.withLock { () throws -> [FLVSegmenter.Run] in
                 received += Int64(data.count)
-                return try reader.append(data)
+                return try cutter.feed(data)
             }
-            runs = lock.withLock { tags.compactMap { segmenter.add($0) } }
         } catch {
-            Diagnostics.shared.record(.warning, "remux", "flv live \(error)")
-            let failure: Error = error as? FLVTagReader.Failure == .notFLV ? FLVLive.NotFLV() : TVError.unsupported(L10n.text("This live stream isn't FLV."))
+            Diagnostics.shared.record(.warning, "remux", "\(kind) live \(error)")
+            let failure: Error = error is FLVLive.NotFLV || error is TSLive.NotTS ? error : TVError.unsupported(L10n.text("This live stream isn't FLV."))
             lock.withLock { ended = failure }
             dataTask.cancel(); wake()
             return
@@ -360,8 +364,19 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
             return response
         }
         waiting?.resume(throwing: error ?? TVError.unsupported(L10n.text("The live stream ended.")))
-        if !closed { Diagnostics.shared.record(.info, "remux", "flv live ended bytes=\(received) \(error.map(Diagnostics.describe) ?? "eof")") }
+        if !closed { Diagnostics.shared.record(.info, "remux", "\(kind) live ended bytes=\(received) \(error.map(Diagnostics.describe) ?? "eof")") }
         wake()
+    }
+
+    /// A link AVPlayer refused over its certificate is read anyway, when `trusting`.
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        if trusting, challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
     }
 
     private func add(_ run: FLVSegmenter.Run) {

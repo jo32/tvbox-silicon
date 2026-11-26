@@ -14,11 +14,18 @@ public enum LiveRepair {
     /// The same loader for a video's playlist whose ad segments are cut (`AdSkip`).
     public static let adScheme = "tvbox-ad-skip"
     nonisolated(unsafe) private static var hostHeaders: [String: [String: String]] = [:]
+    /// Hosts whose playlists were given over plain HTTP: the loader asks them the same way.
+    nonisolated(unsafe) private static var plainHosts: Set<String> = []
     private static let lock = NSLock()
 
     /// The address AVPlayer opens for one of these playlists; the server's playlists are asked for with `headers`.
     static func address(_ url: URL, headers: [String: String]? = nil, skipsAds: Bool = false) -> URL {
-        if let headers, let host = url.host()?.lowercased() { lock.withLock { hostHeaders[host] = headers } }
+        if let host = url.host()?.lowercased() {
+            lock.withLock {
+                if let headers { hostHeaders[host] = headers }
+                if url.scheme?.lowercased() == "http" { plainHosts.insert(host) }
+            }
+        }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = skipsAds ? adScheme : scheme
         return components?.url ?? url
@@ -32,14 +39,23 @@ public enum LiveRepair {
     /// The playlist on the server behind an address from `address`.
     static func upstream(_ url: URL) -> URL? {
         guard url.scheme == scheme || url.scheme == adScheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        components.scheme = "https"
+        let plain = lock.withLock { plainHosts.contains(url.host()?.lowercased() ?? "") }
+        components.scheme = plain ? "http" : "https"
         return components.url
     }
 
-    /// An asset for an address from `address`, or nil for any other address.
+    /// An asset for an address from `address`, or nil for any other address. The segments and keys its playlists
+    /// name load from their CDN with the source's headers too: without its Referer or User-Agent, a CDN that wants
+    /// them refuses every segment (HTTP 403).
     public static func asset(for url: URL) -> AVURLAsset? {
         guard url.scheme == scheme || url.scheme == adScheme else { return nil }
-        let asset = AVURLAsset(url: url)
+        let headers = headers(for: url)
+        var options: [String: Any] = [:]
+        if !headers.isEmpty {
+            options["AVURLAssetHTTPHeaderFieldsKey"] = headers
+            if let agent = headers.first(where: { $0.key.lowercased() == "user-agent" })?.value, !agent.isEmpty { options[AVURLAssetHTTPUserAgentKey] = agent }
+        }
+        let asset = AVURLAsset(url: url, options: options)
         asset.resourceLoader.setDelegate(RepairedPlaylistLoader.shared, queue: RepairedPlaylistLoader.shared.queue)
         return asset
     }

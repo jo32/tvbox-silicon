@@ -308,6 +308,8 @@ import IOKit.pwr_mgt
     private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
+    /// Whether the episode's link was read by this device after AVPlayer gave up on it, and how (`rescueLink`).
+    private var rescueAttempt = PlaybackRescue.Attempt()
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
     private var loopbackRecovered: ContinuousClock.Instant?
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
@@ -478,6 +480,61 @@ import IOKit.pwr_mgt
         return true
     }
 
+    /// A link AVPlayer gave up on that this device can still read (`PlaybackRescue`): a server that ignores the byte
+    /// range AVPlayer asks for first (-12939), or a certificate AVPlayer refuses. It opens the way its first bytes ask
+    /// for, once per episode. A rescued link that fails anyway, or one that can't be, opens as it was, so it fails and
+    /// is reported exactly as before.
+    private func rescueLink(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        if let rung = rescueAttempt.rung, let origin = rescueAttempt.origin, PlaybackRescue.owns(url) {
+            rescueAttempt.rung = nil
+            Diagnostics.shared.record(.warning, "player", "rescue failed rung=\(rung) host=\(origin.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+            detachItem(); observation = nil
+            PlaybackRescue.stop(url)
+            if automatic == url { automatic = origin }
+            // This is the one more try `retryRange` would make.
+            rangeRetried = true
+            configure(channel, url: origin, generation: active)
+            return true
+        }
+        guard !rescueAttempt.tried, let trouble = PlaybackRescue.trouble(failure), ["http", "https"].contains(url.scheme),
+              !Remux.isRemuxed(url), !LocalMediaServer.shared.serves(url) else { return false }
+        rescueAttempt.tried = true
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "rescue trouble=\(trouble.rawValue) host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        let began = ContinuousClock.now
+        preparation = Task { [weak self] in
+            var rescued: PlaybackRescue.Rescued?
+            do { rescued = try await PlaybackRescue.open(url, headers: channel.headers, trouble: trouble) }
+            catch { if !Task.isCancelled { Diagnostics.shared.record(.warning, "player", "rescue declined host=\(url.host() ?? "-") \(Self.describe(error))") } }
+            guard let self, self.generation == active, !Task.isCancelled else {
+                if let rescued { PlaybackRescue.stop(rescued.url) }
+                return
+            }
+            guard let rescued else {
+                self.rangeRetried = true
+                return self.configure(channel, url: url, generation: active)
+            }
+            self.rescueAttempt.rung = rescued.rung; self.rescueAttempt.origin = url
+            if self.automatic == url { self.automatic = rescued.url }
+            self.configure(channel, url: rescued.url, generation: active)
+            self.reportRescue(rescued, trouble: trouble, host: url.host(), since: began, generation: active)
+        }
+        return true
+    }
+
+    /// Logs which rung of `rescueLink` brought the picture, once the rescued item is ready.
+    private func reportRescue(_ rescued: PlaybackRescue.Rescued, trouble: PlaybackRescue.Trouble, host: String?, since began: ContinuousClock.Instant, generation active: UUID) {
+        Task { [weak self] in
+            for _ in 0..<240 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, self.generation == active, let item = self.item, (item.asset as? AVURLAsset)?.url == rescued.url, item.status != .failed else { return }
+                guard item.status == .readyToPlay else { continue }
+                Diagnostics.shared.record(.warning, "player", "rescued rung=\(rescued.rung) trouble=\(trouble.rawValue) host=\(host ?? "-") after=\(began.duration(to: .now).components.seconds)s")
+                return
+            }
+        }
+    }
+
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
     /// the loopback server behind a repackaged file, a plugin's proxy or a saved download refusing (-1004) and gives
     /// up 30 s later.
@@ -485,7 +542,7 @@ import IOKit.pwr_mgt
     /// a server that stays down shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || PlaybackRescue.owns(url),
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
         loopbackRecovered = .now
         let position = player.currentTime().seconds
@@ -496,6 +553,7 @@ import IOKit.pwr_mgt
             do {
                 fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
                     : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
+                    : PlaybackRescue.owns(url) ? try await PlaybackRescue.relisten(url)
                     : try await EmbeddedJarHost.shared.recoverProxy(url)
             }
             catch { failure = error }
@@ -954,7 +1012,7 @@ import IOKit.pwr_mgt
         let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         begin(channel, live: live)
         isLive = live
-        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
+        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rescueAttempt = PlaybackRescue.Attempt()
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
@@ -1288,6 +1346,7 @@ import IOKit.pwr_mgt
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
                 if status == .failed {
+                    if self.rescueLink(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
@@ -1515,7 +1574,7 @@ import IOKit.pwr_mgt
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
         upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { CENCStreams.stop(url) }
-        if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
+        if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic); PlaybackRescue.stop(automatic) }
         #if os(tvOS)
         HDRDisplay.reset()
         #endif
@@ -2002,7 +2061,7 @@ extension PlaybackSession {
         Diagnostics.shared.record(.info, "player", "advance name=\(channel.name) ready=\(upcoming.item.status == .readyToPlay)")
         // Let go of the finished episode's stream; the queued one's becomes the session's.
         if let url = playing?.url { CENCStreams.stop(url) }
-        if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
+        if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic); PlaybackRescue.stop(automatic) }
         #if os(macOS)
         if let proxy { Task { await proxy.stop() } }
         proxy = upcoming.prepared.adapter
