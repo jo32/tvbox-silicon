@@ -392,6 +392,7 @@ struct JSRuntime {
     void *host_promise_rejection_tracker_opaque;
 
     struct list_head job_list; /* list of JSJobEntry.link */
+    uint64_t active_job_scope, last_job_scope;
 
     bool module_normalize_has_attr;
     union {
@@ -1072,6 +1073,7 @@ struct JSModuleDef {
 
 typedef struct JSJobEntry {
     struct list_head link;
+    uint64_t scope;
     JSContext *ctx;
     JSJobFunc *job_func;
     int argc;
@@ -2498,6 +2500,7 @@ int JS_EnqueueJob(JSContext *ctx, JSJobFunc *job_func,
     e = js_malloc(ctx, sizeof(*e) + argc * sizeof(JSValue));
     if (!e)
         return -1;
+    e->scope = rt->active_job_scope;
     e->ctx = ctx;
     e->job_func = job_func;
     e->argc = argc;
@@ -2511,6 +2514,36 @@ int JS_EnqueueJob(JSContext *ctx, JSJobFunc *job_func,
 bool JS_IsJobPending(JSRuntime *rt)
 {
     return !list_empty(&rt->job_list);
+}
+
+uint64_t JS_BeginJobScope(JSRuntime *rt)
+{
+    assert(!rt->active_job_scope);
+    if (!++rt->last_job_scope)
+        rt->last_job_scope++;
+    return rt->active_job_scope = rt->last_job_scope;
+}
+
+void JS_EndJobScope(JSRuntime *rt, uint64_t scope, bool discard)
+{
+    assert(scope && scope == rt->active_job_scope);
+    if (discard) {
+        struct list_head *link = rt->job_list.next;
+        while (link != &rt->job_list) {
+            JSJobEntry *entry = list_entry(link, JSJobEntry, link);
+            if (entry->scope == scope) {
+                struct list_head *previous = link->prev;
+                list_del(link);
+                for (int index = 0; index < entry->argc; index++)
+                    JS_FreeValueRT(rt, entry->argv[index]);
+                js_free_rt(rt, entry);
+                link = previous->next;
+            } else {
+                link = link->next;
+            }
+        }
+    }
+    rt->active_job_scope = 0;
 }
 
 JSContext *JS_GetPendingJobContext(JSRuntime *rt)
