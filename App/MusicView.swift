@@ -11,6 +11,8 @@ struct MusicView: View {
     /// something else clears it.
     @State private var autoPlayQuery: String?
     @State private var showsSettings = false
+    /// The searches this open profile ran, newest first, so the page can offer them again (#1362).
+    @AppStorage("musicSearchHistory", store: Profiles.shared.currentDefaults) private var historyData = Data()
     #if DEBUG
     /// `-qaMusicOpen 1` opens the first album or playlist found, for screenshots.
     @State private var qaOpened: MusicCollection?
@@ -20,6 +22,46 @@ struct MusicView: View {
     @State private var qaDownloads = UserDefaults.standard.bool(forKey: "qaMusicDownloads")
     #endif
 
+    private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
+
+    /// Notes a search the viewer asked for, newest first, once each, twenty deep: as on the video side.
+    private func remember(_ text: String) {
+        let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return }
+        historyData = (try? JSONEncoder().encode(Array(([keyword] + history.filter { $0 != keyword }).prefix(20)))) ?? Data()
+    }
+
+    /// The searches this profile ran, one tap each: a song found yesterday is found again without
+    /// typing it (#1362). Shown while the field is empty, above the page's own shelves.
+    @ViewBuilder private var recentSearches: some View {
+        let past = Array(history.prefix(8))
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, store.musicSearch.query.isEmpty, !past.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L10n.text("Recent Searches")).font(.headline)
+                    Spacer()
+                    Button(L10n.text("Clear")) { historyData = Data() }
+                        .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                ChipRow {
+                    GlassGroup(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(past, id: \.self) { item in
+                                Chip(title: item) {
+                                    query = item
+                                    remember(item)
+                                    store.musicSearch.search(item, kind: Self.searchKind, immediately: true)
+                                }
+                            }
+                        }
+                    }.padding(.vertical, 4)
+                }
+            }
+            .tvFocusSection()
+            .padding(.bottom, 8)
+        }
+    }
+
     var body: some View {
         let search = store.musicSearch
         ScrollView {
@@ -27,12 +69,13 @@ struct MusicView: View {
                 #if os(tvOS)
                 let typed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !typed.isEmpty, typed != search.query {
-                    SearchQueryButton(query: typed) { search.search(typed, immediately: true) }
+                    SearchQueryButton(query: typed) { remember(typed); search.search(typed, immediately: true) }
                         .padding(.bottom, 12)
                 } else if typed.isEmpty {
                     MusicNowPlayingButton()
                 }
                 #endif
+                recentSearches
                 #if !os(macOS)
                 if !search.query.isEmpty { kinds(search) }
                 #endif
@@ -56,6 +99,7 @@ struct MusicView: View {
         }
         .onSubmit(of: .search) {
             autoPlayQuery = search.kind == .songs || search.kind == .top ? query.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+            remember(query)
             search.search(query, kind: Self.searchKind, immediately: true); playDirectHitIfReady()
         }
         .onChange(of: search.busy) {
