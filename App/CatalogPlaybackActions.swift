@@ -64,6 +64,8 @@ struct CatalogPlaybackActions: View {
 /// The source's opening or ending credits playing now (#256): one tap skips them, as Bilibili's own player offers.
 struct SourceSkipButton: View {
     let session: PlaybackSession
+    /// Above the controls at the foot of the picture.
+    var bottom: CGFloat = 96
     var body: some View {
         if let skip = session.skipOffer {
             Button { session.skipSourceSegment() } label: {
@@ -73,7 +75,7 @@ struct SourceSkipButton: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white)
-            .padding(.trailing, 20).padding(.bottom, 96)
+            .padding(.trailing, 20).padding(.bottom, bottom)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .transition(.opacity)
             .accessibilityIdentifier("player.skipSource")
