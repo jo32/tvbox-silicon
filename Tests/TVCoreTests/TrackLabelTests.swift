@@ -34,6 +34,8 @@ struct TrackLabelTests {
         #expect(format(Stream(index: 1, kind: .audio, codec: "dts", profile: 60, channels: 8)) == "DTS-HD MA 7.1")
         #expect(format(Stream(index: 1, kind: .audio, codec: "dts", profile: 20, channels: 6)) == "DTS 5.1")
         #expect(format(Stream(index: 1, kind: .audio, codec: "pcm_bluray", channels: 2)) == "LPCM 2.0")
+        #expect(format(Stream(index: 1, kind: .audio, codec: "aac", channels: 2)) == "AAC 2.0")
+        #expect(format(Stream(index: 1, kind: .audio, codec: "eac3", channels: 6)) == "E-AC-3 5.1")
         #expect(format(Stream(index: 4, kind: .subtitle, codec: "hdmv_pgs_subtitle")) == "PGS")
         #expect(format(Stream(index: -1, kind: .subtitle, codec: "external", isText: true)) == nil)
     }
