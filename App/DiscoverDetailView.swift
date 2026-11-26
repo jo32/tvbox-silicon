@@ -243,10 +243,11 @@ struct DiscoverDetailView: View {
         let name = item.name
         return store.playbackHistory.entries
             .filter { !$0.completed }
+            // The same name only: a name inside another ("家" in "一家人", a first season in its sequel's "… 第二季") would
+            // carry on with a different title. Without one, Search Sources finds it.
             .filter {
-                $0.context.videoName.caseInsensitiveCompare(name) == .orderedSame
-                    || $0.context.videoName.localizedCaseInsensitiveContains(name)
-                    || name.localizedCaseInsensitiveContains($0.context.videoName)
+                $0.context.videoName.trimmingCharacters(in: .whitespaces)
+                    .compare(name.trimmingCharacters(in: .whitespaces), options: [.caseInsensitive, .widthInsensitive]) == .orderedSame
             }
             .max(by: { $0.updatedAt < $1.updatedAt })
     }
