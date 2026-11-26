@@ -97,7 +97,7 @@ enum WebPlayback {
     /// TVBox's JSON parse contract: GET service + page address, answer `{"url": ...}` (sometimes under `data`).
     static func askJSON(service: String, page: String, headers requestHeaders: [String: String], http: HTTPClient) async -> (url: URL, headers: [String: String])? {
         guard let request = try? WebAddress.resolve(service + page),
-              let (data, _) = try? await http.get(request, headers: requestHeaders),
+              let (data, _) = try? await http.get(request, headers: requestHeaders, fresh: true),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let payload = (object["data"] as? [String: Any]) ?? object
         guard let address = payload["url"] as? String, address.lowercased().hasPrefix("http"),

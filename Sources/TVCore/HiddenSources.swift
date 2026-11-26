@@ -4,11 +4,14 @@ import Observation
 /// Subscription-qualified hides. The same key scheme as `PinnedSources`.
 @MainActor @Observable public final class HiddenSources {
     /// In the order they were hidden, as saved and synced.
-    private var keys: [String] { didSet { lookup = Set(keys) } }
+    private var keys: [String] { didSet { lookup = Set(keys); sourceKeys = Set(keys.compactMap(Self.sourceComponent)) } }
     /// The same keys for `contains`, which runs for every source when the app starts and lists or searches its
     /// sources. Searching the list instead took seconds with thousands of sources hidden, long enough for iOS to
     /// kill the app as it started (report 39eb8ea19c38).
     private var lookup: Set<String>
+    /// The `source` each saved key hides, for a history entry whose own key differs from the hide's
+    /// (a Cloud Files folder, below). Rebuilt with `lookup`, so it costs nothing per entry.
+    private var sourceKeys: Set<String>
     /// Bumps when a source is hidden or shown, so a cached source row can be reused until then.
     public private(set) var revision = 0
     private let defaults: UserDefaults
@@ -23,6 +26,7 @@ import Observation
         let saved = defaults.stringArray(forKey: Self.storageKey) ?? []
         keys = saved
         lookup = Set(saved)
+        sourceKeys = Set(saved.compactMap(Self.sourceComponent))
     }
 
     public var isEmpty: Bool { lookup.isEmpty }
@@ -35,12 +39,25 @@ import Observation
         key(origin: site.origin(or: origin), sourceKey: site.sourceKey)
     }
 
+    /// The `source` a saved scope key hides: a scope is `[origin, source, video]` as JSON.
+    private static func sourceComponent(of scope: String) -> String? {
+        guard let data = scope.data(using: .utf8),
+              let parts = try? JSONDecoder().decode([String].self, from: data), parts.count == 3 else { return nil }
+        return parts[1]
+    }
+
     public func contains(_ site: Site, origin: URL) -> Bool {
         !lookup.isEmpty && lookup.contains(key(site, origin: origin))
     }
 
     public func contains(_ context: PlaybackHistoryContext) -> Bool {
-        !lookup.isEmpty && lookup.contains(key(origin: context.origin, sourceKey: context.sourceKey))
+        guard !lookup.isEmpty else { return false }
+        if lookup.contains(key(origin: context.origin, sourceKey: context.sourceKey)) { return true }
+        // Cloud Files history keeps one sourceKey for every drive, while each drive hides under its own site key,
+        // so the exact match above never fires for a watched folder: match the entry to its drive's hide instead
+        // (#2360). A drive's key is unique to it, so no other subscription's source can match by mistake.
+        return context.sourceKey == CloudFiles.sourceKey &&
+            sourceKeys.contains(CloudFilesSource.keyPrefix + context.episodeFlag)
     }
 
     public func toggle(_ site: Site, origin: URL) {
