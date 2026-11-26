@@ -1110,7 +1110,7 @@ import IOKit.pwr_mgt
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
         // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
-        player.allowsExternalPlayback = !Remux.isRemuxed(url) && proxy == nil
+        player.allowsExternalPlayback = !Remux.isRemuxed(url) && !(isLive && proxy != nil)
         player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
         maintainLivePlaylist(item, generation: activeGeneration)
