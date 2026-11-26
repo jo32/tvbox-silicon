@@ -650,15 +650,22 @@ import IOKit.pwr_mgt
         // With video buffered ahead, straight on at the new speed (#1457): a plain `rate` lets AVPlayer first wait
         // to judge whether the download keeps up at it, which would hold the picture and sound as a hold begins
         // or ends. A buffer that runs out still stops to buffer, and the throttle then steps the speed down.
-        if player.timeControlStatus == .playing, bufferedAhead() >= 1 { player.playImmediately(atRate: rate) }
+        if player.timeControlStatus == .playing, (bufferedAhead() ?? 0) >= 1 { player.playImmediately(atRate: rate) }
         else { player.rate = rate }
     }
-    /// Seconds of video loaded past the playhead.
-    private func bufferedAhead() -> Double {
-        guard let item = player.currentItem else { return 0 }
-        let now = player.currentTime()
-        let buffered = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
-        return buffered.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
+    /// Seconds of video loaded past the playhead, including any read-ahead a cloud stream already holds in memory.
+    /// Nil when AVPlayer reports no loaded range around the playhead and no cloud cache is ahead (#2175).
+    private func bufferedAhead() -> Double? {
+        guard let item = player.currentItem else { return nil }
+        let now = player.currentTime().seconds
+        let ranges = item.loadedTimeRanges.map { range -> (start: Double, end: Double) in
+            let value = range.timeRangeValue
+            return (value.start.seconds, CMTimeRangeGetEnd(value).seconds)
+        }
+        let itemAhead = SpeedBoost.bufferedAhead(ranges: ranges, at: now)
+        let cloudAhead = automatic.map(CloudStreams.bufferedAhead(for:)) ?? 0
+        if let itemAhead { return itemAhead + cloudAhead }
+        return cloudAhead > 0 ? cloudAhead : nil
     }
     private func clearBoost() { throttle = nil; boost = nil; boostWanted = nil }
     /// Once a second while a hold plays faster than normal: slower before the buffered video runs out, and faster
@@ -666,13 +673,15 @@ import IOKit.pwr_mgt
     private func throttleBoost(_ item: AVPlayerItem) {
         guard var throttle, throttle.wanted > 1, player.rate != 0, item.status == .readyToPlay else { return }
         let ahead = bufferedAhead()
+        let now = player.currentTime().seconds
+        let remaining = item.duration.isNumeric && now.isFinite ? max(0, item.duration.seconds - now) : .infinity
         // Only a buffer that ran out counts: AVPlayer also waits a moment to judge a new speed (#796).
         let stalled = player.timeControlStatus == .waitingToPlayAtSpecifiedRate && player.reasonForWaitingToPlay == .toMinimizeStalls
-        throttle.update(ahead: ahead, waiting: stalled)
+        throttle.update(ahead: ahead, waiting: stalled, remaining: remaining)
         let changed = throttle.rate != self.throttle?.rate
         self.throttle = throttle
         guard changed else { return }
-        Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(Int(ahead))s")
+        Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(ahead.map { "\(Int($0))s" } ?? "-")")
         applyBoost()
     }
     private var generation = UUID()

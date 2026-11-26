@@ -74,8 +74,10 @@ import Testing
 
 @Test func aHoldSpeedsUpAgainWhileTheDownloadKeepsUp() {
     var throttle = SpeedBoost.Throttle(wanted: 3)
+    throttle.update(ahead: 10, waiting: false)
     throttle.update(ahead: 8, waiting: false)
     throttle.update(ahead: 6, waiting: false)
+    throttle.update(ahead: 4, waiting: false)
     #expect(throttle.rate == 2)
     // The buffer has to hold up for a few seconds, and leave room at the next speed.
     for ahead in [10.0, 11, 12, 13, 14] { throttle.update(ahead: ahead, waiting: false) }
@@ -103,12 +105,62 @@ import Testing
 
 @Test func slidingOnKeepsTheSpeedTheConnectionHeld() {
     var throttle = SpeedBoost.Throttle(wanted: 4)
-    throttle.update(ahead: 2, waiting: false)
-    throttle.update(ahead: 2, waiting: false)
+    throttle.update(ahead: 14, waiting: false)
+    throttle.update(ahead: 11, waiting: false)
+    throttle.update(ahead: 8, waiting: false)
+    throttle.update(ahead: 5, waiting: false)
     #expect(throttle.rate == 2.5)
     #expect(SpeedBoost.Throttle(wanted: 3, after: throttle).rate == 2.5)
     #expect(SpeedBoost.Throttle(wanted: 2, after: throttle).rate == 2)
     #expect(SpeedBoost.Throttle(wanted: 3, after: SpeedBoost.Throttle(wanted: 4)).rate == 3)
+}
+
+@Test func aSteadyOrGrowingSmallBufferDoesNotSlowDown() {
+    // Issue #2175: a fast connection where AVPlayer only reports a few seconds ahead (or after a seek) keeps up.
+    var steady = SpeedBoost.Throttle(wanted: 2)
+    for ahead in [4.0, 4.0, 3.85, 4.1, 4.0, 4.0] { steady.update(ahead: ahead, waiting: false) }
+    #expect(steady.rate == 2 && !steady.limited)
+    // Growing after a seek, with a one-tick dip and small jitter as chunks arrive.
+    var afterSeek = SpeedBoost.Throttle(wanted: 2)
+    for ahead in [3.8, 2.8, 4.4, 4.2, 5.6, 6.9] { afterSeek.update(ahead: ahead, waiting: false) }
+    #expect(afterSeek.rate == 2 && !afterSeek.limited)
+    // Chunk-by-chunk sawtooth at a steady cap never drains for two samples in a row.
+    var sawtooth = SpeedBoost.Throttle(wanted: 2)
+    for ahead in [5.0, 3.0, 5.0, 3.0, 5.0, 3.0] { sawtooth.update(ahead: ahead, waiting: false) }
+    #expect(sawtooth.rate == 2 && !sawtooth.limited)
+}
+
+@Test func anUnreportedBufferDoesNotSlowDownUnlessStalled() {
+    // Issue #2175: empty or missing loadedTimeRanges while playing smoothly is not a slow connection.
+    var throttle = SpeedBoost.Throttle(wanted: 2)
+    for _ in 0..<10 { throttle.update(ahead: nil, waiting: false) }
+    #expect(throttle.rate == 2 && !throttle.limited)
+    // A real stall still steps down, and clean playback recovers toward the wanted speed.
+    throttle.update(ahead: nil, waiting: true)
+    #expect(throttle.rate == 1.5 && throttle.limited)
+    for _ in 0..<SpeedBoost.Throttle.settle { throttle.update(ahead: nil, waiting: false) }
+    #expect(throttle.rate == 2 && !throttle.limited)
+}
+
+@Test func reachingTheEndOfTheVideoDoesNotSlowDown() {
+    var throttle = SpeedBoost.Throttle(wanted: 2)
+    for remaining in [5.0, 3.0, 1.0] {
+        throttle.update(ahead: remaining, waiting: false, remaining: remaining)
+    }
+    #expect(throttle.rate == 2 && !throttle.limited)
+}
+
+@Test func bufferedAheadReadsLoadedRangesAroundPlayhead() {
+    // Empty or stale ranges report nil rather than 0 s.
+    #expect(SpeedBoost.bufferedAhead(ranges: [], at: 100) == nil)
+    #expect(SpeedBoost.bufferedAhead(ranges: [(0, 50)], at: 100) == nil)
+    #expect(SpeedBoost.bufferedAhead(ranges: [(0, 50)], at: .nan) == nil)
+    // Normal range, small start offset, and contiguous ranges with a tiny gap.
+    #expect(SpeedBoost.bufferedAhead(ranges: [(10, 40)], at: 15) == 25)
+    #expect(SpeedBoost.bufferedAhead(ranges: [(10.2, 40)], at: 10) == 30)
+    #expect(SpeedBoost.bufferedAhead(ranges: [(10, 20), (20.1, 35)], at: 15) == 20)
+    // A large gap is not bridged.
+    #expect(SpeedBoost.bufferedAhead(ranges: [(10, 20), (30, 50)], at: 15) == 5)
 }
 
 @Test func aTappedKeySkipsAndAHeldOnePlaysFaster() {

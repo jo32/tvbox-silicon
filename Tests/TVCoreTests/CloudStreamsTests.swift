@@ -355,6 +355,26 @@ struct CloudStreamsTests {
         // An expired link.
         #expect(await CatPawOpen.sameFile(proxied, at: try #require(URL(string: "https://cloud.test/direct-expired.mp4")), headers: [:], session: RangeServer.session) == nil)
     }
+
+    /// Issue #2175: the stream reports how many seconds of cached bytes it already holds ahead of AVPlayer's reads.
+    @Test func reportsSecondsCachedAheadOfReads() async throws {
+        let size = CloudByteStream.chunkSize * 10
+        let (url, _) = try await served("ahead-\(UUID().uuidString).mp4", size: size)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: "ahead.mp4"), session: RangeServer.session) { nil }
+        // Before the duration is known, nothing is reported.
+        #expect(stream.bufferedAhead.withLock { $0 } == 0)
+        // 10 chunks over 100 s = 10 s per chunk.
+        await stream.setDuration(100)
+        _ = try await stream.read(at: 0, count: 64)
+        // Wait briefly for prefetched chunks to land in cache.
+        for _ in 0..<40 {
+            if stream.bufferedAhead.withLock({ $0 }) >= 30 { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        #expect(stream.bufferedAhead.withLock { $0 } >= 30)
+        await stream.clear()
+        #expect(stream.bufferedAhead.withLock { $0 } == 0)
+    }
 }
 
 /// Serves registered bytes for https://cloud.test/<name> with HTTP Range, in memory, so these
