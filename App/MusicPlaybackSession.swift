@@ -903,6 +903,10 @@ typealias MusicTrack = TVCore.MusicTrack
 
     private func tearDownItem() {
         cancelSleepFade()
+        // A seek lands through the item it was made on. Replacing that item while the seek is out leaves its
+        // completion to be dropped, since the generation has moved on, so clear it here or the clock stays
+        // stopped for the rest of the session (#2349).
+        seekingTo = nil
         itemObservation = nil; pictureObservation = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
