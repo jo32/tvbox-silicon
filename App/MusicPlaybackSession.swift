@@ -866,6 +866,7 @@ typealias MusicTrack = TVCore.MusicTrack
         guard track != nil else { return }
         switch status {
         case .playing:
+            if !sleepFade.isActive, sleepFadeRevision != nil { cancelSleepFade() }
             if phase == .loading || phase == .paused { phase = .playing; startWatch?.cancel() }
             if let set = streamSetAt {
                 streamSetAt = nil

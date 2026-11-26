@@ -2005,6 +2005,7 @@ extension PlaybackSession {
     /// Plays the queued next episode now (the Next Episode button); false when none is queued yet.
     func playUpcoming() -> Bool {
         guard let upcoming, upcoming.item.status != .failed, player.currentItem === item else { return false }
+        cancelSleepFade()
         skipsToUpcoming = true
         player.advanceToNextItem()
         player.play()
