@@ -1103,6 +1103,14 @@ import IOKit.pwr_mgt
         return nil
     }
 
+    /// Selects a detailed audio option from the tvOS transport-bar menu (#2388).
+    func chooseAudioTrack(_ option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) {
+        guard let item, player.currentItem === item, let tracks = mediaTracks.audio, tracks.group == group,
+              tracks.options.contains(option) else { return }
+        guard item.currentMediaSelection.selectedMediaOption(in: group) != option else { return }
+        mediaTracks.select(option, in: tracks)
+    }
+
     /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
     func chooseSubtitle(_ option: AVMediaSelectionOption?, in group: AVMediaSelectionGroup) {
         guard let item, player.currentItem === item, let tracks = mediaTracks.legible, tracks.group == group else { return }
