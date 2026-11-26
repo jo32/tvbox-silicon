@@ -14,7 +14,7 @@ struct WatchNowTVPage: View {
     /// The newest titles not finished yet, for the hero.
     private var upNext: [PlaybackHistoryEntry] {
         guard sections.contains(.upNext) else { return [] }
-        return Array(store.playbackHistory.entries.filter { !$0.completed }.prefix(5))
+        return Array(store.visibleHistory.filter { !$0.completed }.prefix(5))
     }
 
     var body: some View {
@@ -59,11 +59,14 @@ struct WatchNowTVPage: View {
     }
 
     @ViewBuilder private var rows: some View {
-        if sections.contains(.continueWatching), !store.playbackHistory.entries.isEmpty {
-            WatchNowTVRail(title: L10n.text("Continue Watching"), seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .history }) {
-                ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
+        if sections.contains(.continueWatching) {
+            let history = store.visibleHistory
+            if !history.isEmpty {
+                WatchNowTVRail(title: L10n.text("Continue Watching"), seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .history }) {
+                    ForEach(history.prefix(12)) { HistoryCard(entry: $0) }
+                }
+                .id("continue")
             }
-            .id("continue")
         }
         if sections.contains(.pinnedSources) {
             let pinned = store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }

@@ -202,6 +202,12 @@ extension PlaybackHistoryEntry {
         entries.removeAll { ids.contains($0.id) }; prioritizeCaches(); persist(); onChange?()
     }
     public func clear() { for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist(); onChange?() }
+
+    /// Watched titles whose source is not hidden.
+    public func visibleEntries(hiding hidden: HiddenSources) -> [PlaybackHistoryEntry] {
+        guard !hidden.isEmpty else { return entries }
+        return entries.filter { !hidden.contains($0.context) }
+    }
     private func prioritizeCaches() {
         cache.prioritize(Set(entries.flatMap { entry in
             [entry.id] + (entry.context.poster.map { [PosterResource.artworkScope($0)] } ?? [])
