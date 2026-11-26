@@ -72,6 +72,7 @@ private final class LoopbackListProtocol: URLProtocol, @unchecked Sendable {
         let body: Data
         switch url.path {
         case "/list.txt": body = Data("央视,#genre#\nCCTV1,https://a.example/1.m3u8\nCCTV2,https://a.example/2.m3u8".utf8)
+        case "/lists/relative.txt": body = Data("Local,#genre#\nOne,one/index.m3u8\nTwo,/two.m3u8".utf8)
         default: body = Data()
         }
         if url.host() == "127.0.0.1" {
@@ -95,6 +96,15 @@ private final class LoopbackListProtocol: URLProtocol, @unchecked Sendable {
     let playlist = try await http.playlist(source)
     #expect(playlist.channels.map(\.name) == ["CCTV1", "CCTV2"] && playlist.channels[0].group == "央视")
     #expect(!LoopbackListProtocol.requests.contains { $0.host() == "127.0.0.1" })
+    // Relative channel addresses resolve against the list's own address, never 127.0.0.1:9978…
+    let relative = try await http.playlist(LiveSource(name: "R", url: URL(string: "http://127.0.0.1:9978/proxy?do=live&url=https://lists.example/lists/relative.txt")!))
+    #expect(relative.channels.map(\.url.absoluteString) == ["https://lists.example/lists/one/index.m3u8", "https://lists.example/two.m3u8"])
+    // …and a list given inline has no address to resolve them against: its relative ones are dropped, and say so.
+    let inline = { (text: String) in LiveSource(name: "I", url: URL(string: "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64(text))!) }
+    let mixed = try await http.playlist(inline("News,#genre#\nA,https://a.example/a.m3u8\nB,b.m3u8"))
+    #expect(mixed.channels.map(\.url.absoluteString) == ["https://a.example/a.m3u8"])
+    do { _ = try await http.playlist(inline("News,#genre#\nA,a.m3u8\nB,/b.m3u8")); Issue.record("relative list loaded") }
+    catch { #expect(error.localizedDescription.contains("relative")) }
     // A spider's own list without a spider to ask, and an Android file, say why.
     await #expect(throws: TVError.self) { try await http.playlist(LiveSource(name: "S", url: URL(string: "http://127.0.0.1:9978/proxy?do=live&u=Gather")!)) }
     do { _ = try await http.playlist(LiveSource(name: "F", url: URL(string: "http://127.0.0.1:9978/file/TVBox/live.txt")!)); Issue.record("file loaded") }

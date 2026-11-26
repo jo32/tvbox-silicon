@@ -48,12 +48,13 @@ public struct HTTPClient: Sendable {
     }
 
     /// A live source's playlist, also one that Android TVBox players serve from their own local server
-    /// (`LoopbackPlaylist`), and where its relative addresses resolve.
-    func playlistData(_ source: LiveSource) async throws -> (Data, URL) {
+    /// (`LoopbackPlaylist`), and where its relative addresses resolve: the address it came from, never the
+    /// Android server's 127.0.0.1:9978. A list given inline or answered by a plugin has none (nil).
+    func playlistData(_ source: LiveSource) async throws -> (Data, URL?) {
         switch LoopbackPlaylist.route(source.url) {
         case nil: return try await get(source.url, headers: source.headers)
         case .playlist(let url)?: return try await get(url, headers: source.headers)
-        case .text(let text)?: return (Data(text.utf8), source.url)
+        case .text(let text)?: return (Data(text.utf8), nil)
         case .deviceFile?: throw LoopbackPlaylist.deviceFileError
         case .spider(let query)?:
             guard let spider = source.spider else { throw LoopbackPlaylist.needsPlugin }
@@ -62,7 +63,7 @@ public struct HTTPClient: Sendable {
                 return try await get(location, headers: source.headers)
             }
             guard (200..<300).contains(answer.status) else { throw TVError.http(answer.status) }
-            return (answer.body, source.url)
+            return (answer.body, nil)
         }
     }
 }

@@ -1,12 +1,16 @@
 import Foundation
 
 public enum Playlist {
-    public static func parse(_ text: String, origin: URL, headers: [String: String] = [:]) throws -> [Channel] {
+    /// `origin`: where relative addresses resolve; nil for a list with no address of its own (`LoopbackPlaylist`), whose
+    /// relative addresses are dropped.
+    public static func parse(_ text: String, origin: URL?, headers: [String: String] = [:]) throws -> [Channel] {
         // TVBox's JSON live format reads as the TXT lines it stands for.
         if let lines = jsonLines(text) { return try parse(lines, origin: origin, headers: headers) }
         var result: [Channel] = [], seen = Set<String>()
         // Channel addresses this app can't play (rtmp://, rtsp://, P2P), to say so when nothing else is left.
         var otherSchemes = Set<String>()
+        // Relative channel addresses in a list without an address of its own: nothing to resolve them against.
+        var unresolved = 0
         // Where each named channel is in `result`, by group and name: the same channel again is another line of it.
         var named: [String: Int] = [:]
         var name: String?, logo: URL?, guideID: String?, group = "", entryHeaders = headers
@@ -53,7 +57,7 @@ public enum Playlist {
                 guard let first = lines.first else {
                     if let scheme = address.firstMatch(of: /^\s*([A-Za-z][A-Za-z0-9+.-]*):\/\//)?.1.lowercased(), !["http", "https"].contains(scheme) {
                         otherSchemes.insert(scheme)
-                    }
+                    } else if origin == nil, !address.contains("://") { unresolved += 1 }
                     name = nil; continue
                 }
                 if let name, let at = named[group + "|" + name] {
@@ -80,6 +84,7 @@ public enum Playlist {
             let schemes = otherSchemes.sorted().prefix(4).map { $0 + "://" }.joined(separator: ", ")
             throw TVError.unsupported(L10n.text("This playlist only has %@ channels, which Apple's player can't play.", schemes))
         }
+        if unresolved > 0 { throw TVError.unsupported(L10n.text("This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here.")) }
         let start = text.prefix(512).lowercased()
         if start.contains("<!doctype") || start.contains("<html") {
             throw TVError.unsupported(L10n.text("The playlist address returned a web page instead of a playlist. Its host may be offline."))
@@ -135,7 +140,7 @@ public enum Playlist {
 
     /// An address with the entry's headers, and its own after a `|` (`url|User-Agent=…&Referer=…`). A line's name
     /// after a `$` (`url$高清`) is dropped.
-    private static func channelLine(_ address: String, headers: [String: String], origin: URL) -> ChannelLine? {
+    private static func channelLine(_ address: String, headers: [String: String], origin: URL?) -> ChannelLine? {
         let parts = address.split(separator: "|", maxSplits: 1).map(String.init)
         guard var first = parts.first else { return nil }
         if let dollar = first.lastIndex(of: "$"), !first[first.index(after: dollar)...].contains(where: { "/=&?".contains($0) }) {
