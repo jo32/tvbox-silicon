@@ -113,10 +113,42 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
         all.contains { $0.id != profile?.id && subscriptionAddresses(of: $0).contains(address) }
     }
 
+    /// Whether another profile has an enabled subscription whose saved copy has sources or live playlists:
+    /// shared sections and settings (such as Music) stay available after switching to a profile that has not
+    /// added its own subscriptions yet (#1853).
+    public func hasWorkingSubscription(besides profile: Profile?, mainDirectory: URL) -> Bool {
+        all.contains { other in
+            other.id != profile?.id && hasWorkingSubscription(in: other, mainDirectory: mainDirectory)
+        }
+    }
+
+    private func hasWorkingSubscription(in profile: Profile, mainDirectory: URL) -> Bool {
+        let entries = subscriptionEntries(of: profile).filter(\.enabled)
+        guard !entries.isEmpty else { return false }
+        let folder = (folder(for: profile) ?? mainDirectory).appending(path: "subscriptions")
+        return entries.contains { entry in
+            guard let data = try? Data(contentsOf: folder.appending(path: entry.cacheName)),
+                  let content = try? JSONDecoder().decode(SubscriptionContent.self, from: data) else { return false }
+            return !content.sites.isEmpty || !content.lives.isEmpty
+        }
+    }
+
+    /// Only the counts of `sites` and `lives` from a cached `Subscription`, avoiding decoding every source entry.
+    private struct SubscriptionContent: Decodable {
+        struct Item: Decodable {}
+        let sites: [Item]
+        let lives: [Item]
+    }
+
+    /// The profile's subscriptions, as the store saved them.
+    func subscriptionEntries(of profile: Profile) -> [SubscriptionEntry] {
+        let data = defaults(for: profile).data(forKey: "subscriptions")
+        return data.flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) } ?? []
+    }
+
     /// The addresses of the profile's subscriptions, as the store saved them.
     func subscriptionAddresses(of profile: Profile) -> [String] {
-        let data = defaults(for: profile).data(forKey: "subscriptions")
-        return (data.flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) } ?? []).map(\.address)
+        subscriptionEntries(of: profile).map(\.address)
     }
 
     private func save() {

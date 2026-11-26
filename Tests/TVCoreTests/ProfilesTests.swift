@@ -72,3 +72,51 @@ import Testing
     defer { sandbox.clean(profiles) }
     #expect(profiles.current == .main)
 }
+
+@Test @MainActor func workingSubscriptionInAnotherProfileKeepsExtrasUnlocked() throws {
+    let sandbox = Sandbox(), profiles = sandbox.profiles()
+    defer { sandbox.clean(profiles) }
+    let mainDir = sandbox.root.appending(path: "main-data", directoryHint: .isDirectory)
+    let kid = profiles.add(named: "Kid")
+    let address = "https://example.com/tvbox.json"
+    let origin = try #require(URL(string: address))
+    let entry = SubscriptionEntry(address: address)
+
+    func write(_ subscription: Subscription, for profile: Profile, entry: SubscriptionEntry) throws {
+        let dir = (profiles.folder(for: profile) ?? mainDir).appending(path: "subscriptions", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try JSONEncoder().encode(subscription).write(to: dir.appending(path: entry.cacheName))
+    }
+
+    // No subscriptions yet in any profile.
+    #expect(!profiles.hasWorkingSubscription(besides: kid, mainDirectory: mainDir))
+    #expect(!profiles.hasWorkingSubscription(besides: .main, mainDirectory: mainDir))
+
+    // An enabled entry without a cached copy does not unlock.
+    profiles.defaults(for: .main).set(try JSONEncoder().encode([entry]), forKey: "subscriptions")
+    #expect(!profiles.hasWorkingSubscription(besides: kid, mainDirectory: mainDir))
+
+    // A cached copy with neither sites nor live playlists does not unlock.
+    try write(Subscription(origin: origin, importedAt: Date(), sites: [], lives: [], raw: [:]), for: .main, entry: entry)
+    #expect(!profiles.hasWorkingSubscription(besides: kid, mainDirectory: mainDir))
+
+    // A cached copy with sites in the main profile unlocks for another profile, not for main itself.
+    let site = Site(key: "s1", name: "S1", type: 1, api: "https://example.com/api", raw: [:])
+    try write(Subscription(origin: origin, importedAt: Date(), sites: [site], lives: [], raw: [:]), for: .main, entry: entry)
+    #expect(profiles.hasWorkingSubscription(besides: kid, mainDirectory: mainDir))
+    #expect(!profiles.hasWorkingSubscription(besides: .main, mainDirectory: mainDir))
+
+    // Disabling the subscription stops unlocking for other profiles.
+    let disabled = SubscriptionEntry(address: address, enabled: false)
+    profiles.defaults(for: .main).set(try JSONEncoder().encode([disabled]), forKey: "subscriptions")
+    #expect(!profiles.hasWorkingSubscription(besides: kid, mainDirectory: mainDir))
+
+    // A working live-only subscription in another profile unlocks for the main profile, until that profile is deleted.
+    let live = LiveSource(name: "Live", url: try #require(URL(string: "https://example.com/live.m3u")))
+    profiles.defaults(for: kid).set(try JSONEncoder().encode([entry]), forKey: "subscriptions")
+    try write(Subscription(origin: origin, importedAt: Date(), sites: [], lives: [live], raw: [:]), for: kid, entry: entry)
+    #expect(profiles.hasWorkingSubscription(besides: .main, mainDirectory: mainDir))
+
+    profiles.remove(kid)
+    #expect(!profiles.hasWorkingSubscription(besides: .main, mainDirectory: mainDir))
+}

@@ -124,9 +124,16 @@ import TVCore
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
     var hidesSidebar = false
-    /// Unlock additional sections once an enabled subscription has sources or live playlists.
-    var extrasUnlocked: Bool {
+    /// Whether the open profile itself has an enabled subscription with sources or live playlists.
+    private var currentProfileUnlocksExtras: Bool {
         subscriptions.contains { $0.enabled && documents[$0.address].map { !$0.sites.isEmpty || !$0.lives.isEmpty } == true }
+    }
+    /// Whether another profile on this device has a working subscription, updated when subscriptions or profiles
+    /// change so `extrasUnlocked` does no disk work inside view bodies (#1853).
+    private var otherProfileUnlocksExtras = false
+    /// Unlock additional sections once any profile has an enabled subscription with sources or live playlists.
+    var extrasUnlocked: Bool {
+        currentProfileUnlocksExtras || otherProfileUnlocksExtras
     }
     /// Sections kept out of the tab bar and sidebar until then; Manga while no Venera comic source list
     /// is subscribed (one is added with Add Subscription, like any other).
@@ -284,9 +291,12 @@ import TVCore
     }
     // MARK: Profiles (#1456)
 
+    /// Whether this store uses `Profiles.shared` (ordinary app runs, not tests or QA's isolated data).
+    private var usesProfiles: Bool { baseDefaults === UserDefaults.standard && !Self.isolated(baseDefaults) }
+
     /// Whether another profile can open now: not while a subscription loads into this one, nor in tests or QA's
     /// isolated data.
-    var switchesProfiles: Bool { !importing && baseDefaults === UserDefaults.standard && !Self.isolated(baseDefaults) }
+    var switchesProfiles: Bool { !importing && usesProfiles }
 
     /// Opens another profile's library in place of this one. What plays stops first, so its place is saved to the
     /// profile it belongs to; RootView is rebuilt for the new profile, so no page of the last one stays on screen.
@@ -330,6 +340,18 @@ import TVCore
     /// Picks up a new name for the open profile.
     func profileRenamed() {
         if let renamed = Profiles.shared.all.first(where: { $0.id == profile.id }), renamed != profile { profile = renamed }
+    }
+
+    /// Re-checks whether another profile still unlocks shared sections after one is deleted (#1853).
+    func profileRemoved() {
+        refreshOtherProfileExtras()
+    }
+
+    /// Updates `otherProfileUnlocksExtras` when the open profile itself has no working subscription.
+    private func refreshOtherProfileExtras() {
+        let unlocked = usesProfiles && !currentProfileUnlocksExtras
+            && Profiles.shared.hasWorkingSubscription(besides: profile, mainDirectory: Self.subscriptionDirectory)
+        if otherProfileUnlocksExtras != unlocked { otherProfileUnlocksExtras = unlocked }
     }
 
     /// Removes the app's copy of an imported file, unless another profile lists it too.
@@ -835,6 +857,7 @@ import TVCore
         // Only an explicitly enabled subscription may supply service metadata. Ignore the old automatic cache.
         CloudSources.current = enabled.first(where: CloudSources.accepts)
         subscription = Subscription.merge(enabled)?.withCloudFiles().withLivePlugins()
+        refreshOtherProfileExtras()
         if let subscription {
             // Older downloads only had the last episode in Continue Watching. Keep that position before the
             // viewer moves on to another episode and the show-level entry is replaced.
