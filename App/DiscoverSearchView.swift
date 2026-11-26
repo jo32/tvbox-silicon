@@ -45,7 +45,15 @@ struct DiscoverSearchView: View {
                     .scrollDismissesKeyboard(.interactively)
                     #endif
                     .safeAreaInset(edge: .top, spacing: 0) { topChrome }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        // The search bar belongs to this root page, so an interactive pop reveals it with the page
+                        // as soon as the swipe starts. Keep it hidden until the pop commits and the path is empty
+                        // again, then fade it back in (#1723).
+                        bottomChrome
+                            .opacity(path.isEmpty ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.2), value: path.isEmpty)
+                            .allowsHitTesting(path.isEmpty)
+                    }
                     if let section = filterSection {
                         Color.clear.contentShape(Rectangle()).onTapGesture { filterSection = nil }
                             .padding(.top, 122)
