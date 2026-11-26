@@ -10,6 +10,8 @@ import inspect
 import json
 import os
 import re
+import select
+import socket
 import sys
 import threading
 import traceback
@@ -125,51 +127,181 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def answer(self, include_body):
         session = self.session
+        body = None
+        sent = False
+        finished = threading.Event()
+        cancelled = threading.Event()
+        monitor = None
+
+        def disconnected():
+            while not finished.wait(.05):
+                try:
+                    readable, _, _ = select.select([self.connection], [], [], .05)
+                    if readable and not self.connection.recv(1, socket.MSG_PEEK):
+                        raise ConnectionResetError('The playback connection was closed')
+                except OSError:
+                    cancelled.set()
+                    # Media writes wait for the decoder's backpressure without a
+                    # deadline. Closing the client must still release that write.
+                    try:
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+                    self.close_body(body, interrupt=True, close=False)
+                    return
+
         try:
+            monitor = threading.Thread(target=disconnected, daemon=True, name='python-proxy-cancel')
+            monitor.start()
             with open(os.path.join(session.cache, 'proxy-active'), 'w'):
                 pass
-            # AVPlayer reads progressive media in byte ranges, starting with `bytes=0-1`. Keep the last
-            # complete response so each range does not make the spider download the file again.
+            # Only immutable, small in-memory responses are shared. A media stream
+            # never holds the source cache lock or waits for the entire movie.
+            request_headers = dict(self.headers)
+            cache_key = (self.path, tuple(sorted((key.lower(), value) for key, value in request_headers.items()
+                if key.lower() not in ('range', 'connection', 'host'))))
             with session.cache_lock:
                 cached_path, response = session.cached_response
-                if cached_path != self.path:
-                    response = session.proxy_response(self.path)
-                    if response[0] == 200 and len(response[3]) <= 512 * 1024 * 1024:
-                        session.cached_response = (self.path, response)
-            status, mime, headers, data = response
-        except Exception as error:
-            log('PY_PROXY_FAILED', ''.join(traceback.format_exception(error)))
-            status, mime, headers, data = 502, 'text/plain', {}, str(error).encode()
-        extra = {}
-        if status == 200:
-            extra['Accept-Ranges'] = 'bytes'
-            match = _RANGE.match(self.headers.get('Range', '').strip())
-            if match and (match.group(1) or match.group(2)):
-                total = len(data)
-                if match.group(1):
-                    first = int(match.group(1))
-                    last = min(int(match.group(2)), total - 1) if match.group(2) else total - 1
-                else:
-                    first, last = max(0, total - int(match.group(2))), total - 1
-                if first >= total or first > last:
-                    status, data, extra = 416, b'', {'Content-Range': f'bytes */{total}'}
-                else:
-                    status, data = 206, data[first:last + 1]
-                    extra['Content-Range'] = f'bytes {first}-{last}/{total}'
-        self.send_response(status)
-        for key, value in headers.items():
-            if key.lower() not in ('content-length', 'transfer-encoding', 'connection', 'content-type', 'content-range', 'accept-ranges'):
-                self.send_header(key, str(value))
-        for key, value in extra.items():
-            self.send_header(key, value)
-        self.send_header('Content-Type', mime)
-        self.send_header('Content-Length', str(len(data)))
-        self.end_headers()
-        if include_body:
+            if cached_path != cache_key:
+                response = session.proxy_response(self.path, request_headers)
+                response_headers = {str(key).lower(): str(value) for key, value in response[2].items()}
+                cache_control = response_headers.get('cache-control', '').lower()
+                if (response[0] == 200 and isinstance(response[3], bytes) and len(response[3]) <= 1024 * 1024
+                        and 'content-range' not in response_headers
+                        and not re.search(r'(?:^|,)\s*(?:no-cache|no-store)\b', cache_control)):
+                    with session.cache_lock:
+                        session.cached_response = (cache_key, response)
+            status, mime, headers, body = response
+            headers = {str(key).lower(): str(value) for key, value in headers.items()
+                if re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", str(key)) and not re.search(r'[\r\n]', str(value))}
+            if isinstance(body, bytes):
+                headers['content-length'] = str(len(body))
+                if status == 200 and 'content-range' not in headers:
+                    headers['accept-ranges'] = 'bytes'
+                    match = _RANGE.fullmatch(self.headers.get('Range', '').strip())
+                    if match and (match.group(1) or match.group(2)):
+                        total = len(body)
+                        if match.group(1):
+                            first = int(match.group(1))
+                            last = min(int(match.group(2)), total - 1) if match.group(2) else total - 1
+                        else:
+                            first, last = max(0, total - int(match.group(2))), total - 1
+                        if first >= total or first > last:
+                            status, body = 416, b''
+                            headers['content-range'] = f'bytes */{total}'
+                        else:
+                            status, body = 206, body[first:last + 1]
+                            headers['content-range'] = f'bytes {first}-{last}/{total}'
+                        headers['content-length'] = str(len(body))
+            length = headers.get('content-length')
+            length = int(length) if length and re.fullmatch(r'\d+', length) else None
+            # For an unbounded generator, EOF is framed by closing this one
+            # connection; arbitrary binary chunks are never joined in memory.
+            self.close_connection = True
+            self.connection.settimeout(20)
+            self.send_response(status)
+            excluded = {'content-type', 'content-length', 'transfer-encoding', 'connection', 'keep-alive', 'proxy-connection', 'trailer', 'upgrade'}
+            for key, value in headers.items():
+                if key not in excluded:
+                    self.send_header(key, value)
+            self.send_header('Content-Type', mime)
+            if length is not None:
+                self.send_header('Content-Length', str(length))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            sent = True
+            if not include_body:
+                return
+
+            # DASH can leave a companion audio socket unread while consuming
+            # buffered video, or the user can pause for any length of time.
+            # A 20-second send deadline truncates valid media and becomes EOF.
+            # The disconnect monitor, rather than elapsed playback time, owns
+            # cancellation of this bounded-chunk write.
+            self.connection.settimeout(None)
+            delivered = 0
+            for chunk in self.chunks(body):
+                if cancelled.is_set():
+                    break
+                if length is not None:
+                    chunk = chunk[:max(0, length - delivered)]
+                if chunk:
+                    self.wfile.write(chunk)
+                    delivered += len(chunk)
+                if length is not None and delivered >= length:
+                    break
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout):
+            cancelled.set()
+        except (Exception, SystemExit) as error:
+            if not cancelled.is_set():
+                log('PY_PROXY_FAILED', ''.join(traceback.format_exception(error)))
+            if not sent:
+                self.close_connection = True
+                data = str(error).encode()
+                try:
+                    self.send_response(502)
+                    self.send_header('Content-Type', 'text/plain')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.send_header('Connection', 'close')
+                    self.end_headers()
+                    if include_body:
+                        self.wfile.write(data)
+                except OSError:
+                    pass
+        finally:
+            finished.set()
+            if monitor:
+                monitor.join(.15)
+            self.close_body(body, interrupt=cancelled.is_set())
+
+    @staticmethod
+    def chunks(body):
+        size = 64 * 1024
+        if isinstance(body, bytes):
+            iterator = (memoryview(body)[offset:offset + size] for offset in range(0, len(body), size))
+        elif isinstance(body, requests.Response):
+            # Keep Content-Encoding and length consistent with the actual wire
+            # bytes; iter_content() otherwise transparently decompresses them.
+            iterator = body.raw.stream(size, decode_content=False)
+        elif hasattr(body, 'read'):
+            def reads():
+                while True:
+                    chunk = body.read(size)
+                    if not chunk:
+                        return
+                    yield chunk
+            iterator = reads()
+        else:
+            iterator = iter(body)
+        for chunk in iterator:
+            if chunk is None:
+                continue
+            if isinstance(chunk, str):
+                chunk = chunk.encode('utf-8')
+            elif not isinstance(chunk, (bytes, bytearray, memoryview)):
+                raise TypeError('Python proxy chunks must contain bytes or text')
+            for offset in range(0, len(chunk), size):
+                yield chunk[offset:offset + size]
+
+    @staticmethod
+    def close_body(body, interrupt=False, close=True):
+        if body is None or isinstance(body, bytes):
+            return
+        if interrupt and isinstance(body, requests.Response):
+            # A concurrent buffered socket read can hold the file object's lock.
+            # Shutdown its underlying socket before close to interrupt that read.
             try:
-                self.wfile.write(data)
-            except (BrokenPipeError, ConnectionResetError):
-                pass  # Players routinely drop a range once they have the bytes they need.
+                body.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+            except (AttributeError, OSError):
+                pass
+        if not close:
+            return
+        try:
+            close = getattr(body, 'close', None)
+            if callable(close):
+                close()
+        except (OSError, ValueError):
+            pass  # A generator currently executing observes cancellation on its next yield.
 
     def log_message(self, format, *args):
         pass
@@ -258,9 +390,13 @@ class Session:
         instance.init(extension)
         return instance
 
-    def proxy_response(self, path):
+    def proxy_response(self, path, request_headers=None):
         """Call the spider's localProxy and normalize its [status, mime, body, headers?, base64?] result."""
         params = dict(parse_qsl(urlsplit(path).query, keep_blank_values=True))
+        params['headers'] = dict(request_headers or {})
+        incoming_range = next((value for key, value in params['headers'].items() if key.lower() == 'range'), None)
+        if incoming_range:
+            params['range'] = params['Range'] = incoming_range
         result = list(self.spider.localProxy(params) or [])
         status = int(result[0]) if result else 404
         mime = str(result[1]) if len(result) > 1 and result[1] else 'application/octet-stream'
@@ -270,15 +406,30 @@ class Session:
             import base64
             body = base64.b64decode(body.split('base64,', 1)[-1])
         if isinstance(body, requests.Response):
-            body = body.content
-        elif hasattr(body, 'read'):
-            body = body.read()
+            fields = {str(key).lower(): value for key, value in body.headers.items()}
+            fields.update({str(key).lower(): value for key, value in headers.items()})
+            headers = fields
+            # Most spiders return [200, mime, response] and let the host carry
+            # the actual HTTP metadata. Preserve a partial response or origin
+            # failure; otherwise an expired URL/failed seek becomes cacheable
+            # successful movie bytes. An explicitly chosen source status wins.
+            if status == 200 and body.status_code != 200:
+                status = body.status_code
+            # A spider may already have eagerly read its response. Reuse those
+            # bytes without asking .content to fetch a second complete body.
+            if body._content_consumed and isinstance(body._content, bytes):
+                data = body._content
+                body.close()
+                body = data
+                headers.pop('content-encoding', None)
+                headers['content-length'] = str(len(data))
         elif body is None:
             body = b''
-        elif not isinstance(body, (bytes, bytearray, str)):
-            body = b''.join(chunk if isinstance(chunk, bytes) else str(chunk).encode() for chunk in body)
-        data = body.encode('utf-8') if isinstance(body, str) else bytes(body)
-        return status, mime, headers, data
+        elif isinstance(body, str):
+            body = body.encode('utf-8')
+        elif isinstance(body, bytearray):
+            body = bytes(body)
+        return status, mime, headers, body
 
     def call(self, params):
         spider = self.spider
