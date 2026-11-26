@@ -31,6 +31,37 @@ struct MusicView: View {
         historyData = (try? JSONEncoder().encode(Array(([keyword] + history.filter { $0 != keyword }).prefix(20)))) ?? Data()
     }
 
+    /// The searches this profile ran, one tap each: a song found yesterday is found again without
+    /// typing it (#1362). Shown while the field is empty, above the page's own shelves.
+    @ViewBuilder private var recentSearches: some View {
+        let past = Array(history.prefix(8))
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, store.musicSearch.query.isEmpty, !past.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L10n.text("Recent Searches")).font(.headline)
+                    Spacer()
+                    Button(L10n.text("Clear")) { historyData = Data() }
+                        .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                ChipRow {
+                    GlassGroup(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(past, id: \.self) { item in
+                                Chip(title: item) {
+                                    query = item
+                                    remember(item)
+                                    store.musicSearch.search(item, kind: Self.searchKind, immediately: true)
+                                }
+                            }
+                        }
+                    }.padding(.vertical, 4)
+                }
+            }
+            .tvFocusSection()
+            .padding(.bottom, 8)
+        }
+    }
+
     var body: some View {
         let search = store.musicSearch
         ScrollView {
@@ -44,6 +75,7 @@ struct MusicView: View {
                     MusicNowPlayingButton()
                 }
                 #endif
+                recentSearches
                 #if !os(macOS)
                 if !search.query.isEmpty { kinds(search) }
                 #endif
