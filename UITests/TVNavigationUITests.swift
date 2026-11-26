@@ -413,6 +413,47 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertTrue(focused.label.hasPrefix("Storage"), "Up from the sort buttons did not reach the storage card: \(focused.label)")
     }
 
+    /// Delete All on Apple TV asks for a second press instead of a dialog, which hangs a pushed tvOS page (#272). Moving
+    /// off the button takes the question back; the second press empties the cache (#1704).
+    func testDeleteAllAsksForASecondPress() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "downloads", "-qaIsolatedData", "1", "-qaDownload", "qa-downloads:1:1",
+                               "-qaSubscription", "http://127.0.0.1:8776/downloads-config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play '")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "The episode was never cached")
+        sleep(3)
+        let deleteAll = app.buttons["downloads.deleteAll"]
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        remote.press(.right); sleep(1)
+        for _ in 0..<4 where !card.hasFocus { remote.press(.down); usleep(800_000) }
+        XCTAssertTrue(card.hasFocus, "Down never reached the cached show")
+        // Up to the header's buttons, then right to Delete All, the last of them.
+        remote.press(.up); sleep(1)
+        var trail: [String] = []
+        for _ in 0..<4 where !deleteAll.hasFocus {
+            trail.append(focused.exists ? focused.label : "-")
+            remote.press(.right); usleep(800_000)
+        }
+        XCTAssertTrue(deleteAll.hasFocus, "Right along the header never reached Delete All; focus went \(trail.joined(separator: " > "))")
+        XCTAssertEqual(deleteAll.label, "Delete All")
+        remote.press(.select); sleep(1)
+        XCTAssertEqual(deleteAll.label, "Press Again to Delete All", "The first press did not ask again")
+        XCTAssertTrue(card.exists, "The first press already deleted the show")
+        let asking = XCTAttachment(screenshot: app.screenshot()); asking.lifetime = .keepAlways; add(asking)
+        remote.press(.left); sleep(1)
+        remote.press(.right); sleep(1)
+        XCTAssertTrue(deleteAll.hasFocus, "Right did not come back to Delete All")
+        XCTAssertEqual(deleteAll.label, "Delete All", "Moving off the button did not take the question back")
+        remote.press(.select); sleep(1)
+        remote.press(.select); sleep(3)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCTAssertFalse(card.exists, "The second press did not delete the cached show")
+    }
+
     /// Up from anywhere in Global Search's results reaches the search field beside the sidebar button. The field was
     /// 560 points wide at the left, nothing sat above most of the results, and once a search had run the field could
     /// not be reached to search again.

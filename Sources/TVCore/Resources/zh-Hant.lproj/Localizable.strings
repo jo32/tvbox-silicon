@@ -523,6 +523,9 @@
 "Delete all cached episodes of %@?" = "刪除《%@》的所有已快取劇集？";
 "Delete Cached Items" = "刪除快取";
 "Delete from Cache" = "刪除快取";
+"Delete All" = "全部刪除";
+"Delete all cached videos?" = "要刪除全部快取的影片嗎？";
+"Press Again to Delete All" = "再按一次以全部刪除";
 "Caching" = "正在快取";
 "At a Time" = "同時快取";
 "%lld at a time" = "同時 %lld 個";
@@ -950,6 +953,7 @@
 "Your feedback is now issue #%lld on GitHub." = "你的意見已成為 GitHub 上的問題 #%lld。";
 "Send Another" = "再傳一則";
 "Your Feedback" = "我的意見";
+"%lld sent · %lld adopted" = "已傳送 %lld 則 · 已採納 %lld 則";
 "Received" = "已收到";
 "Replied" = "已回覆";
 "Resolved" = "已解決";
