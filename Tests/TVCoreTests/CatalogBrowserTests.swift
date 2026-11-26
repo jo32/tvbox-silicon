@@ -177,3 +177,59 @@ private actor FetchCancellationProbe {
     model.seed(categories: [])
     #expect(model.categories.count == 2)
 }
+
+/// Issue #2209: the Recommendations chip only appears when the source's home actually returned videos.
+@MainActor @Test func catalogHomeTracksWhetherRecommendationsExist() async {
+    let origin = URL(string: "https://example.com")!
+    let categories: JSONValue = .array([
+        .object(["type_id": .string("rec"), "type_name": .string("推荐")]),
+        .object(["type_id": .string("dramas"), "type_name": .string("韩剧")]),
+    ])
+
+    // Category-only home: falls into the first category and offers no extra Recommendations chip.
+    let categoryOnly = CatalogBrowser()
+    await categoryOnly.load(.home) { request in
+        if request == .home { return CatalogPage(json: ["class": categories], origin: origin) }
+        return page("first-category")
+    }
+    #expect(!categoryOnly.hasRecommendations)
+    #expect(categoryOnly.category == "rec")
+    await categoryOnly.load(.list(category: "dramas", query: "", page: 1)) { _ in page("drama") }
+    #expect(!categoryOnly.hasRecommendations)
+
+    // Home with recommendations: keeps the Recommendations chip when browsing a category or searching.
+    let withHome = CatalogBrowser()
+    await withHome.load(.home) { _ in
+        CatalogPage(json: ["class": categories,
+                           "list": .array([.object(["vod_id": .string("h1"), "vod_name": .string("Home Pick")])])],
+                    origin: origin)
+    }
+    #expect(withHome.hasRecommendations)
+    #expect(withHome.category.isEmpty)
+    await withHome.load(.list(category: "dramas", query: "", page: 1)) { _ in page("drama") }
+    #expect(withHome.hasRecommendations)
+    await withHome.load(.list(category: nil, query: "test", page: 1)) { _ in page("found") }
+    #expect(withHome.hasRecommendations)
+
+    // Seeded from Watch Now and loaded from search.
+    let seededHome = CatalogBrowser()
+    seededHome.seed(videos: page("pick").videos, categories: [Category(id: "dramas", name: "韩剧")])
+    #expect(seededHome.hasRecommendations)
+
+    let seededCategory = CatalogBrowser()
+    seededCategory.seed(categories: [Category(id: "dramas", name: "韩剧")], hasRecommendations: true)
+    #expect(seededCategory.hasRecommendations)
+
+    let fromSearchNoHome = CatalogBrowser()
+    await fromSearchNoHome.loadCategories { CatalogPage(json: ["class": categories], origin: origin) }
+    #expect(!fromSearchNoHome.hasRecommendations)
+    #expect(fromSearchNoHome.categories.count == 2)
+
+    let fromSearchWithHome = CatalogBrowser()
+    await fromSearchWithHome.loadCategories {
+        CatalogPage(json: ["class": categories,
+                           "list": .array([.object(["vod_id": .string("h1"), "vod_name": .string("Home Pick")])])],
+                    origin: origin)
+    }
+    #expect(fromSearchWithHome.hasRecommendations)
+}

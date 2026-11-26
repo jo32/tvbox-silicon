@@ -1009,11 +1009,11 @@ struct RecommendationsView: View {
     /// With `category`, it opens on that category instead, as a category row's heading asks (#1267).
     private func sitePage(_ site: Site, category: TVCore.Category? = nil) -> Route {
         let config = config
-        var preview: (videos: [Video], categories: [TVCore.Category])?
+        var preview: (videos: [Video], categories: [TVCore.Category], hasRecommendations: Bool)?
         if model.site?.key == site.key, !model.busy {
             let videos = model.items.compactMap { item -> Video? in if case .detail(let video) = item.destination { video } else { nil } }
-            if category != nil { preview = ([], model.categories) }
-            else if !videos.isEmpty, videos.count == model.items.count { preview = (videos, model.categories) }
+            if category != nil { preview = ([], model.categories, !model.items.isEmpty) }
+            else if !videos.isEmpty, videos.count == model.items.count { preview = (videos, model.categories, true) }
         }
         return Route { AnyView(SiteView(site: site, origin: config.origin, jarURL: config.spiderURL, preview: preview, category: category)) }
     }
