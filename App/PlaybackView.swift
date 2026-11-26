@@ -213,7 +213,15 @@ import IOKit.pwr_mgt
         }
     }
 
-    var error: String?
+    var error: String? { didSet { if error != nil { countPlay(.failed) } } }
+    /// This play on its way to the first frame, counted for the play success rate (`PlayAttempt`).
+    private var attempt: PlayAttempt?
+    /// A retry rung is trying to save this play (a short constant such as "line"): if the picture then starts, the
+    /// play counts as recovered by it.
+    func retrying(via rung: String) { attempt?.retrying(rung) }
+    private func countPlay(_ outcome: PlayAttempt.Outcome) {
+        attempt?.resolve(outcome, playing: (player.currentItem?.asset as? AVURLAsset)?.url)
+    }
     var loading = true
     var looping = false { didSet { if looping { discardUpcoming() } } }
     var buffering = false
@@ -443,7 +451,7 @@ import IOKit.pwr_mgt
         if liveRetrying { return true } // The failed item's other report of the same failure.
         let played = liveReadyAt.map { ContinuousClock.now - $0 }
         guard let room = liveRoom, liveReopen.shouldReopen(after: failure, playedFor: played) else { return false }
-        liveRetrying = true; loading = true
+        liveRetrying = true; loading = true; retrying(via: "live")
         if failure.map({ ($0 as NSError).domain == "CoreMediaErrorDomain" && ($0 as NSError).code == -12312 }) == true {
             LiveRepair.noteContradiction((player.currentItem?.asset as? AVURLAsset)?.url)
         }
@@ -471,7 +479,7 @@ import IOKit.pwr_mgt
     /// this for every episode nobody has opened lately. One more try, at once, does what Retry would.
     private func retryRange(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard !rangeRetried, Self.ignoredRange(failure) else { return false }
-        rangeRetried = true
+        rangeRetried = true; retrying(via: "range")
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "range retry host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
         configure(channel, url: url, generation: active)
@@ -487,7 +495,7 @@ import IOKit.pwr_mgt
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
               Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
-        loopbackRecovered = .now
+        loopbackRecovered = .now; retrying(via: "loopback")
         let position = player.currentTime().seconds
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
@@ -520,7 +528,7 @@ import IOKit.pwr_mgt
         let current = player.currentTime().seconds
         let position = pendingResume ?? (current.isFinite ? current : 0)
         guard let delay = dropRecovery.delay(after: failure, position: position) else { return false }
-        reopenedAfterDrop = true
+        reopenedAfterDrop = true; retrying(via: "drop")
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "dropped host=\(transfer.host ?? url.host() ?? "-") at=\(Int(position))s attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening")
         note(L10n.text("The connection dropped. Reconnecting"))
@@ -560,6 +568,7 @@ import IOKit.pwr_mgt
         let captured = Self.screenCaptured
         guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
         if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
+        retrying(via: "hdr-sdr")
         #if os(tvOS)
         Self.refusedMatching = HDRDisplay.matching
         #endif
@@ -591,6 +600,7 @@ import IOKit.pwr_mgt
     /// work either, the channel's next line, or the error.
     private func retryConvertingAudio(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard Self.unsupportedFormat(failure), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return false }
+        retrying(via: "audio")
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "format refused; repackaging host=\(url.host() ?? "-") \(Self.describe(failure!))")
         note(L10n.text("Repackaging the video for this device"))
@@ -943,7 +953,11 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.warning, "player", "line \(line + 1)/\(lines.count) \(failure.map(Self.describe) ?? "not ready"); trying line \(next + 1)")
         let failed = line
         line = next; triedLines.insert(next)
+        // The same play goes on, on another line: one attempt, not one per line.
+        let carried = attempt?.outcome == nil ? attempt : nil; attempt = nil
         open(lines[next])
+        if let carried { attempt = carried }
+        retrying(via: "line")
         note(L10n.text("Line %@ didn't play. Trying line %@.", "\(failed + 1)", "\(next + 1)"))
         return true
     }
@@ -954,6 +968,8 @@ import IOKit.pwr_mgt
         let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         begin(channel, live: live)
         isLive = live
+        // Live: a live room, or a channel of a live playlist (only on-demand episodes have a history context).
+        attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
@@ -1026,7 +1042,11 @@ import IOKit.pwr_mgt
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
-        } catch { Diagnostics.shared.failure("player", "audio session", error); self.error = error.localizedDescription }
+        } catch {
+            // Not a reason to stop: the item plays on, its sound once the session can start (AVAudioSession '!pla'
+            // when another app holds it). As an error it hid a playing video behind the error screen.
+            Diagnostics.shared.failure("player", "audio session", error)
+        }
         #endif
         if !url.isFileURL {
             note(L10n.text("Connecting to %@", Self.server(CloudStreams.transfer(for: url)?.host ?? Remux.transfer(for: url)?.host ?? url.host())))
@@ -1134,7 +1154,7 @@ import IOKit.pwr_mgt
     /// Hongguo's ByteVC2 (#957, read clear through its decrypting stream). It opens again repackaged as HLS (`Remux.showsPicture`) and resumes where it was asked to. When it
     /// can't be repackaged, the sound plays on as before.
     private func repackage(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
-        player.pause(); loading = true
+        player.pause(); loading = true; retrying(via: "repackage")
         note(L10n.text("Repackaging the video for this device"))
         Diagnostics.shared.record(.warning, "player", "no picture; repackaging host=\(url.host() ?? "-")")
         preparation = Task { [weak self] in
@@ -1217,6 +1237,7 @@ import IOKit.pwr_mgt
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
+        retrying(via: "segments")
         note(L10n.text("Repackaging the video for this device"))
         Remux.screenCaptured = Self.screenCaptured
         preparation = Task { [weak self] in
@@ -1352,11 +1373,14 @@ import IOKit.pwr_mgt
                 #endif
                 if paused { self.clearBoost(); self.saveHistory() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
+                // A queued episode the queue moved to plays under the picture already on screen.
+                if playing, self.showsPicture { self.countPlay(.started) }
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .milliseconds(350))
                         guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing, !self.showsPicture else { return }
                         self.showsPicture = true
+                        self.countPlay(.started)
                         // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
                         let seconds = self.player.currentTime().seconds
                         Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", Date().timeIntervalSince(self.openedAt) - 0.35))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
@@ -1503,6 +1527,7 @@ import IOKit.pwr_mgt
         return text
     }
     func stop() {
+        countPlay(.abandoned); attempt = nil
         #if os(macOS)
         displayAwake.hold(false)
         #endif
@@ -2015,8 +2040,10 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        // A queued next episode is a point video, never live.
+        // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
+        attempt = PlayAttempt(live: false, address: channel.url)
+        if upcoming.item.status == .readyToPlay, player.timeControlStatus == .playing { countPlay(.started) }
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)
