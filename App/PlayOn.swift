@@ -80,7 +80,7 @@ import AVKit
         let route = switch plan { case .source: "source"; case .channel(let channel): CloudFiles.isFile(channel.url) ? "file" : "direct" }
         Diagnostics.shared.record(.info, "play-on", "request source=\(sent.historyContext?.sourceKey ?? "-") route=\(route)")
         task?.cancel()
-        incoming = (sent.historyContext.map { "\($0.videoName) · \($0.episodeName)" } ?? sent.name, request.sender)
+        incoming = (sent.historyContext.map(\.displayName) ?? sent.name, request.sender)
         task = Task { [weak self] in
             guard let self else { return }
             defer { if !Task.isCancelled { self.incoming = nil } }

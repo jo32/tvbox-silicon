@@ -242,6 +242,19 @@ import Testing
     library.pause(item.id)
 }
 
+/// #2363: a saved episode named like its show reads once, as it does online.
+@Test func savedEpisodeTitleShowsADuplicatedNameOnce() throws {
+    let site = Site(key: "s", name: "S", type: 3, api: "csp_Test", raw: [:])
+    func item(_ title: String, _ episode: String) -> DownloadItem {
+        let line = Episode(id: "1", name: episode, address: "https://example.com/1.mp4", flag: "line")
+        return DownloadItem(id: "e1", title: title, episode: episode, poster: nil, posterHeaders: [:],
+                            source: DownloadSource(site: site, videoID: "v", episode: line), created: Date(), status: .completed, media: "media.mp4")
+    }
+    #expect(item("第1集", " 第1集").displayName == "第1集")
+    #expect(item("Show", "第 2 集").displayName == "Show · 第 2 集")
+    #expect(item("Movie", "").displayName == "Movie")
+}
+
 /// #960: a saved episode plays under the history entry it has online, so its progress and Continue Watching are the
 /// same either way; once its source leaves the subscription it has none.
 @Test func savedEpisodesShareTheirOnlineHistoryEntry() throws {

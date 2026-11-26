@@ -25,6 +25,19 @@ public struct PlaybackHistoryContext: Codable, Hashable, Sendable {
     public var posterHeaders: [String: String]?
     public var id: String { EpisodeSkipSettings.scope(origin: origin, source: sourceKey, video: videoID) }
 
+    /// The title the player shows: the video and its episode, except when the two
+    /// are the same and would read twice ("第1集 · 第1集", #2363).
+    public var displayName: String { Self.displayName(video: videoName, episode: episodeName) }
+
+    /// "video · episode", or one of them when the other is empty or the two are the same name.
+    public static func displayName(video: String, episode: String) -> String {
+        let video = video.trimmingCharacters(in: .whitespacesAndNewlines)
+        let episode = episode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !episode.isEmpty else { return video }
+        guard video.lowercased() != episode.lowercased() else { return video }
+        return video.isEmpty ? episode : "\(video) · \(episode)"
+    }
+
     public init(origin: URL, sourceKey: String, sourceName: String, videoID: String, videoName: String,
                 poster: URL? = nil, episodeID: String, episodeName: String, episodeFlag: String) {
         self.origin = origin; self.sourceKey = sourceKey; self.sourceName = sourceName
