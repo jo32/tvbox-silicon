@@ -236,17 +236,53 @@ struct DiscoverDetailView: View {
         return values.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
+    /// The most recent unfinished watch for this title, if any. Continue Playing takes the place of Search Sources,
+    /// which the page already does on its own, and carries on where the viewer stopped. iPhone only.
+    #if os(iOS)
+    private var resumeEntry: PlaybackHistoryEntry? {
+        let name = item.name
+        return store.playbackHistory.entries
+            .filter { !$0.completed }
+            .filter {
+                $0.context.videoName.caseInsensitiveCompare(name) == .orderedSame
+                    || $0.context.videoName.localizedCaseInsensitiveContains(name)
+                    || name.localizedCaseInsensitiveContains($0.context.videoName)
+            }
+            .max(by: { $0.updatedAt < $1.updatedAt })
+    }
+    #endif
+
     private var sourceButton: some View {
-        Button {
-            episode = nil
-            if store.subscription == nil { store.section = .settings }
-            else { store.searchVideos(item.name) }
-        } label: {
-            Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 54)
+        #if os(iOS)
+        if let entry = resumeEntry {
+            Button {
+                store.resume(entry)
+            } label: {
+                VStack(spacing: 3) {
+                    Label(L10n.text("Continue Playing"), systemImage: "play.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(HistoryFormat.status(entry)).font(.system(size: 12)).opacity(0.8)
+                }
+                .frame(maxWidth: .infinity).frame(height: 54)
                 .foregroundStyle(dark ? Color.black : Color.white)
                 .background(dark ? Color.white : Color.black, in: Capsule())
-        }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("discover.continuePlaying")
+        } else {
+        #endif
+            Button {
+                episode = nil
+                if store.subscription == nil { store.section = .settings }
+                else { store.searchVideos(item.name) }
+            } label: {
+                Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 54)
+                    .foregroundStyle(dark ? Color.black : Color.white)
+                    .background(dark ? Color.white : Color.black, in: Capsule())
+            }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
+        #if os(iOS)
+        }
+        #endif
     }
 
     /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes
