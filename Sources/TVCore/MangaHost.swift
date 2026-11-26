@@ -13,6 +13,7 @@ final class MangaHost: ScriptHostExtension, @unchecked Sendable {
 
     init(sourceKey: String) { self.sourceKey = sourceKey }
     deinit { pending.cancelAll() }
+    func cancelPending() { pending.cancelAllAndWait() }
 
     func answer(_ operation: String, _ argument: String) throws -> String?? {
         guard operation.hasPrefix("manga.") else { return nil }
