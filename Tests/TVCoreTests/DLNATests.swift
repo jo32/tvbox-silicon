@@ -327,3 +327,121 @@ private final class FixtureServer: @unchecked Sendable {
 
     func stop() { listener.cancel() }
 }
+
+@Test func castRelayKeepsLongPlaylistsAndHeaderIdentity() async throws {
+    let upstream = try await FixtureServer.start { path, headers in
+        if path.hasSuffix(".m3u8") { return (200, "application/vnd.apple.mpegurl", Data("#EXTM3U\n#EXTINF:2,\n0.ts\n".utf8)) }
+        return (200, "video/mp2t", Data((headers["authorization"] ?? "missing").utf8))
+    }
+    defer { upstream.stop() }
+    let relay = CastRelay()
+    let source = URL(string: "http://127.0.0.1:\(upstream.port)/index.m3u8")!
+    let headers = ["Authorization": "Bearer first"]
+    let root = try await relay.address(for: source, headers: headers, playlist: true, towards: nil)
+    let vod = "#EXTM3U\n" + (0..<4200).map { "#EXTINF:2,\ns/\($0).ts\n" }.joined() + "#EXT-X-ENDLIST\n"
+    let rewritten = try await relay.rewrite(vod, base: source, headers: headers)
+    let paths = rewritten.components(separatedBy: "\n").filter { $0.hasPrefix("/") }
+    #expect(paths.count == 4200)
+    for path in [paths[0], paths[4199]] {
+        let (data, response) = try await URLSession.shared.data(from: URL(string: path, relativeTo: root)!)
+        #expect((response as? HTTPURLResponse)?.statusCode == 200)
+        #expect(data == Data("Bearer first".utf8))
+    }
+    let variant = try await relay.address(for: source.appendingPathComponent("variant.m3u8"), headers: headers, playlist: true, towards: nil)
+    let key = try await relay.address(for: source.appendingPathComponent("key.bin"), headers: headers, playlist: false, towards: nil)
+    let initial = try await relay.address(for: source.appendingPathComponent("init.mp4"), headers: headers, playlist: false, towards: nil)
+    for index in 0..<5000 {
+        _ = try await relay.register(source.appendingPathComponent("live-\(index).ts"), headers: headers, playlist: false)
+    }
+    for address in [root, variant, key, initial] {
+        let (_, response) = try await URLSession.shared.data(from: address)
+        #expect((response as? HTTPURLResponse)?.statusCode == 200)
+    }
+    let changed = try await relay.address(for: source.appendingPathComponent("key.bin"), headers: ["Authorization": "Bearer second"], playlist: false, towards: nil)
+    for (address, expected) in [(key, "Bearer first"), (changed, "Bearer second")] {
+        let (data, _) = try await URLSession.shared.data(from: address)
+        #expect(data == Data(expected.utf8))
+    }
+    await relay.reset()
+    let (_, expired) = try await URLSession.shared.data(from: root)
+    #expect((expired as? HTTPURLResponse)?.statusCode == 404)
+}
+
+@Test func castRelaySeparatesHeadersAtTheSameURL() async throws {
+    let upstream = try await FixtureServer.start { _, headers in (200, "video/mp4", Data((headers["authorization"] ?? "missing").utf8)) }
+    defer { upstream.stop() }
+    let relay = CastRelay()
+    let url = URL(string: "http://127.0.0.1:\(upstream.port)/movie.mp4")!
+    let first = try await relay.address(for: url, headers: ["Authorization": "first"], playlist: false, towards: nil)
+    let second = try await relay.address(for: url, headers: ["Authorization": "second"], playlist: false, towards: nil)
+    let (data, _) = try await URLSession.shared.data(from: second)
+    #expect(data == Data("second".utf8))
+    let (original, _) = try await URLSession.shared.data(from: first)
+    #expect(original == Data("first".utf8))
+}
+
+@Test(arguments: [true, false])
+func castRelayDoesNotIssuePlaylistRoutesAcrossReset(declaredPlaylist: Bool) async throws {
+    let (requests, received) = AsyncStream<Void>.makeStream()
+    let release = DispatchSemaphore(value: 0)
+    let upstream = try await FixtureServer.start { _, _ in
+        received.yield(())
+        guard release.wait(timeout: .now() + 10) == .success else { return (503, "text/plain", Data()) }
+        return (200, "application/octet-stream", Data("#EXTM3U\n#EXTINF:2,\nsegment.ts\n".utf8))
+    }
+    defer { release.signal(); upstream.stop() }
+    let relay = CastRelay()
+    let source = URL(string: "http://127.0.0.1:\(upstream.port)/dispatch")!
+    let address = try await relay.address(for: source, headers: [:], playlist: declaredPlaylist, towards: nil)
+    let response = Task {
+        defer { received.finish() }
+        return try await URLSession.shared.data(from: address)
+    }
+    var arrivals = requests.makeAsyncIterator()
+    try #require(await arrivals.next() != nil)
+    await relay.reset()
+    let current = try await relay.register(source, headers: [:], playlist: declaredPlaylist)
+    let currentID = try #require(current.split(separator: "/").dropFirst().first)
+    release.signal()
+    let (body, reply) = try await response.value
+    #expect((reply as? HTTPURLResponse)?.statusCode == 410)
+    #expect(body.isEmpty)
+    #expect(await relay.route(String(currentID))?.url == source)
+}
+
+@Test func castRelayTicketsAreAuthenticatedAndBounded() async throws {
+    let relay = CastRelay()
+    let url = URL(string: "https://cdn.example/segment.ts")!
+    let path = try await relay.register(url, headers: ["Cookie": String(repeating: "x", count: 32000)], playlist: false)
+    #expect(path.utf8.count < 1024)
+    let id = String(path.split(separator: "/")[1])
+    #expect(await relay.route(id)?.url == url)
+    var forged = Array(id)
+    forged[forged.count / 2] = forged[forged.count / 2] == "a" ? "b" : "a"
+    #expect(await relay.route(String(forged)) == nil)
+    await #expect(throws: URLError.self) {
+        _ = try await relay.register(url, headers: ["Cookie": String(repeating: "x", count: 66000)], playlist: false)
+    }
+    await #expect(throws: URLError.self) {
+        _ = try await relay.register(URL(string: "https://cdn.example/" + String(repeating: "a", count: 9000))!, headers: [:], playlist: false)
+    }
+    await #expect(throws: URLError.self) {
+        _ = try await relay.rewrite(String(repeating: "#", count: (4 << 20) + 1), base: url, headers: [:])
+    }
+    await relay.reset()
+    #expect(await relay.route(id) == nil)
+    for index in 0..<32 { _ = try await relay.register(url, headers: ["Authorization": "account \(index)"], playlist: false) }
+    await #expect(throws: URLError.self) { _ = try await relay.register(url, headers: ["Authorization": "account 33"], playlist: false) }
+}
+
+@Test func castRelayGivesOneAddressTheSameTicketEachTime() async throws {
+    let relay = CastRelay()
+    let url = URL(string: "https://cdn.example/live/segment-1.ts?sign=abc")!
+    let first = try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false)
+    // A refreshed live playlist names the segment exactly as before.
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false) == first)
+    #expect(try await relay.register(url, headers: ["Referer": "https://other.example/"], playlist: false) != first)
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: true) != first)
+    await relay.reset()
+    #expect(try await relay.register(url, headers: ["Referer": "https://site.example/"], playlist: false) != first)
+}
