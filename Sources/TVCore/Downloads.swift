@@ -47,6 +47,8 @@ public struct DownloadWatchProgress: Codable, Hashable, Sendable {
 }
 
 public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
+    /// The title and episode as the player and the progress show them, the same name only once (#2363).
+    public var displayName: String { PlaybackHistoryContext.displayName(video: title, episode: episode) }
     public enum Status: String, Codable, Sendable {
         /// Waiting for a free slot in the queue.
         case queued
@@ -384,7 +386,7 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     /// What the player opens for a finished download: under the episode's history entry when there is one
     /// (`DownloadItem.historyContext(in:)`), so it records progress and opens where it stopped.
     public func channel(for item: DownloadItem, context: PlaybackHistoryContext? = nil, resumePosition: Double? = nil) -> Channel {
-        Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!,
+        Channel(name: item.displayName, group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!,
                 skipScope: context?.id, historyContext: context, resumePosition: resumePosition)
     }
 

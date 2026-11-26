@@ -46,24 +46,29 @@ public enum GuideAddress: Hashable, Sendable {
 
 /// What's on a playlist's channels, by a key of each name and id the guide gives a channel (#802).
 public struct ProgramGuide: Sendable {
-    /// Programmes in time order, by `key(_:)`.
+    /// Programmes in time order, by `key(_:)`. Where guide channels share a key ("CCTV1" and "CCTV1 HD"), the first
+    /// one in the guide has it.
     let schedules: [String: [Programme]]
-    public var isEmpty: Bool { schedules.isEmpty }
+    /// The same programmes by each guide channel's exact id, which a playlist's `tvg-id` names: "News-HD" and "news"
+    /// share a key but are two channels.
+    var exact: [String: [Programme]] = [:]
+    public var isEmpty: Bool { schedules.isEmpty && exact.isEmpty }
 
-    /// The channel's programmes: by its `tvg-id`/`tvg-name`, else by its name.
+    /// The channel's programmes: by its exact `tvg-id`/`tvg-name`, else by the key of that or of its name.
     public func schedule(for channel: Channel) -> [Programme]? {
+        if let id = channel.guideID, let found = exact[id] { return found }
         for name in [channel.guideID, channel.name].compactMap({ $0 }) {
             if let found = schedules[Self.key(name)] { return found }
         }
         return nil
     }
 
-    /// The keys a guide's channels are looked up by, for the channels a playlist lists.
+    /// The keys (and exact ids) a guide's channels are looked up by, for the channels a playlist lists.
     public static func wanted(_ channels: [Channel]) -> Set<String> {
         var keys = Set<String>()
         for channel in channels {
             keys.insert(key(channel.name))
-            if let id = channel.guideID { keys.insert(key(id)) }
+            if let id = channel.guideID { keys.insert(id); keys.insert(key(id)) }
         }
         return keys
     }
@@ -111,13 +116,16 @@ public struct ProgramGuide: Sendable {
         parser.shouldResolveExternalEntities = false
         // A guide cut short (a dropped connection, a bad character near the end) keeps what was read.
         if !parser.parse(), reader.programmes.isEmpty { throw parser.parserError ?? TVError.invalidConfiguration }
-        var schedules: [String: [Programme]] = [:]
-        for (id, list) in reader.programmes {
+        var schedules: [String: [Programme]] = [:], exact: [String: [Programme]] = [:]
+        // In the guide's order, so the first of the channels that share a key keeps it, every time.
+        for id in reader.order {
+            guard let list = reader.programmes[id] else { continue }
             let keys = reader.channelKeys[id] ?? [key(id)]
             let sorted = closingGaps(list.sorted { $0.start < $1.start })
+            if wanted?.contains(id) ?? true { exact[id] = sorted }
             for key in keys where schedules[key] == nil && (wanted?.contains(key) ?? true) { schedules[key] = sorted }
         }
-        return ProgramGuide(schedules: schedules)
+        return ProgramGuide(schedules: schedules, exact: exact)
     }
 
     /// `20261114083000 +0800`.
@@ -207,6 +215,9 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
     /// The keys of each `<channel id>`'s id and display names.
     var channelKeys: [String: [String]] = [:]
     var programmes: [String: [Programme]] = [:]
+    /// Channel ids in the order the guide first names them.
+    private(set) var order: [String] = []
+    private var named = Set<String>()
     private var kept: [String: Bool] = [:]
     private var channel: String?
     private var keys: [String] = []
@@ -217,10 +228,12 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
 
     init(wanted: Set<String>?, from: Date, to: Date) { self.wanted = wanted; self.from = from; self.to = to }
 
+    private func note(_ id: String) { if named.insert(id).inserted { order.append(id) } }
+
     private func keeps(_ id: String) -> Bool {
         if let known = kept[id] { return known }
         let keys = channelKeys[id] ?? [ProgramGuide.key(id)]
-        let keep = wanted.map { wanted in keys.contains { wanted.contains($0) } } ?? true
+        let keep = wanted.map { wanted in wanted.contains(id) || keys.contains { wanted.contains($0) } } ?? true
         kept[id] = keep
         return keep
     }
@@ -256,7 +269,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
             if !name.isEmpty { keys.append(ProgramGuide.key(name)) }
             reading = false
         case "channel":
-            if let channel { channelKeys[channel] = keys }
+            if let channel { channelKeys[channel] = keys; note(channel) }
             channel = nil; keys = []
         case "title" where programme != nil && title == nil:
             title = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -264,6 +277,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
         case "programme":
             if let programme, let title, !title.isEmpty {
                 programmes[programme.channel, default: []].append(Programme(title: title, start: programme.start, end: programme.end))
+                note(programme.channel)
             }
             programme = nil; title = nil; reading = false
         default:
@@ -276,7 +290,7 @@ private final class XMLTVReader: NSObject, XMLParserDelegate {
 /// main thread.
 public actor ProgramGuides {
     public static let shared = ProgramGuides()
-    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date }
+    private struct Loaded { let guide: ProgramGuide; let wanted: Set<String>; let at: Date; let lookback: TimeInterval }
     private var guides: [URL: Loaded] = [:]
     private var loading: [URL: Task<Loaded, Error>] = [:]
     private var days: [URL: (programmes: [Programme], at: Date)] = [:]
@@ -287,20 +301,22 @@ public actor ProgramGuides {
     /// The XMLTV guide at `url`, for `channels`.
     public func guide(_ url: URL, for channels: [Channel]) async throws -> ProgramGuide {
         let wanted = ProgramGuide.wanted(channels)
-        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), Date().timeIntervalSince(loaded.at) < lifetime {
+        let lookback = ProgramCatchup.lookback(for: channels)
+        if let loaded = guides[url], loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback, Date().timeIntervalSince(loaded.at) < lifetime {
             return loaded.guide
         }
         if let task = loading[url] {
             let loaded = try await task.value
-            if loaded.wanted.isSuperset(of: wanted) { return loaded.guide }
+            if loaded.wanted.isSuperset(of: wanted), loaded.lookback >= lookback { return loaded.guide }
         }
         // Another playlist sharing the guide asks for its channels too.
         let union = guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.wanted.union(wanted) : wanted } ?? wanted
+        let history = max(lookback, guides[url].map { Date().timeIntervalSince($0.at) < lifetime ? $0.lookback : 3600 } ?? 3600)
         let task = Task { [http] in
             let (data, _) = try await http.get(url, limit: 60_000_000)
             let now = Date()
-            let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-3600), to: now.addingTimeInterval(30 * 3600))
-            return Loaded(guide: guide, wanted: union, at: now)
+            let guide = try ProgramGuide.xmltv(data, wanted: union, from: now.addingTimeInterval(-history), to: now.addingTimeInterval(30 * 3600))
+            return Loaded(guide: guide, wanted: union, at: now, lookback: history)
         }
         loading[url] = task
         defer { loading[url] = nil }
@@ -310,14 +326,16 @@ public actor ProgramGuides {
         return loaded.guide
     }
 
-    /// Today's programmes of the channel `name` from a per-channel address; nil when the ask was cancelled. A failed
+    /// Programmes on `date` (today by default) from a per-channel address; nil when the ask was cancelled. A failed
     /// ask counts as no programmes, so the server isn't asked again for a while.
-    public func schedule(_ address: GuideAddress, name: String) async -> [Programme]? {
+    public func schedule(_ address: GuideAddress, name: String, on date: Date = Date()) async -> [Programme]? {
         let now = Date()
-        guard let url = address.address(for: name, on: now) else { return [] }
+        if case let .perChannel(template) = address, !template.contains("{date}"),
+           ProgramGuide.dayString(date) != ProgramGuide.dayString(now) { return [] }
+        guard let url = address.address(for: name, on: date) else { return [] }
         if let day = days[url], now.timeIntervalSince(day.at) < lifetime { return day.programmes }
         let programmes: [Programme]
-        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: now) }
+        do { programmes = ProgramGuide.diyp(try await http.get(url).0, on: date) }
         catch {
             if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { return nil }
             programmes = []
