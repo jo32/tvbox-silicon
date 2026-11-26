@@ -819,6 +819,8 @@ struct MobilePlayerView: View {
             // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
             if tvBrowser.receivers.isEmpty && CastController.shared.devices.isEmpty {
                 AirPlayButton()
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             } else {
                 PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
                     session.player.pause()
@@ -1511,19 +1513,16 @@ private struct PlayerCircleStyle: ButtonStyle {
     }
 }
 
-/// AirPlay, drawn like the buttons beside it: the system's own button (AVRoutePickerView) drew its mark bigger and heavier,
-/// so it stays out of sight and this one opens its picker, as Play On's menu does.
-private struct AirPlayButton: View {
-    @State private var airPlay = AirPlayPicker()
-    var body: some View {
-        Button(action: airPlay.present) {
-            Image(systemName: "airplay.video").font(.airPlayGlyph).frame(width: 22, height: 22)
-        }
-        .chromeButton()
-        .background { AirPlayPickerView(picker: airPlay).opacity(0.02).allowsHitTesting(false) }
-        .accessibilityLabel(L10n.text("AirPlay"))
-        .accessibilityIdentifier("player.airPlay")
+/// The system's AirPlay button, which presents the route picker itself. Its own glyph is the one people know; drawing
+/// our own `airplay.video` symbol here in the capsule left this, the first button, blank on a device (#2466).
+private struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.prioritizesVideoDevices = true
+        view.tintColor = .white
+        return view
     }
+    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }
 
 /// The picture's own gestures, in UIKit: taps, a touch and hold followed while the finger moves, slides and a pinch.
