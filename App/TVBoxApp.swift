@@ -370,3 +370,31 @@ struct SubscriptionImportView: View {
     }
 }
 #endif
+
+#if os(macOS)
+/// Gives the main window a frame autosave name: AppKit then saves where it was and brings it back
+/// the same size and in the same place on the next launch, which the scene's own restoration does
+/// not keep (#1060). `.defaultSize` still decides the first one, before anything is saved.
+private struct MacWindowFrameAutosave: NSViewRepresentable {
+    static let name = "YingxiaMainWindow"
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        attach(from: view, tries: 0)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    /// A window joins its view a beat after the view is made; a few quiet tries cover that, and a
+    /// window that never comes is not this view's business.
+    private func attach(from view: NSView, tries: Int) {
+        if let window = view.window {
+            if window.frameAutosaveName != Self.name { window.setFrameAutosaveName(Self.name) }
+            return
+        }
+        guard tries < 10 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.attach(from: view, tries: tries + 1) }
+    }
+}
+#endif
