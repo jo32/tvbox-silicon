@@ -23,6 +23,8 @@ import IOKit.pwr_mgt
     /// Keeps the Mac from dimming, starting the screen saver and locking while a video plays (#565).
     private let displayAwake = DisplayAwake()
     #endif
+    private let sleepFade = PlaybackSleepFade()
+    private var sleepFadeRevision: UUID?
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
     @ObservationIgnored var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
@@ -153,6 +155,7 @@ import IOKit.pwr_mgt
     #endif
 
     func beginEditingSkip() {
+        cancelSleepFade()
         editingSkip = true
         resumeAfterEditing = player.rate > 0
         player.pause()
@@ -358,6 +361,7 @@ import IOKit.pwr_mgt
     private var volumeObservation: NSKeyValueObservation?
 
     func togglePlayback() {
+        cancelSleepFade()
         if player.timeControlStatus == .paused {
             if let item = player.currentItem, item.duration.seconds.isFinite,
                player.currentTime().seconds >= item.duration.seconds - 0.1 {
@@ -430,6 +434,7 @@ import IOKit.pwr_mgt
 
     /// Stops listening to the current item, before another replaces it in the same playback.
     private func detachItem() {
+        cancelSleepFade()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
@@ -1046,6 +1051,7 @@ import IOKit.pwr_mgt
     }
 
     private func attach(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
+        cancelSleepFade()
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
         // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
@@ -1328,6 +1334,7 @@ import IOKit.pwr_mgt
                     _ = SleepTimer.shared.itemEnded()
                     return
                 }
+                if self.sleepFadeRevision != nil { self.saveHistory(completed: true); return }
                 // The queue plays the next episode by itself; `queueMoved` takes over from here.
                 if self.upcoming != nil { return }
                 self.saveHistory(completed: true)
@@ -1343,6 +1350,7 @@ import IOKit.pwr_mgt
             let playing = player.timeControlStatus == .playing
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
+                if playing, !self.sleepFade.isActive, self.sleepFadeRevision != nil { self.cancelSleepFade() }
                 self.buffering = waiting
                 self.paused = paused
                 // No plugin conversion ahead of time while a video plays or loads: it ran a core flat out (#1428).
@@ -1503,6 +1511,7 @@ import IOKit.pwr_mgt
         return text
     }
     func stop() {
+        cancelSleepFade()
         #if os(macOS)
         displayAwake.hold(false)
         #endif
@@ -1921,7 +1930,7 @@ extension PlaybackSession {
             let queued = self.makeItem(next, url: prepared.url)
             guard self.player.canInsert(queued, after: item) else { return Self.release(next, prepared) }
             self.player.insert(queued, after: item)
-            self.player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
+            self.player.actionAtItemEnd = SleepTimer.shared.endsWithItem || self.sleepFadeRevision != nil ? .pause : .advance
             self.upcoming = Upcoming(channel: next, item: queued, prepared: prepared)
             Diagnostics.shared.record(.info, "player", "upcoming queued name=\(next.name) left=\(Int(length - item.currentTime().seconds))s")
             // The next episode starts past its intro when that is skipped, rather than jumping there once it plays.
@@ -1973,14 +1982,24 @@ extension PlaybackSession {
 
     /// The Sleep Timer ran out: the sound fades away and the video pauses.
     private func sleepTimerFired() {
-        guard player.rate != 0 else { return }
-        SleepTimer.fadeOut(player) { [weak self] in self?.player.pause() }
+        guard sleepFadeRevision != SleepTimer.shared.revision else { return }
+        sleepFadeRevision = SleepTimer.shared.revision
+        player.actionAtItemEnd = .pause
+        sleepFade.start(player) { [weak self] in self?.player.pause() }
+    }
+
+    private func cancelSleepFade() {
+        sleepFade.cancel(); sleepFadeRevision = nil
+        followSleepTimer()
     }
 
     /// With End of Episode set, the player pauses at the end instead of moving on to the queued episode.
     private func followSleepTimer() {
+        if let revision = sleepFadeRevision, revision != SleepTimer.shared.revision {
+            sleepFade.cancel(); sleepFadeRevision = nil
+        }
         guard upcoming != nil else { return }
-        player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
+        player.actionAtItemEnd = SleepTimer.shared.endsWithItem || sleepFadeRevision != nil ? .pause : .advance
     }
 
     /// Plays the queued next episode now (the Next Episode button); false when none is queued yet.
