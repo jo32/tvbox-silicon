@@ -86,9 +86,8 @@ struct MobilePlayerView: View {
     @State private var taps = PictureTaps()
     @State private var skipped: (forward: Bool, total: Double)?
     @State private var skippedTask: Task<Void, Never>?
-    /// Controls a tap just brought up let a second tap through to the picture, which may be a double tap.
-    @State private var settling = false
-    @State private var settleTask: Task<Void, Never>?
+    /// A single tap waits `PictureTaps.interval` for a second tap before toggling the controls (#2148).
+    @State private var tapTask: Task<Void, Never>?
     /// Sliding sideways across the picture: where the slide began.
     @State private var swipeStart: Double?
     /// Sliding up or down: the brightness on the left, the volume on the right, from where the slide began.
@@ -158,6 +157,7 @@ struct MobilePlayerView: View {
             // Two taps on a side skip, touching and holding plays faster, and sliding sideways seeks.
             PictureGestures(tap: tapped, hold: held, swipe: swiped, levels: slidesLevels) { wider in
                 guard !locked else { return }
+                cancelPendingTap()
                 withAnimation(.easeInOut(duration: 0.25)) { videoFill = wider ? .fill : .fit }
             }
             .playerBleed(!inline)
@@ -200,7 +200,7 @@ struct MobilePlayerView: View {
             }
             // Faded out, the controls take no touches (a view at opacity 0 isn't hit). Hit testing isn't turned off as they
             // fade: on iOS 17 that closes a menu opened from them, so the Subtitles menu shut 3 s after the last tap (#1449).
-            controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(!locked && !settling)
+            controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(!locked)
             if !inline { lockButton }
         }
         // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
@@ -225,6 +225,7 @@ struct MobilePlayerView: View {
             }
         }
         .onDisappear {
+            cancelPendingTap()
             clock.detach(); nowPlaying.stop(); tvBrowser.stop(); CastController.shared.detach()
             if let brightnessBefore { screen?.brightness = brightnessBefore }
         }
@@ -283,6 +284,7 @@ struct MobilePlayerView: View {
     }
 
     private func keyboardAction(_ action: PlaybackKeyboard.Action) {
+        cancelPendingTap()
         switch action {
         case .playPause: session.togglePlayback(); poke()
         case .seek(let seconds): session.skip(seconds); poke()
@@ -347,17 +349,22 @@ struct MobilePlayerView: View {
             if showsLock { withAnimation(.easeOut(duration: 0.2)) { showsLock = false } } else { flashLock() }
             return
         }
+        tapTask?.cancel(); tapTask = nil
         let zone = PictureTaps.zone(x: x, width: width, seekable: doubleTapSkips && seekable && showsTransport && playingOn == nil && !pip.active)
         switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone, step: SkipInterval.seconds(skipInterval)) {
-        case .toggleControls:
-            let showing = !chromeVisible
-            toggleChrome()
-            if showing { settle(); clearLabels() }
+        case .wait:
+            tapTask = Task {
+                try? await Task.sleep(for: .seconds(PictureTaps.interval))
+                guard !Task.isCancelled, taps.settle() else { return }
+                tapTask = nil
+                let showing = !chromeVisible
+                toggleChrome()
+                if showing { clearLabels() }
+            }
         case .togglePlayback:
-            toggleChrome()
             session.togglePlayback()
         case .skip(let seconds, let total, _):
-            // Hidden whether the first tap showed the controls or hid them.
+            // Hidden whether the controls were up or not.
             hideChrome()
             session.skip(seconds)
             nowPlaying.update(title: channel.name, session: session)
@@ -370,14 +377,14 @@ struct MobilePlayerView: View {
         }
     }
 
-    /// For as long as a second tap would make a double tap, it reaches the picture rather than the controls it showed.
-    private func settle() {
-        settling = true
-        settleTask?.cancel()
-        settleTask = Task {
-            try? await Task.sleep(for: .seconds(PictureTaps.interval))
-            if !Task.isCancelled { settling = false }
-        }
+    private func cancelPendingTap() {
+        tapTask?.cancel(); tapTask = nil
+        taps.cancel()
+    }
+
+    private func keepChrome() {
+        cancelPendingTap()
+        poke()
     }
 
     /// A gesture's label has the picture to itself: the controls make way, unless loading or a failure keeps them up.
@@ -398,12 +405,14 @@ struct MobilePlayerView: View {
         if locked, case .began = phase { return }
         switch phase {
         case .began(.seek):
+            cancelPendingTap()
             guard showsTransport, seekable, clock.duration > 0, playingOn == nil, !pip.active else { return }
             let start = clock.currentPosition
             swipeStart = start
             clock.scrub(to: start)
             hideChrome()
         case .began(let slide):
+            cancelPendingTap()
             let volume = slide == .volume
             guard volume || screen != nil else { return }
             keyboardVolume = nil
@@ -585,12 +594,13 @@ struct MobilePlayerView: View {
         .padding(right ? .trailing : .leading, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: right ? .trailing : .leading)
         .opacity(visible ? 1 : 0)
-        .allowsHitTesting(visible && !settling)
+        .allowsHitTesting(visible)
         .animation(.easeOut(duration: 0.2), value: visible)
     }
 
     private func setLocked(_ lock: Bool) {
         guard lock != locked else { return }
+        cancelPendingTap()
         lockTask?.cancel()
         withAnimation(.easeOut(duration: 0.2)) { locked = lock }
         if lock {
@@ -624,6 +634,7 @@ struct MobilePlayerView: View {
         switch phase {
         case .began:
             guard boosts, !locked, SpeedBoost.isOn(holdSpeed) else { return }
+            cancelPendingTap()
             keyboardBoost = false
             // A new hold replaces a kept speed: it ends with the finger unless slid down again.
             let started = SpeedBoost(rate: holdSpeed)
@@ -740,7 +751,7 @@ struct MobilePlayerView: View {
                 Spacer(minLength: 0)
                 HStack(spacing: 0) { toolbar; optionsMenu }.chromeGroup()
             }
-            .simultaneousGesture(TapGesture().onEnded { poke() })
+            .simultaneousGesture(TapGesture().onEnded { keepChrome() })
         } else {
             screenTopRow
         }
@@ -767,7 +778,7 @@ struct MobilePlayerView: View {
             }
             .chromeGroup()
         }
-        .simultaneousGesture(TapGesture().onEnded { poke() })
+        .simultaneousGesture(TapGesture().onEnded { keepChrome() })
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topRowHeight = $0 }
     }
 
@@ -785,7 +796,7 @@ struct MobilePlayerView: View {
             if showsTags {
                 PlaybackBadges(session: session, active: chromeVisible) {
                     withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
-                    poke()
+                    keepChrome()
                 }
             }
         }
@@ -980,7 +991,7 @@ struct MobilePlayerView: View {
                     .accessibilityLabel(L10n.text("Forward %@ seconds", String(Int(step))))
             }
         }
-        .simultaneousGesture(TapGesture().onEnded { poke() })
+        .simultaneousGesture(TapGesture().onEnded { keepChrome() })
     }
 
     /// Previous and Next Episode, small and at the right of the time above the seek bar. Beside ±10 and play, a tap
@@ -1054,7 +1065,7 @@ struct MobilePlayerView: View {
                         .accessibilityIdentifier("player.fullScreen")
                 }
             }
-            .simultaneousGesture(TapGesture().onEnded { poke() })
+            .simultaneousGesture(TapGesture().onEnded { keepChrome() })
         }
     }
 
@@ -1089,7 +1100,7 @@ struct MobilePlayerView: View {
             }
         } else if session.hasTimeline {
             // Dragging holds the controls up itself (`hold`); a tap gesture here would compete with the scrubber's drag.
-            SeekBar(clock: clock, moving: chromeVisible && !session.paused, hold: { scrubbingBar = $0; hold($0) }, sought: sought,
+            SeekBar(clock: clock, moving: chromeVisible && !session.paused, hold: { if $0 { cancelPendingTap() }; scrubbingBar = $0; hold($0) }, sought: sought,
                     marks: session.chapters.map(\.start)) { stepButtons }
                 // Gone mid-drag (the next episode began): what made way for the frame comes back.
                 .onDisappear { scrubbingBar = false }
@@ -1103,7 +1114,7 @@ struct MobilePlayerView: View {
 
     /// The position moved by a button or the seek bar: the Lock Screen follows.
     private func sought() {
-        poke()
+        keepChrome()
         nowPlaying.update(title: channel.name, session: session)
     }
 
