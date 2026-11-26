@@ -819,6 +819,8 @@ struct MobilePlayerView: View {
             // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
             if tvBrowser.receivers.isEmpty && CastController.shared.devices.isEmpty {
                 AirPlayButton()
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             } else {
                 PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
                     session.player.pause()
@@ -1511,18 +1513,59 @@ private struct PlayerCircleStyle: ButtonStyle {
     }
 }
 
-/// AirPlay, drawn like the buttons beside it: the system's own button (AVRoutePickerView) drew its mark bigger and heavier,
-/// so it stays out of sight and this one opens its picker, as Play On's menu does.
-private struct AirPlayButton: View {
-    @State private var airPlay = AirPlayPicker()
-    var body: some View {
-        Button(action: airPlay.present) {
-            Image(systemName: "airplay.video").font(.airPlayGlyph).frame(width: 22, height: 22)
+/// AirPlay, drawn like the buttons beside it: the 15 pt mark, not the system's bigger, heavier one (#1560). All of it is
+/// UIKit: the system's button, all but invisible, takes the tap and opens its picker itself, with our mark on top. A
+/// SwiftUI mark over the hidden picker drew nothing on iPhones, only the picker's own faint mark (#2466).
+private struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AirPlayMarkView { AirPlayMarkView() }
+    func updateUIView(_ view: AirPlayMarkView, context: Context) {}
+}
+
+private final class AirPlayMarkView: UIView {
+    private let picker = AVRoutePickerView()
+    private let mark = UIImageView(image: UIImage(systemName: "airplay.video",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+    /// As `ChromeButtonStyle` in a button group: a faint circle while pressed.
+    private let pressed = UIView()
+    private weak var button: UIButton?
+
+    init() {
+        super.init(frame: .zero)
+        picker.prioritizesVideoDevices = true
+        // 0.02, not 0: a view under 0.01 takes no touches.
+        picker.alpha = 0.02
+        pressed.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        pressed.alpha = 0
+        pressed.isUserInteractionEnabled = false
+        mark.tintColor = .white
+        mark.contentMode = .center
+        mark.isUserInteractionEnabled = false
+        for view in [pressed, picker, mark] as [UIView] {
+            view.frame = bounds
+            view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(view)
         }
-        .chromeButton()
-        .background { AirPlayPickerView(picker: airPlay).opacity(0.02).allowsHitTesting(false) }
-        .accessibilityLabel(L10n.text("AirPlay"))
-        .accessibilityIdentifier("player.airPlay")
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        pressed.layer.cornerRadius = min(bounds.width, bounds.height) / 2
+        guard button == nil else { return }
+        func find(in view: UIView) -> UIButton? { view as? UIButton ?? view.subviews.lazy.compactMap(find).first }
+        guard let found = find(in: picker) else { return }
+        button = found
+        found.accessibilityIdentifier = "player.airPlay"
+        found.addTarget(self, action: #selector(touchDown), for: [.touchDown, .touchDragEnter])
+        found.addTarget(self, action: #selector(touchEnded), for: [.touchUpInside, .touchUpOutside, .touchDragExit, .touchCancel])
+    }
+
+    // Not press()/release(): -release is NSObject's own, and overriding it recursed at once.
+    @objc private func touchDown() { highlight(true) }
+    @objc private func touchEnded() { highlight(false) }
+    private func highlight(_ on: Bool) {
+        pressed.alpha = on ? 1 : 0
+        mark.alpha = on ? 0.72 : 1
     }
 }
 
