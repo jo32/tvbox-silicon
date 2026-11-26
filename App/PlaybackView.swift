@@ -1804,7 +1804,7 @@ extension PlaybackSession {
                         // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
                         // Keep seekable FLV files on the file path and repackage live streams as local HLS.
                         do {
-                            prepared.url = try await FLVLive.open(address, headers: channel.headers)
+                            prepared.url = try await FLVLive.open(address, headers: channel.headers, source: channel.flvSource)
                             return prepared
                         } catch is FLVLive.NotFLV {
                             // Let the normal file path report the original conversion failure below.

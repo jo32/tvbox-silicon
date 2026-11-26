@@ -543,6 +543,12 @@ public struct CatalogClient: Sendable {
     }
 
     public func preparePlayback(_ episode: Episode, forDownload: Bool = false) async throws -> PlaybackPlan {
+        var plan = try await preparePlaybackPlan(episode, forDownload: forDownload)
+        if !forDownload { plan.sourceEpisode = episode }
+        return plan
+    }
+
+    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool) async throws -> PlaybackPlan {
         var headers = site.raw["header"]?.object?.compactMapValues(\.string) ?? [:]
         if site.type == 4 || site.type == 3 {
             if !forDownload { CatPawDanmaku.remember(self) }
@@ -627,6 +633,23 @@ public struct CatalogClient: Sendable {
     /// Neither exists on Apple TV, which throws the existing web-detection error.
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
+        var channel = try await resolvePlaybackChannel(plan, choice: choice)
+        if FLVLive.names(channel.url), let episode = plan.sourceEpisode {
+            channel.flvSource = FLVLive.Source {
+                try Task.checkCancellation()
+                let fresh = try await self.preparePlayback(episode)
+                guard let selected = choice.renewed(in: fresh.choices, originalCount: plan.choices.count) else {
+                    throw TVError.unsupported(L10n.text("The selected live quality is no longer available."))
+                }
+                let renewed = try await self.resolvePlaybackChannel(fresh, choice: selected)
+                try Task.checkCancellation()
+                return (renewed.url, renewed.headers)
+            }
+        }
+        return channel
+    }
+
+    private func resolvePlaybackChannel(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
         if let url = URL(string: choice.address), url.scheme == CENCStreams.scheme || url.scheme == DashStreams.scheme {
             return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:],

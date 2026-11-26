@@ -4,6 +4,13 @@ public struct PlaybackChoice: Identifiable, Sendable {
     public let id: Int
     public let name: String
     public let address: String
+
+    /// Reordered qualities keep their name. Only two single-choice plans may use the sole-choice fallback.
+    func renewed(in choices: [PlaybackChoice], originalCount: Int) -> PlaybackChoice? {
+        let matches = choices.filter { $0.name == name }
+        if matches.count == 1 { return matches[0] }
+        return originalCount == 1 && choices.count == 1 ? choices[0] : nil
+    }
     static func parse(_ value: JSONValue?, prefix: String = "", fallbackName: String) -> [PlaybackChoice] {
         if let text = value?.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [PlaybackChoice(id: 0, name: fallbackName, address: prefix + text)]
@@ -33,6 +40,8 @@ public struct PlaybackChoice: Identifiable, Sendable {
 }
 
 public struct PlaybackPlan: Sendable {
+    /// Original source address, needed to resolve a fresh live CDN URL. Not a cached play result.
+    var sourceEpisode: Episode?
     public let choices: [PlaybackChoice]
     public let headers: [String: String]
     public let group: String
