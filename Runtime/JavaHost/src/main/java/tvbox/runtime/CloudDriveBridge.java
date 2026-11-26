@@ -116,8 +116,21 @@ public final class CloudDriveBridge implements AutoCloseable {
             } catch (Exception error) {
                 // Never print request URLs, credentials, or upstream exception messages.
                 System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
-                try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
+                try { exchange.sendResponseHeaders(failureStatus(error), -1); } catch (IOException ignored) { }
             } finally { exchange.close(); }
+    }
+
+    /**
+     * What a failed proxy request answers the player: the source's own 4xx (an expired or refused link, which asking
+     * again won't change), 504 when it took too long, otherwise 502 (the player asks a 502, 503 or 504 once more).
+     */
+    static int failureStatus(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof HttpDiagnostics.SourceHTTPException source && source.status >= 400 && source.status < 500) return source.status;
+            if (cause instanceof HttpDiagnostics.RequestStopped || cause instanceof java.net.SocketTimeoutException) return 504;
+            if (cause.getCause() == cause) break;
+        }
+        return 502;
     }
 
     /** Apple can invalidate sockets while the app is suspended without destroying its JVM. */
@@ -200,12 +213,7 @@ public final class CloudDriveBridge implements AutoCloseable {
     /** Hands a media or drive request to the plugin's proxy and streams its answer back. */
     private void relay(com.sun.net.httpserver.HttpExchange exchange, String resource, String method) throws Exception {
         if ((!resource.equals("media") || proxy == null) && (!resource.startsWith("drive/") || driveProxy == null)) { exchange.sendResponseHeaders(404, -1); return; }
-        Map<String,String> params = new HashMap<>();
-        String query = exchange.getRequestURI().getRawQuery();
-        if (query != null) for (String pair : query.split("&")) {
-            String[] parts = pair.split("=", 2);
-            params.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8), parts.length == 2 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
-        }
+        Map<String,String> params = queryParameters(exchange.getRequestURI().getRawQuery());
         Map<String,String> headers = new HashMap<>();
         exchange.getRequestHeaders().forEach((key, values) -> headers.put(key.toLowerCase(Locale.ROOT), String.join(",", values)));
         touch();
@@ -338,7 +346,7 @@ public final class CloudDriveBridge implements AutoCloseable {
                     bridge.relay(exchange, "media", method);
                 } catch (Exception error) {
                     System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
-                    try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
+                    try { exchange.sendResponseHeaders(failureStatus(error), -1); } catch (IOException ignored) { }
                 } finally { exchange.close(); }
             });
             // The dispatcher thread inherits daemon status from its starter; this server lives for
@@ -396,6 +404,47 @@ public final class CloudDriveBridge implements AutoCloseable {
     /** The digest of the app's sign-in in this field, or "" without one. */
     String appAccountDigest(String field) { return appAccounts.getOrDefault(field, ""); }
     android.content.Context context() { return context; }
+
+    /** A /proxy query's parameters, decoded as Android TVBox's server (NanoHTTPD) decodes them. */
+    public static Map<String,String> queryParameters(String query) {
+        Map<String,String> params = new HashMap<>();
+        if (query != null) for (String pair : query.split("&")) {
+            if (pair.isEmpty()) continue;
+            String[] parts = pair.split("=", 2);
+            try {
+                params.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8), parts.length == 2 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
+            } catch (IllegalArgumentException malformed) {
+                // A bare % in an address the configuration didn't encode: keep it as written.
+                params.put(parts[0], parts.length == 2 ? parts[1] : "");
+            }
+        }
+        return params;
+    }
+
+    /** Most of a proxy answer read into memory: a playlist, not a stream. */
+    static final int PROXY_ANSWER_LIMIT = 20_000_000;
+
+    /**
+     * The plugin's /proxy answer to these parameters, for the app to read itself: {@code status}, {@code type},
+     * {@code body} in Base64 (the app decodes its text), and {@code location} when the answer redirects.
+     */
+    public JSONObject proxyAnswer(Map<String,String> params) throws Exception {
+        Proxy handler = proxy;
+        if (handler == null) throw new IllegalStateException("This plugin has no local proxy");
+        touch();
+        Object[] answer = handler.invoke(new HashMap<>(params));
+        if (answer == null || answer.length < 3 || !(answer[0] instanceof Number status)) throw new PluginSession.EmptyContentException();
+        var result = new JSONObject().put("status", status.intValue()).put("type", String.valueOf(answer[1]));
+        if (answer.length > 3 && answer[3] instanceof Map<?,?> headers) {
+            for (var entry : headers.entrySet())
+                if (String.valueOf(entry.getKey()).equalsIgnoreCase("location")) result.put("location", String.valueOf(entry.getValue()));
+        }
+        byte[] body = new byte[0];
+        if (answer[2] instanceof InputStream stream) { try (stream) { body = stream.readNBytes(PROXY_ANSWER_LIMIT); } }
+        else if (answer[2] instanceof String text) body = text.getBytes(StandardCharsets.UTF_8);
+        else if (answer[2] instanceof byte[] bytes) body = bytes;
+        return result.put("body", java.util.Base64.getEncoder().encodeToString(body));
+    }
 
     /** The plugin's own /proxy answer to these parameters as text, or null when it has no proxy or no body. */
     String proxyText(Map<String,String> params) throws Exception {

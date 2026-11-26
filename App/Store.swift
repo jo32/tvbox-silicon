@@ -467,7 +467,7 @@ import TVCore
             throw TVError.unsupported(L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue."))
         }
         let resolved = try await client.playback(source.episode)
-        return Channel(name: "\(context.videoName) · \(context.episodeName)", group: resolved.group, url: resolved.url, logo: resolved.logo,
+        return Channel(name: context.displayName, group: resolved.group, url: resolved.url, logo: resolved.logo,
                        headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
     }
 
@@ -1009,7 +1009,7 @@ import TVCore
     private func episodeChannel(_ resolved: Channel, video: Video, episode: Episode, client: CatalogClient,
                                 resumePosition: Double? = nil) -> Channel {
         let context = PlaybackHistoryContext(origin: client.origin, site: client.site, video: video, episode: episode)
-        return Channel(name: "\(video.name) · \(episode.name)", group: resolved.group, url: resolved.url,
+        return Channel(name: context.displayName, group: resolved.group, url: resolved.url,
                        logo: resolved.logo, headers: resolved.headers, skipScope: context.id,
                        historyContext: context, resumePosition: resumePosition, subtitles: resolved.subtitles, skips: resolved.skips,
                        bilibiliPart: client.site.isBilibili ? BilibiliAPI.Part(address: episode.address) : nil)
@@ -1059,6 +1059,19 @@ import TVCore
             return episodeChannel(resolved, video: catalog.video, episode: next, client: catalog.client)
         } catch {
             if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "upcoming episode \(catalog.client.reportContext) flag=\(next.flag)", error) }
+            return nil
+        }
+    }
+
+    /// The episode `channel` plays, resolved again by its source: a fresh link for one that expired while it played
+    /// (`LinkRenewal`). Nil for anything but a catalog episode, or when the source answers nothing.
+    func renewedChannel(for channel: Channel) async -> Channel? {
+        guard let context = channel.historyContext, let catalog = catalog(for: channel),
+              let episode = catalog.video.episodes.first(where: { $0.id == context.episodeID && $0.flag == context.episodeFlag })
+                ?? catalog.video.episodes.first(where: { $0.id == context.episodeID }) else { return nil }
+        do { return try await catalog.client.playback(episode) }
+        catch {
+            if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "renew episode \(catalog.client.reportContext) flag=\(episode.flag)", error) }
             return nil
         }
     }

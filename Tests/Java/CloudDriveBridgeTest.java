@@ -108,7 +108,23 @@ public class CloudDriveBridgeTest {
         suspendedListenerRecovers();
         directMediaRevealsTheCdnRequest();
         connectionDownloadsRevealTheCdnRequest();
+        proxyAnswersForLivePlaylists();
         System.out.println("Cloud bridge checks passed (credentials, capability, range streaming, quality arrays).");
+    }
+    /** A live playlist on Android TVBox's 127.0.0.1:9978/proxy: the app asks the plugin's proxy and reads its answer. */
+    static void proxyAnswersForLivePlaylists() throws Exception {
+        try (var bridge = new CloudDriveBridge(Files.createTempDirectory("cloud-bridge-proxy"))) {
+            var params = CloudDriveBridge.queryParameters("do=live&u=Gather&type=txt&bad=100%&ext=a%2Bb");
+            check(params.get("u").equals("Gather") && params.get("ext").equals("a+b") && params.get("bad").equals("100%"), "Proxy query decoded wrong: " + params);
+            bridge.setProxy(asked -> "Gather".equals(asked.get("u"))
+                ? new Object[]{200, "text/plain", new ByteArrayInputStream("央视,#genre#\nCCTV1,http://a/1.m3u8".getBytes(StandardCharsets.UTF_8))}
+                : new Object[]{302, "text/plain", null, Map.of("Location", "https://example.com/list.txt")});
+            var answer = bridge.proxyAnswer(params);
+            check(answer.getInt("status") == 200 && !answer.has("location"), "Proxy answer status lost");
+            check(new String(Base64.getDecoder().decode(answer.getString("body")), StandardCharsets.UTF_8).startsWith("央视,#genre#"), "Proxy answer body changed");
+            var moved = bridge.proxyAnswer(Map.of("do", "live"));
+            check(moved.getInt("status") == 302 && moved.getString("location").equals("https://example.com/list.txt") && moved.getString("body").isEmpty(), "Proxy redirect lost");
+        }
     }
     /** The app streams drive files itself: the bridge reveals the CDN request behind a proxy address. */
     static void directMediaRevealsTheCdnRequest() throws Exception {

@@ -172,20 +172,23 @@ public enum Remux {
     /// A file behind an HTTP(S) link that answers byte ranges. One that sends the bytes asked for is read
     /// like a cloud drive's file, in parallel chunks. One that answers every range with the rest of the file
     /// (a plugin's drive proxy, which downloads it with its own threads) is read through one connection.
-    public static func httpSource(_ url: URL, headers: [String: String]) async throws -> RemuxSource {
-        try await httpSource(url, headers: headers, chunks: CloudByteStream.session, configuration: RangeConnection.configuration)
+    /// `renewal` gives a fresh link to the same file once this one is refused (an expired signed link): the episode
+    /// resolved again (`LinkRenewal`). Without it a refused link ended playback for good (`read offset=… HTTP 403`).
+    public static func httpSource(_ url: URL, headers: [String: String], renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) async throws -> RemuxSource {
+        try await httpSource(url, headers: headers, chunks: CloudByteStream.session, configuration: RangeConnection.configuration, renewal: renewal)
     }
 
-    static func httpSource(_ url: URL, headers: [String: String], chunks: URLSession, configuration: URLSessionConfiguration) async throws -> RemuxSource {
+    static func httpSource(_ url: URL, headers: [String: String], chunks: URLSession, configuration: URLSessionConfiguration,
+                           renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) async throws -> RemuxSource {
         let counter = CloudCounter()
         let probe = try await RangeConnection.open(url, headers: headers, from: 0, through: 1, configuration: configuration, counter: counter)
         if probe.last > 1 {
             Diagnostics.shared.record(.info, "remux", "link sends the rest of the file host=\(url.host() ?? "-") length=\(probe.length)")
-            return StreamingRemuxSource(url: url, headers: headers, configuration: configuration, counter: counter, first: probe)
+            return StreamingRemuxSource(url: url, headers: headers, configuration: configuration, counter: counter, first: probe, renewal: renewal)
         }
         probe.close()
         let source = CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
-        return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }))
+        return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }, renewal: renewal))
     }
 
     /// Whether an address is a server inside this app that doesn't name the file it sends: a plugin's own
@@ -196,11 +199,12 @@ public enum Remux {
 
     /// The file behind a link when its first bytes are a container the repackager opens and AVPlayer doesn't
     /// (`handles`); nil for anything else, and for a link that answers no byte ranges.
-    public static func sniffedSource(_ url: URL, headers: [String: String]) async -> RemuxSource? {
-        await sniffedSource(url, headers: headers, chunks: CloudByteStream.session, configuration: RangeConnection.configuration)
+    public static func sniffedSource(_ url: URL, headers: [String: String], renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) async -> RemuxSource? {
+        await sniffedSource(url, headers: headers, chunks: CloudByteStream.session, configuration: RangeConnection.configuration, renewal: renewal)
     }
 
-    static func sniffedSource(_ url: URL, headers: [String: String], chunks: URLSession, configuration: URLSessionConfiguration) async -> RemuxSource? {
+    static func sniffedSource(_ url: URL, headers: [String: String], chunks: URLSession, configuration: URLSessionConfiguration,
+                              renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) async -> RemuxSource? {
         let counter = CloudCounter()
         guard let probe = try? await RangeConnection.open(url, headers: headers, from: 0, through: 15, configuration: configuration, counter: counter) else { return nil }
         var head = Data()
@@ -208,11 +212,11 @@ public enum Remux {
         guard handles(head) else { probe.close(); return nil }
         if probe.last > 15 {
             Diagnostics.shared.record(.info, "remux", "link sends the rest of the file host=\(url.host() ?? "-") length=\(probe.length)")
-            return StreamingRemuxSource(url: url, headers: headers, configuration: configuration, counter: counter, first: probe)
+            return StreamingRemuxSource(url: url, headers: headers, configuration: configuration, counter: counter, first: probe, renewal: renewal)
         }
         probe.close()
         let source = CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
-        return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }))
+        return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }, renewal: renewal))
     }
 
     /// A file on this device.
@@ -247,18 +251,24 @@ struct CloudRemuxSource: RemuxSource {
 final class StreamingRemuxSource: RemuxSource, @unchecked Sendable {
     static let readThrough: Int64 = 8 << 20
     static let kept = 2
+    /// The first wait before a response that couldn't open is asked for again.
+    nonisolated(unsafe) static var retryBase = 0.5
     let length: Int64
-    private let url: URL
-    private let headers: [String: String]
+    private var url: URL
+    private var headers: [String: String]
     private let configuration: URLSessionConfiguration
     private let counter: CloudCounter
+    private let renewal: (@Sendable () async -> CloudStreams.Source?)?
     private let lock = NSLock()
     /// The open responses, the one read last at the end.
     private var connections: [RangeConnection]
     private var closed = false
+    /// When the link was last renewed: at most once a minute.
+    private var renewedAt: Date?
 
-    init(url: URL, headers: [String: String], configuration: URLSessionConfiguration, counter: CloudCounter, first: RangeConnection) {
-        self.url = url; self.headers = headers; self.configuration = configuration; self.counter = counter
+    init(url: URL, headers: [String: String], configuration: URLSessionConfiguration, counter: CloudCounter, first: RangeConnection,
+         renewal: (@Sendable () async -> CloudStreams.Source?)? = nil) {
+        self.url = url; self.headers = headers; self.configuration = configuration; self.counter = counter; self.renewal = renewal
         length = first.length; connections = [first]
     }
 
@@ -281,7 +291,7 @@ final class StreamingRemuxSource: RemuxSource, @unchecked Sendable {
             try Task.checkCancellation()
             lock.withLock { connections.count >= Self.kept ? connections.removeFirst() : nil }?.close()
             Diagnostics.shared.record(.debug, "remux", "link reopened at=\(offset)")
-            let next = try await RangeConnection.open(url, headers: headers, from: offset, configuration: configuration, counter: counter)
+            let next = try await reopen(at: offset)
             let stale: Bool = lock.withLock {
                 if closed { return true }
                 connections.append(next)
@@ -291,7 +301,39 @@ final class StreamingRemuxSource: RemuxSource, @unchecked Sendable {
         }
     }
 
-    var transfer: (received: Int64, host: String?)? { (counter.value, url.host()) }
+    /// A response from `offset`. A connection that drops or times out, and a server's passing error, are tried again a
+    /// little later; a plugin's loopback proxy that stopped listening is asked where it listens now; a refused link is
+    /// renewed. Anything else, or the same failure a few times over, fails the read.
+    private func reopen(at offset: Int64) async throws -> RangeConnection {
+        var backoff = Backoff(base: Self.retryBase, ceiling: 4, attempts: 3)
+        while true {
+            let (address, fields) = lock.withLock { (url, headers) }
+            do { return try await RangeConnection.open(address, headers: fields, from: offset, configuration: configuration, counter: counter) }
+            catch {
+                if TransientRetry.isCancellation(error) || Task.isCancelled { throw error }
+                if TransientRetry.urlCode(error) == .cannotConnectToHost, EmbeddedJarHost.isPluginProxy(address),
+                   let moved = try? await EmbeddedJarHost.shared.recoverProxy(address), moved != address {
+                    Diagnostics.shared.record(.warning, "remux", "plugin proxy listens again port=\(moved.port ?? 0)")
+                    lock.withLock { url = moved }
+                    continue
+                }
+                if TransientRetry.isExpired(error), let renewal, lock.withLock({ renewedAt.map { Date().timeIntervalSince($0) > 60 } ?? true }) {
+                    lock.withLock { renewedAt = Date() }
+                    if let fresh = await renewal(), Int64(fresh.length) == length, fresh.url != address {
+                        Diagnostics.shared.record(.info, "remux", "link renewed host=\(fresh.url.host() ?? "-")")
+                        lock.withLock { url = fresh.url; headers = fresh.headers }
+                        continue
+                    }
+                    Diagnostics.shared.record(.warning, "remux", "link refused and not renewed host=\(address.host() ?? "-")")
+                }
+                guard TransientRetry.isTransient(error), let wait = backoff.next() else { throw error }
+                Diagnostics.shared.record(.debug, "remux", "link reopen at=\(offset) \(Diagnostics.describe(error)); again in \(wait) s")
+                try await Task.sleep(for: .seconds(wait))
+            }
+        }
+    }
+
+    var transfer: (received: Int64, host: String?)? { (counter.value, lock.withLock { url.host() }) }
 
     func close() async {
         lock.withLock {

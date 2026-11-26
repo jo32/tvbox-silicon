@@ -110,6 +110,19 @@ def load_source(name, path):
     return module
 
 
+def proxy_failure_status(error):
+    """What a spider's failed proxy answers the player: the server's own 4xx (an expired or refused link, which asking
+    again won't change), 504 when it took too long, otherwise 502 (the player asks a 502, 503 or 504 once more)."""
+    status = getattr(error, 'status', None)
+    if not isinstance(status, int):
+        status = getattr(getattr(error, 'response', None), 'status_code', None)
+    if isinstance(status, int) and 400 <= status < 500:
+        return status
+    if isinstance(error, (requests.Timeout, TimeoutError)):
+        return 504
+    return 502
+
+
 _RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
 
 
@@ -139,7 +152,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             status, mime, headers, data = response
         except Exception as error:
             log('PY_PROXY_FAILED', ''.join(traceback.format_exception(error)))
-            status, mime, headers, data = 502, 'text/plain', {}, str(error).encode()
+            status, mime, headers, data = proxy_failure_status(error), 'text/plain', {}, str(error).encode()
         extra = {}
         if status == 200:
             extra['Accept-Ranges'] = 'bytes'

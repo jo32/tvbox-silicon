@@ -2257,6 +2257,8 @@ extension Store {
     }
     session.upcomingEpisode = { [weak store] in await store?.upcomingEpisode(after: channel) }
     session.onAdvance = { [weak store] next in store?.advance(to: next, from: channel) }
+    // A link that expires while it plays gets a fresh one from the source (`LinkRenewal`).
+    session.renewLink = { [weak store] playing in await store?.renewedChannel(for: playing) }
     session.onUnplayableFile = { [weak store, weak session] in
         guard let store, let other = store.transcodedLine(for: channel) else { return nil }
         store.selectEpisode(other, from: channel) { session?.lineSwitchFailed($0) }
