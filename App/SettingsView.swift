@@ -676,6 +676,10 @@ struct FormSettingsView: View {
                 }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
+                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
+                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+                    .settingsAnchor(.removeSubscriptions)
+                }
                 if store.subscription != nil {
                     Button { editingSources = true } label: {
                         HStack(spacing: 8) {
@@ -721,10 +725,6 @@ struct FormSettingsView: View {
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
                     .settingsAnchor(.arrangeSubscriptions)
-                }
-                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
-                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
-                    .settingsAnchor(.removeSubscriptions)
                 }
                 #if os(iOS)
                 // One row instead of an always-open field and three text buttons; the address goes in a sheet.
