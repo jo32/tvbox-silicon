@@ -1945,6 +1945,8 @@
 "Refresh List" = "Refresh List";
 "Refreshed." = "Refreshed.";
 "Remove from Bookshelf" = "Remove from Bookshelf";
+"Remove %lld books" = "Remove %lld books";
+"Remove %lld books from the Bookshelf?" = "Remove %lld books from the Bookshelf?";
 "Search All Sources" = "Search All Sources";
 "Search Books" = "Search Books";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "Search asks every source that is on. Turn off the ones that never answer to make it faster.";
