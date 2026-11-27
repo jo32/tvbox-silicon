@@ -2530,6 +2530,15 @@ extension Store {
     session.externalSubtitles.tmdbKey = { [weak store] channel in
         store?.catalog(for: channel).map { TMDBMatchStore.key(source: $0.client.site.key, video: $0.video.id) }
     }
+    session.skipMatchKey = { [weak store] channel in
+        if let catalog = store?.catalog(for: channel) {
+            return TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
+        }
+        guard let context = channel.historyContext,
+              let client = store?.historyClient(PlaybackHistoryEntry(context: context, position: 0, duration: 0, updatedAt: Date())) else { return nil }
+        // History keeps the original source key; a merged subscription may have renamed its site's cache key.
+        return TMDBMatchStore.key(source: client.site.key, video: context.videoID)
+    }
     session.skipDefaults = store.playbackDefaults
     session.catalogDanmaku.enabled = UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil
         || UserDefaults.standard.bool(forKey: DanmakuPreference.key)

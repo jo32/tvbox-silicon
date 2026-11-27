@@ -40,6 +40,7 @@ export interface Related {
 export interface Details {
   mediaType: MediaType;
   id: number;
+  imdbID: string | null;
   name: string;
   originalName: string;
   tagline: string;
@@ -160,6 +161,8 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   });
   if (!item) return null;
   const tv = type === "tv";
+  const imdb = item.imdb_id ?? item.external_ids?.imdb_id;
+  const imdbID = typeof imdb === "string" && /^tt[0-9]+$/.test(imdb) && imdb === imdb.trim() ? imdb : null;
   const credits = tv ? item.aggregate_credits : item.credits;
   const cast: Person[] = list(credits?.cast)
     .slice(0, 16)
@@ -208,6 +211,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   return {
     mediaType: type,
     id,
+    imdbID,
     name: clip(tv ? item.name : item.title, 200) || translated(item.translations, language, tv ? "name" : "title"),
     originalName: clip(tv ? item.original_name : item.original_title, 200),
     tagline: clip(item.tagline, 300) || translated(item.translations, language, "tagline"),

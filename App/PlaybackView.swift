@@ -53,6 +53,12 @@ import IOKit.pwr_mgt
     private(set) var sourceSkips: [PlaybackSkip] = []
     private(set) var skipOffer: PlaybackSkip?
     private var skippedSource = Set<PlaybackSkip>()
+    @ObservationIgnored var skipMatchKey: ((Channel) -> String?)?
+    @ObservationIgnored private var skipLookup: Task<Void, Never>?
+    @ObservationIgnored private var skipLookupRevision = UUID()
+    @ObservationIgnored private var skipLookupStarted = false
+    @ObservationIgnored private var skipChannel: Channel?
+    private var remoteSkips: [PlaybackSkip] = []
     /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
     /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
     enum SkipNotice: Equatable {
@@ -119,10 +125,48 @@ import IOKit.pwr_mgt
     /// The source's credits: skipped by themselves when the viewer has intros and outros skipped and set no times of
     /// their own for this video; otherwise offered while they play.
     private func updateSourceSkip(time: Double) {
-        let current = PlaybackSkip.current(sourceSkips, at: time).flatMap { skippedSource.contains($0) ? nil : $0 }
+        // A source's own markers take priority for each kind. Online markers only fill what it did not supply.
+        let online = remoteSkips.filter { skip in !sourceSkips.contains { $0.kind == skip.kind } }
+        let current = PlaybackSkip.current(sourceSkips + online, at: time).flatMap { skippedSource.contains($0) ? nil : $0 }
         if current != skipOffer { skipOffer = current }
         guard current != nil, player.rate > 0, skipSettings.enabled, skipSettings.introEnd == 0, skipSettings.outroLength == 0 else { return }
         skipSourceSegment()
+    }
+
+    /// Once the playing item's duration is known, ask all three marker services without delaying playback.
+    private func loadRemoteSkipsIfNeeded(duration: Double) {
+        guard !skipLookupStarted, duration.isFinite, duration > 0, TMDBMatch.enabled,
+              let channel = skipChannel else { return }
+        skipLookupStarted = true
+        guard let key = skipMatchKey?(channel) else { return }
+        let episodeName = channel.historyContext?.episodeName ?? channel.name
+        let revision = skipLookupRevision
+        skipLookup = Task { [weak self] in
+            let choice = await TMDBMatchStore.shared.choice(for: key)
+            let answer = await TMDBMatchStore.shared.kept(for: key)
+            guard !Task.isCancelled else { return }
+            guard let match = PlaybackSkipLookup.Media.match(answer: answer, choice: choice) else {
+                // The video page may still be identifying a title when playback starts. Retry the local cache
+                // on a later sample, without starting another identification request or repeating a known refusal.
+                if choice == nil, answer == nil, let self, self.skipLookupRevision == revision {
+                    self.skipLookupStarted = false
+                    self.skipLookup = nil
+                }
+                return
+            }
+            var details = answer?.details.flatMap { $0.id == match.id && $0.mediaType == match.mediaType ? $0 : nil }
+            // Refresh legacy cached details once to obtain IMDb, which IntroDB requires. The other services use TMDB.
+            if details?.imdbID == nil || (match.mediaType == .tv && match.numbering == .absolute && details?.season?.number != match.season) {
+                if let fresh = try? await TMDBMatch.details(match.mediaType, id: match.id, season: match.season), !Task.isCancelled {
+                    details = fresh
+                }
+            }
+            guard !Task.isCancelled, let media = PlaybackSkipLookup.Media(match: match, details: details, episodeName: episodeName, duration: duration) else { return }
+            for await skips in PlaybackSkipLookup.lookup(media) {
+                guard let self, self.skipLookupRevision == revision, !Task.isCancelled else { return }
+                self.remoteSkips = skips
+            }
+        }
     }
 
     /// A Bilibili part's chapters and subtitle files, asked for once its picture is on its way so its start never waits.
@@ -194,6 +238,7 @@ import IOKit.pwr_mgt
         duration = length.isFinite ? max(0, length) : 0
         guard skipScope != nil, !editingSkip, !seekingSegment, pendingResume == nil, !restoringPosition,
               item.status == .readyToPlay else { return }
+        loadRemoteSkipsIfNeeded(duration: length)
         updateSourceSkip(time: time)
         updateSkipNotice(time: time, duration: length)
         var pass = skipPass
@@ -1845,6 +1890,8 @@ import IOKit.pwr_mgt
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
+        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        skipLookupStarted = false; skipChannel = nil; remoteSkips = []
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
         onPlaybackEnded = nil; onUnplayableFile = nil
         if player.currentItem != nil {
@@ -1908,6 +1955,8 @@ import IOKit.pwr_mgt
         if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
+        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        skipLookupStarted = false; skipChannel = live ? nil : channel; remoteSkips = []
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
         bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0
