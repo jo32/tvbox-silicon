@@ -945,7 +945,10 @@ struct MobilePlayerView: View {
                 }
             }
             // A series' intro and outro (#1488), here with the player's other settings, on the video page too.
-            if session.canSkip, !session.isLive { SkipTimesMenuButton(session: session) { showsSkip = true } }
+            if session.canSkip, !session.isLive {
+                SkipTimesMenuButton(session: session) { showsSkip = true }
+                Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(get: { session.looksUpSkipsOnline }, set: { session.looksUpSkipsOnline = $0 }))
+            }
             SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Picker(selection: $videoFill) {
                 ForEach(VideoFill.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }

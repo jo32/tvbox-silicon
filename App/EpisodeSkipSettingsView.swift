@@ -141,8 +141,10 @@ struct SkipTimesMenuButton: View {
 /// Apple TV's transport-bar menu for a title's intro and outro (#808, #1284). No keyboard for a time here: the intro
 /// ends, or the outro starts, where the picture or the sound is now. Its title says what is skipped, as Quality does.
 enum SkipTimesMenu {
+    /// `online`: the switch for online intro and outro times, for a video (#2653); nil for an audiobook.
     static func make(_ skipping: EpisodeSkipSettings, set: @escaping @MainActor (EpisodeSkipSettings) -> Void,
-                     mark: @escaping @MainActor (_ intro: Bool) -> Void) -> UIMenu {
+                     mark: @escaping @MainActor (_ intro: Bool) -> Void,
+                     online: Bool? = nil, setOnline: @escaping @MainActor (Bool) -> Void = { _ in }) -> UIMenu {
         var options: [UIMenuElement] = [
             UIAction(title: L10n.text("Automatically skip intro and outro"), state: skipping.enabled ? .on : .off) { _ in
                 var value = skipping; value.enabled.toggle(); set(value)
@@ -153,6 +155,11 @@ enum SkipTimesMenu {
                      subtitle: skipping.outroLength > 0 ? L10n.text("%@ before the end", EpisodeSkipSettings.formatTime(skipping.outroLength))
                         : L10n.text("Not set")) { _ in mark(false) },
         ]
+        if let online {
+            options.insert(UIAction(title: L10n.text("Look Up Intro and Outro Times Online"), state: online ? .on : .off) { _ in
+                setOnline(!online)
+            }, at: 1)
+        }
         if skipping.hasTimes {
             options.append(UIAction(title: L10n.text("Clear Intro and Outro"), image: UIImage(systemName: "xmark")) { _ in
                 set(EpisodeSkipSettings(enabled: skipping.enabled))

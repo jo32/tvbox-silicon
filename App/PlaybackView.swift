@@ -66,6 +66,16 @@ import IOKit.pwr_mgt
     /// Works whose details were fetched again for an IMDb ID this run: once each, whatever came back.
     @ObservationIgnored private static var skipDetailsRefreshed = Set<String>()
     private var remoteSkips: [PlaybackSkip] = []
+    /// The viewer's switch for online intro and outro times, in Settings and in the player's menus (#2653): off drops
+    /// what the services sent; on looks this episode up at its next time sample.
+    var looksUpSkipsOnline = PlaybackSkipLookup.enabled {
+        didSet {
+            guard looksUpSkipsOnline != oldValue else { return }
+            UserDefaults.standard.set(looksUpSkipsOnline, forKey: PlaybackSkipLookup.enabledKey)
+            skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+            skipLookupStarted = false; remoteSkips = []; skipLookupNotBefore = .distantPast
+        }
+    }
     /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
     /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
     enum SkipNotice: Equatable {
@@ -144,7 +154,7 @@ import IOKit.pwr_mgt
 
     /// Once the playing item's duration is known, ask all three marker services without delaying playback.
     private func loadRemoteSkipsIfNeeded(duration: Double) {
-        guard !skipLookupStarted, PlaybackSkipLookup.enabled, Date() >= skipLookupNotBefore, duration.isFinite, duration > 0,
+        guard !skipLookupStarted, looksUpSkipsOnline, Date() >= skipLookupNotBefore, duration.isFinite, duration > 0,
               TMDBMatch.enabled, let channel = skipChannel else { return }
         skipLookupStarted = true
         guard let key = skipMatchKey?(channel) else { return }
@@ -2272,6 +2282,7 @@ import IOKit.pwr_mgt
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
         skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        looksUpSkipsOnline = PlaybackSkipLookup.enabled
         skipLookupStarted = false; skipChannel = live ? nil : channel; remoteSkips = []; skipLookupNotBefore = .distantPast
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
         bilibiliPart = channel.bilibiliPart

@@ -23,7 +23,10 @@ struct CatalogPlaybackActions: View {
                 }
                 // The players with a settings menu have Skip Intro / Outro there (#1488); a lone switch here, on with no
                 // times set, skipped nothing and looked broken (#1405).
-                if offersSkip { SkipTimesMenuButton(session: session) { showsSkip = true } }
+                if offersSkip {
+                    SkipTimesMenuButton(session: session) { showsSkip = true }
+                    Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(get: { session.looksUpSkipsOnline }, set: { session.looksUpSkipsOnline = $0 }))
+                }
                 if !session.chapters.isEmpty {
                     Menu {
                         ForEach(Array(session.chapters.enumerated()), id: \.offset) { _, chapter in

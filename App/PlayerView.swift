@@ -99,6 +99,7 @@ struct PlaybackView: View {
                                  external: session.externalSubtitles, ownSubtitles: session.hasOwnSubtitles, chooseSubtitle: session.chooseSubtitle, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  skipping: session.canSkip ? session.skipSettings : nil, setSkipping: { session.applySkipSettings($0) },
                                  markSkip: { session.markSkip(intro: $0) },
+                                 onlineSkips: session.looksUpSkipsOnline, setOnlineSkips: { session.looksUpSkipsOnline = $0 },
                                  chapters: session.chapters,
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices, channels: channelChoices,
                                  lines: session.lines.indices.map { L10n.text("Line %@", "\($0 + 1)") }, line: session.line,
@@ -1010,6 +1011,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var skipping: EpisodeSkipSettings? = nil
     var setSkipping: @MainActor (EpisodeSkipSettings) -> Void = { _ in }
     var markSkip: @MainActor (_ intro: Bool) -> Void = { _ in }
+    var onlineSkips = false
+    var setOnlineSkips: @MainActor (Bool) -> Void = { _ in }
     /// The part's chapters (Bilibili's 分段章节): a Chapters tab in the info panel, beside Danmaku.
     var chapters: [PlaybackChapter] = []
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
@@ -1222,7 +1225,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
-        if let skipping, !live { items.append(SkipTimesMenu.make(skipping, set: setSkipping, mark: markSkip)) }
+        if let skipping, !live { items.append(SkipTimesMenu.make(skipping, set: setSkipping, mark: markSkip,
+                                                                                 online: onlineSkips, setOnline: setOnlineSkips)) }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -2509,7 +2513,10 @@ private struct DesktopOptionsMenu: View, Equatable {
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
             // A series' intro and outro (#1488), with the player's other settings.
-            if session.canSkip, !session.isLive { SkipTimesMenuButton(session: session) { showsSkip = true } }
+            if session.canSkip, !session.isLive {
+                SkipTimesMenuButton(session: session) { showsSkip = true }
+                Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: $session.looksUpSkipsOnline)
+            }
             SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
             Toggle(L10n.text("Float on Top"), isOn: $floats)
