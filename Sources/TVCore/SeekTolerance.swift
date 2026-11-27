@@ -28,6 +28,11 @@ public enum SeekTolerance {
         guard seconds.isFinite else { return 0 }
         return min(widest, abs(seconds) / 4)
     }
+
+    /// How early a resume seek may land before its target: up to 10 s for a saved history position (so AVPlayer opens
+    /// straight on the preceding keyframe), or exact (`0`) when handing off mid-playback after repackaging so audio
+    /// already heard isn't repeated (#2032, #1680, #2454).
+    public static func resumeBefore(exact: Bool) -> Double { exact ? 0 : 10 }
 }
 
 /// After a jump, playing again once a few seconds are in, rather than when AVPlayer predicts the download will keep up

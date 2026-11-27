@@ -35,6 +35,9 @@ import IOKit.pwr_mgt
     private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
     @ObservationIgnored private var soughtAhead: Double?
+    /// True when `pendingResume` is an in-session handoff (`repackageSegments`): land on the exact second instead of
+    /// jumping back up to 10 s to a keyframe and repeating audio just heard (#2032, #1680, #2454).
+    @ObservationIgnored private var exactResume = false
     private var restoringPosition = false
     private(set) var restoredPosition: Double?
     private(set) var requestedResumePosition: Double?
@@ -261,6 +264,17 @@ import IOKit.pwr_mgt
         let seconds = player.currentTime().seconds
         let waited = max(0, Date().timeIntervalSince(openedAt) - delay)
         Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", waited))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+    }
+    /// Reveals an audio-only stream once checks confirm there is no video picture waiting to be repackaged.
+    private func revealAudioIfPlaying() {
+        guard !showsPicture, player.timeControlStatus == .playing, let item, player.currentItem === item,
+              pictureReadiness.shouldRevealWithoutFrame(itemReady: item.status == .readyToPlay,
+                                                        playing: true,
+                                                        pendingResume: pendingResume != nil || restoringPosition,
+                                                        checkingPicture: checkingPicture,
+                                                        checkingSegments: checkingSegmentsActive,
+                                                        repackagingSegments: repackagingSegments) else { return }
+        showPicture(delay: 0)
     }
     /// When this episode (or line) began to open: the waiting screen counts from here until the first frame.
     private(set) var openedAt = Date()
@@ -1626,28 +1640,51 @@ import IOKit.pwr_mgt
     /// HEVC track but doesn't show it, and a 4K stream that takes longer than eight seconds to start, both play sound
     /// alone otherwise (#585). Only frames count, watched for a minute so a slow 4K stream isn't given up on.
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
-        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
+        let upstream = LiveRepair.upstream(url) ?? url
+        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(upstream.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
+        let isAdOrRepair = LiveRepair.upstream(url) != nil
+        checkingSegmentsActive = isAdOrRepair || upstream.pathExtension.lowercased() == "m3u8"
+            || ["VOD", "LIVE"].contains(item.accessLog()?.events.last?.playbackType ?? "")
         Task { [weak self] in
             var pictureless = 0
             for _ in 0..<120 {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
+                let playback = item.accessLog()?.events.last?.playbackType ?? ""
+                let playlist = isAdOrRepair || ["VOD", "LIVE"].contains(playback) || upstream.absoluteString.lowercased().contains("m3u8")
+                if playlist { self.checkingSegmentsActive = true }
                 let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
-                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) { return }
+                if self.pictureReadiness.hasFreshFrame || video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) {
+                    self.checkingSegmentsActive = false
+                    self.revealPictureIfReady()
+                    return
+                }
                 // The rate counts frames drawn, so it reads 0 too for a picture nothing draws (a hidden or minimized
                 // window). Only HEVC is listed without being shown; any other listed picture plays, as before #585.
-                if !video.isEmpty, await !Self.mayBeHEVC(video) { return }
+                if !video.isEmpty, await !Self.mayBeHEVC(video) {
+                    guard self.generation == active, self.item === item else { return }
+                    self.checkingSegmentsActive = false
+                    self.revealAudioIfPlaying()
+                    return
+                }
                 guard self.generation == active, self.item === item else { return }
                 // The first frames land a beat after sound starts; four checks without any is no picture.
                 guard self.player.timeControlStatus == .playing else { pictureless = 0; continue }
                 pictureless += 1
                 guard pictureless >= 4 else { continue }
                 // Only a playlist can be repackaged; a plain file mustn't be read whole to find that out.
-                let playback = item.accessLog()?.events.last?.playbackType ?? ""
-                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { continue }
-                self.repackageSegments(item, channel: channel, url: url, generation: active)
+                guard playlist else {
+                    self.checkingSegmentsActive = false
+                    self.revealAudioIfPlaying()
+                    return
+                }
+                self.repackageSegments(item, channel: channel, url: upstream, generation: active)
                 return
+            }
+            if let self, self.generation == active, self.item === item {
+                self.checkingSegmentsActive = false
+                self.revealAudioIfPlaying()
             }
         }
     }
@@ -1667,6 +1704,11 @@ import IOKit.pwr_mgt
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
+        let position = player.currentTime().seconds
+        let wasPlaying = player.rate != 0
+        // Pause and keep the waiting screen up while HLSRemux opens, so sound doesn't play over a blank frame (#2032, #1680, #2454).
+        repackagingSegments = true; checkingSegmentsActive = false
+        player.pause(); loading = true; showsPicture = false; pictureReadiness.reset()
         retrying(via: "segments")
         note(L10n.text("Repackaging the video for this device"))
         Remux.screenCaptured = Self.screenCaptured
@@ -1674,14 +1716,22 @@ import IOKit.pwr_mgt
             var remuxed: URL?
             do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
             catch { if !Task.isCancelled { Diagnostics.shared.record(.info, "player", "hls not repackaged \(Self.describe(error))") } }
-            guard let self, self.generation == active, !Task.isCancelled, self.item === item, let remuxed else {
+            guard let self, self.generation == active, !Task.isCancelled, self.item === item else {
                 if let remuxed { Remux.stop(remuxed) }
                 return
             }
-            let position = self.player.currentTime().seconds
+            guard let remuxed else {
+                self.repackagingSegments = false; self.loading = false
+                if wasPlaying { self.player.play() }
+                self.revealAudioIfPlaying()
+                return
+            }
             // A live stream (no duration) has no place to return to: it opens again at its live edge.
-            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 { self.pendingResume = position }
-            self.loading = true
+            // Use exact tolerance so playback continues where audio paused instead of repeating the last 2 s (#2032, #1680).
+            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 {
+                self.pendingResume = position
+                self.exactResume = true
+            }
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)
             self.externalSubtitles.playing(remuxed)
@@ -2009,7 +2059,7 @@ import IOKit.pwr_mgt
         subtitles.follow(nil)
         mediaTracks.follow(nil)
         subtitleScope = nil
-        historyContext = nil; pendingResume = nil; restoringPosition = false
+        historyContext = nil; pendingResume = nil; restoringPosition = false; exactResume = false
         checkingSegmentsActive = false; repackagingSegments = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
@@ -2064,7 +2114,7 @@ import IOKit.pwr_mgt
         lastHistoryPosition = nil
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
+        restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil; exactResume = false
         subtitleScope = Self.subtitleScope(for: channel)
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
@@ -2097,18 +2147,19 @@ import IOKit.pwr_mgt
         // A live stream (a sports line a source lists as an episode) has no duration, so there is no place to
         // return to. Waiting for one left "loading" on and the player paused for good (#683, #717): play it from its live edge.
         if item.duration.isIndefinite {
-            pendingResume = nil; soughtAhead = nil; loading = false
+            pendingResume = nil; soughtAhead = nil; exactResume = false; loading = false
             revealPictureIfReady()
             if !editingSkip, !recoveryPause.consumeStayPaused() { player.play() }
             return
         }
         guard let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
         let activeGeneration = generation
+        let before = SeekTolerance.resumeBefore(exact: exactResume)
         // The item opened at the saved place (`seekAhead`) and is there: it plays from where it already loaded.
         let ahead = soughtAhead; soughtAhead = nil
         let landed = player.currentTime().seconds
-        if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - 10.5, landed <= target + 0.5 {
-            pendingResume = nil; loading = false
+        if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - (before + 0.5), landed <= target + 0.5 {
+            pendingResume = nil; exactResume = false; loading = false
             restoredPosition = landed
             revealPictureIfReady()
             Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(landed) opened there")
@@ -2119,12 +2170,14 @@ import IOKit.pwr_mgt
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
         note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
         // Up to 10 s early, at the keyframe before the saved place: the player shows it without first reading and
-        // decoding the frames up to the exact second (half a second and more from a cloud drive).
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+        // decoding the frames up to the exact second (half a second and more from a cloud drive). Exact when handing
+        // off from repackaging so audio just heard isn't repeated.
+        let toleranceBefore = before > 0 ? CMTime(seconds: before, preferredTimescale: 600) : .zero
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: toleranceBefore,
                     toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
-                self.restoringPosition = false; self.pendingResume = nil; self.loading = false
+                self.restoringPosition = false; self.pendingResume = nil; self.exactResume = false; self.loading = false
                 guard finished else {
                     self.error = L10n.text("The player could not restore the saved position. Try again.")
                     return
@@ -2143,7 +2196,9 @@ import IOKit.pwr_mgt
     private func seekAhead() {
         guard let target = pendingResume, target.isFinite, target > 0, !Self.oldResume else { return }
         soughtAhead = target
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+        let before = SeekTolerance.resumeBefore(exact: exactResume)
+        let toleranceBefore = before > 0 ? CMTime(seconds: before, preferredTimescale: 600) : .zero
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: toleranceBefore,
                     toleranceAfter: .zero)
     }
 

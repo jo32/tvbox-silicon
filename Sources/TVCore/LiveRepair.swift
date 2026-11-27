@@ -33,7 +33,7 @@ public enum LiveRepair {
     }
 
     /// The playlist on the server behind an address from `address`.
-    static func upstream(_ url: URL) -> URL? {
+    public static func upstream(_ url: URL) -> URL? {
         guard loads(url), var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         components.scheme = url.scheme?.hasSuffix(plainSuffix) == true ? "http" : "https"
         return components.url
