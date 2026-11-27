@@ -1691,7 +1691,7 @@ private struct PlayerLayerView: UIViewRepresentable {
     let gravity: AVLayerVideoGravity
     let pip: PictureInPicture
     var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
-    final class Coordinator {
+    @MainActor final class Coordinator {
         var observation: NSKeyValueObservation?
         var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
         weak var layer: AVPlayerLayer?
