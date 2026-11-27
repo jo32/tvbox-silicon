@@ -70,8 +70,9 @@ struct SitesView: View {
                             }.tvFocusSection()
                         }
                         #else
-                        // The search order and hiding sources are under Edit (#973, #994).
-                        if query.isEmpty, groups.count > 1 { groupChips(groups) }
+                        // The search order and hiding sources are under Edit (#973, #994). The subscription
+                        // chips live in the pinned top bar (#2364), not here: inside this stack they scrolled
+                        // away with the site list, so a long group left no way back to the other subscriptions.
                         // A search finds sources by name; the first row looks for the videos instead (#974).
                         if pick == nil, !query.isEmpty { SearchVideosRow(query: query) }
                         #endif
@@ -120,6 +121,18 @@ struct SitesView: View {
                     // Starting or clearing a search swaps the whole page at once: never as a fade.
                     .transaction(value: query) { $0.animation = nil }
                 }
+                #if !os(tvOS)
+                // The subscription chips stay pinned above the list while it scrolls (#2364): they are the
+                // only way between groups on iPhone, iPad and Mac, and the list below them is long. tvOS
+                // keeps its folds, so it has no chips to pin. Hidden while searching, as they were in the stack.
+                .topBar {
+                    if query.isEmpty, groups.count > 1 {
+                        groupChips(groups)
+                            .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
+                            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
+                    }
+                }
+                #endif
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
@@ -1045,6 +1058,8 @@ struct HideSourcesCard: View {
 struct HiddenSourcesEditor: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Groups folded away, by group id (#2282): a long subscription list no longer has to be scrolled through.
+    @State private var collapsed = Set<String>()
 
     private func isHidden(_ site: Site) -> Bool {
         store.subscription.map { store.hiddenSources.contains(site, origin: $0.origin) } ?? false
@@ -1136,20 +1151,34 @@ struct HiddenSourcesEditor: View {
                 }
                 ForEach(groups) { group in
                     let hidden = group.sites.filter(isHidden)
+                    let folded = collapsed.contains(group.id)
                     Section {
-                        ForEach(group.sites) { site in
-                            let shown = !isHidden(site)
-                            Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
-                                .buttonStyle(.plain)
-                                .accessibilityAddTraits(shown ? [.isSelected] : [])
-                                .accessibilityIdentifier("sources.hidden.row." + site.key)
-                                #if os(iOS)
-                                .listRowBackground(Surface())
-                                #endif
+                        if !folded {
+                            ForEach(group.sites) { site in
+                                let shown = !isHidden(site)
+                                Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityAddTraits(shown ? [.isSelected] : [])
+                                    .accessibilityIdentifier("sources.hidden.row." + site.key)
+                                    #if os(iOS)
+                                    .listRowBackground(Surface())
+                                    #endif
+                            }
                         }
                     } header: {
                         HStack(spacing: 12) {
-                            Text(L10n.text(group.title)).lineLimit(1)
+                            Button {
+                                withAnimation(.smooth) {
+                                    if folded { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: folded ? "chevron.right" : "chevron.down")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    Text(L10n.text(group.title)).lineLimit(1)
+                                }
+                            }
+                            .accessibilityLabel(L10n.text(group.title))
                             Spacer(minLength: 8)
                             Button(L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
                             Button(L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
@@ -3041,6 +3070,13 @@ struct VideoDetailView: View {
         let showsStills = items.count > 1 && (!tmdb.episodeTiles(items).isEmpty || (tmdbPending && items.count <= 60))
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
+        // The episode playing, else the one watched last, so it reads as the current one in the grid (#2572).
+        // As in watchedFlag: watchChannel only exists off tvOS, and only iOS reads it here.
+        #if os(iOS)
+        let currentID = (watchChannel?.historyContext ?? watchHistory?.context)?.episode(in: items)?.id
+        #else
+        let currentID = watchHistory?.context.episode(in: items)?.id
+        #endif
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
             ForEach(shownOrder(items)) { episode in
                 let saved = download(episode)
@@ -3048,18 +3084,18 @@ struct VideoDetailView: View {
                     if showsStills {
                         Button { startRequest { await play(episode) } } label: {
                             TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], detail: episodeDetails[episode.id],
-                                            loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
+                                            current: episode.id == currentID, loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
                         }
                         .tmdbCardButton()
                         .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
                         .accessibilityLabel(episode.name)
                     } else if longNames {
                         EpisodeRow(name: episode.name, label: episodeLabels[episode.id], file: episodeDetails[episode.id],
-                                   loading: loadingEpisode == episode.id, download: saved) {
+                                   current: episode.id == currentID, loading: loadingEpisode == episode.id, download: saved) {
                             startRequest { await play(episode) }
                         }
                     } else {
-                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true,
+                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id || episode.id == currentID, fill: true,
                              subtitle: episodeDetails[episode.id]) { startRequest { await play(episode) } }
                             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
                     }
@@ -3186,7 +3222,9 @@ struct VideoDetailView: View {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
-    /// Where the viewer stopped last time, for Continue.
+    /// Where the viewer stopped last time, for Continue. All history, a hidden source's too: its page is only reached
+    /// on purpose (its own page, a favorite), and there resuming is what the viewer wants. Only Discover, which
+    /// matches across sources by title, keeps to visible history (#2202).
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
     }
@@ -4227,6 +4265,8 @@ struct EpisodeRow: View {
     var label: String? = nil
     /// Resolution and size from the file name (4K · 5.2G), shown in place of the size tag.
     var file: String? = nil
+    /// The episode playing (else the one watched last): read as the current one, like a loading one (#2572).
+    var current = false
     let loading: Bool
     var download: DownloadItem? = nil
     let action: () -> Void
@@ -4259,7 +4299,7 @@ struct EpisodeRow: View {
                     else { Image(systemName: "play.fill").font(.system(size: Self.metrics.icon)).foregroundStyle(hovering ? .primary : .tertiary) }
                 }
                 .frame(width: Self.metrics.icon + 6)
-                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading ? .semibold : .medium))
+                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading || current ? .semibold : .medium))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 8)
                 if let detail = parts.detail {
@@ -4270,7 +4310,7 @@ struct EpisodeRow: View {
             .padding(.horizontal, Self.metrics.inset).frame(minHeight: Self.metrics.height)
             .frame(maxWidth: .infinity, alignment: .leading)
             #if !os(tvOS)
-            .background(Color.primary.opacity(loading ? 0.12 : (hovering ? 0.08 : 0.04)),
+            .background(Color.primary.opacity(loading || current ? 0.12 : (hovering ? 0.08 : 0.04)),
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             #endif
             .contentShape(Rectangle())

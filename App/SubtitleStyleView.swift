@@ -38,7 +38,7 @@ struct SubtitleStyleView: View {
 /// The positions one choice puts a subtitle back to, centred across.
 enum SubtitleSpot: CaseIterable, Hashable {
     case top, middle, bottom
-    var y: Double {
+    private var y: Double {
         switch self {
         case .top: SubtitleStyle.top
         case .middle: SubtitleStyle.middle
@@ -56,20 +56,25 @@ enum SubtitleSpot: CaseIterable, Hashable {
     static func of(_ style: SubtitleStyle) -> SubtitleSpot? {
         allCases.first { abs(style.x - 0.5) < 0.001 && abs(style.y - $0.y) < 0.001 }
     }
+
+    func apply(to style: inout SubtitleStyle) {
+        style.place(at: CGPoint(x: 0.5, y: y))
+    }
 }
 
 extension SubtitleStyle {
     var positionTitle: String { SubtitleSpot.of(self)?.title ?? L10n.text("Custom") }
     /// The size as a share of the standard one: 100% is the standard size.
-    var sizeTitle: String { (size / SubtitleStyle().size).formatted(.percent.precision(.fractionLength(0))) }
+    var sizeTitle: String { relativeSize.formatted(.percent.precision(.fractionLength(0))) }
     /// Moved by `dx` and `dy` (fractions of the picture) and kept on the picture. A drag `snaps` to the centre line
     /// when it comes close; the remote's steps land on it by themselves.
     func moved(dx: Double, dy: Double, from start: SubtitleStyle, snaps: Bool = true) -> SubtitleStyle {
+        guard dx != 0 || dy != 0 else { return start }
         var moved = self
-        moved.x = start.x + dx
-        moved.y = start.y + dy
-        if snaps, abs(moved.x - 0.5) < 0.025 { moved.x = 0.5 }
-        if !snaps { moved.x = (moved.x * 1000).rounded() / 1000; moved.y = (moved.y * 1000).rounded() / 1000 }
+        var x = start.x + dx, y = start.y + dy
+        if snaps, abs(x - 0.5) < 0.025 { x = 0.5 }
+        if !snaps { x = (x * 1000).rounded() / 1000; y = (y * 1000).rounded() / 1000 }
+        moved.place(at: CGPoint(x: x, y: y))
         return moved.clamped
     }
 }
@@ -209,7 +214,7 @@ private struct FormSubtitleStylePage: View {
             Group {
                 Section {
                     Picker(L10n.text("Position"), selection: Binding(get: { SubtitleSpot.of(style) },
-                                                                  set: { if let spot = $0 { style.x = 0.5; style.y = spot.y } })) {
+                                                                  set: { if let spot = $0 { spot.apply(to: &style) } })) {
                         ForEach(SubtitleSpot.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
                     }
                     .pickerStyle(.segmented)
@@ -217,7 +222,10 @@ private struct FormSubtitleStylePage: View {
                 } header: {
                     Text(L10n.text("Position"))
                 } footer: {
-                    Text(L10n.text("Drag the subtitle on the picture to put it anywhere. It snaps to the center line."))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.text("Drag the subtitle on the picture to put it anywhere. It snaps to the center line."))
+                        Text(L10n.text("PGS bitmap subtitles use this size and position."))
+                    }
                 }
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -391,12 +399,15 @@ private struct TVSubtitleStylePage: View {
                                       footer: L10n.text("Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select.")) {
                         TVSettingsAction(title: L10n.text("Position"), value: style.positionTitle) {
                             let spots = SubtitleSpot.allCases
-                            let next = SubtitleSpot.of(style).flatMap { spots.firstIndex(of: $0) }.map { spots[($0 + 1) % spots.count] } ?? .bottom
-                            style.x = 0.5; style.y = next.y
+                            // From the default, the first press picks Bottom on purpose (PGS then follows it too);
+                            // after that it steps through the spots as before.
+                            let next = style.followsSourcePosition ? .bottom
+                                : (SubtitleSpot.of(style).flatMap { spots.firstIndex(of: $0) }.map { spots[($0 + 1) % spots.count] } ?? .top)
+                            next.apply(to: &style)
                         }
                         TVSettingsAction(title: L10n.text("Adjust Position")) { positioning = true }
                     }
-                    TVSettingsSection(title: L10n.text("Text")) {
+                    TVSettingsSection(title: L10n.text("Text"), footer: L10n.text("PGS bitmap subtitles use this size and position.")) {
                         TVSettingsAction(title: L10n.text("Size"), value: style.sizeTitle) {
                             style.size = Self.sizes.first { $0 > style.size + 0.01 } ?? Self.sizes[0]
                         }

@@ -94,6 +94,10 @@ struct MobilePlayerView: View {
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     /// Off, as it starts (#1745): two taps anywhere play or pause, and the sides don't skip.
     @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = PictureDoubleTap.standard
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    /// Two taps on a side skip right now: the setting is on, and the picture takes taps (not cast, not floating,
+    /// and not under VoiceOver, which can't reach the tap zones).
+    private var tapsSkip: Bool { doubleTapSkips && playingOn == nil && !pip.active && !voiceOver }
     /// The lock button's edge (#1922), the tags over the seek bar (#1534) and Picture in Picture (#1731), from Settings.
     @AppStorage(LockButtonSide.key) private var lockSide = LockButtonSide.left.rawValue
     @AppStorage(PlaybackTags.key) private var showsTags = true
@@ -975,9 +979,11 @@ struct MobilePlayerView: View {
 
     // MARK: Middle and bottom
 
+    /// The middle row: play/pause, with skip buttons beside it — unless two taps on a side already skip (#2061),
+    /// in which case the buttons would only duplicate the gesture.
     private var centerRow: some View {
         HStack(spacing: 20) {
-            if seekable && !inline {
+            if seekable && !inline && !tapsSkip {
                 let step = SkipInterval.seconds(skipInterval)
                 Button { session.skip(-step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: false, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))
@@ -990,7 +996,7 @@ struct MobilePlayerView: View {
                 .buttonStyle(PlayerCircleStyle(size: inline ? 50 : 68))
                 .accessibilityLabel(L10n.text(session.paused ? "Play" : "Pause"))
                 .accessibilityIdentifier("player.playPause")
-            if seekable && !inline {
+            if seekable && !inline && !tapsSkip {
                 let step = SkipInterval.seconds(skipInterval)
                 Button { session.skip(step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: true, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))

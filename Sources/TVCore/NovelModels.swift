@@ -131,10 +131,26 @@ public struct NovelBook: Codable, Hashable, Sendable, Identifiable {
 
     /// The same title by the same author, whichever source lists it: how search merges results. An audiobook is
     /// another book than the text of the same title, on the shelf too.
-    public var match: String { Self.normalized(name) + "|" + Self.normalized(author) + (isAudio ? "|audio" : "") }
+    public var match: String { Self.normalized(name) + "|" + Self.normalizedAuthor(author) + (isAudio ? "|audio" : "") }
+
+    /// The same book from another source, even when the sources spell the author differently or one leaves it out
+    /// (#2308, #2315): the same title (an audiobook apart), and authors that agree — or one side has none.
+    public func sameBook(as other: NovelBook) -> Bool {
+        guard isAudio == other.isAudio, Self.normalized(name) == Self.normalized(other.name) else { return false }
+        let mine = Self.normalizedAuthor(author), theirs = Self.normalizedAuthor(other.author)
+        return mine == theirs || mine.isEmpty || theirs.isEmpty
+    }
 
     static func normalized(_ text: String) -> String {
         text.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation && !$0.isSymbol }
+    }
+
+    /// An author as sources spell it: "作者：张三", "张三著" and "张三" are the same person (#2308).
+    static func normalizedAuthor(_ text: String) -> String {
+        var author = normalized(text)
+        if author.hasPrefix("作者") { author = String(author.dropFirst(2)) }
+        for suffix in ["编著", "著者", "原著", "著"] where author.hasSuffix(suffix) { author = String(author.dropLast(suffix.count)); break }
+        return author
     }
 }
 

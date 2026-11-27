@@ -90,6 +90,24 @@ private func document(_ origin: String, sites: [(key: String, api: String)]) thr
     #expect(renamed.origin(or: first.origin) == second.origin)
 }
 
+@Test func telegramChannelsGetTheirOwnGroupBelowRecommended() {
+    let channel = TelegramSource.subscription("RMDJ33", origin: URL(string: "https://t.me/RMDJ33")!).sites[0]
+    var driveRaw: [String: JSONValue] = ["key": .string("drive"), "searchable": .number(1)]
+    driveRaw["yingxia"] = .object(["builtin": .bool(true)])
+    let drive = Site(key: "drive", name: "drive", type: 1, api: "https://api.example/drive", raw: driveRaw)
+    let groups = SourceGroups.make(entries: [], documents: [:], builtIns: [channel, drive], builtInOrigin: URL(string: "https://t.me/RMDJ33")!,
+                                   mergedSites: [channel, drive], pinOrder: [], userHidden: { _ in false }, includeHidden: false, jarURL: nil)
+    // The channel leaves Recommended for a group of its own, below it.
+    #expect(groups.map(\.id) == ["builtIn", "telegram"])
+    #expect(groups[0].title == "Recommended")
+    #expect(groups[0].sites.map(\.key) == ["drive"])
+    #expect(groups[1].title == "Telegram")
+    #expect(groups[1].sites.map(\.key) == ["builtin.telegram.rmdj33"])
+    // The home row keeps that order: Recommended, then the Telegram group.
+    let row = SourceGroups.homeRow(pinned: [], builtIn: [drive], groups: groups)
+    #expect(row.map(\.key) == ["drive", "builtin.telegram.rmdj33"])
+}
+
 @Test func homeRowKeepsPinsAndBuiltInsThenFollowsTheDirectory() {
     let pin = source("pin")
     let firstBuiltIn = source("built-a")

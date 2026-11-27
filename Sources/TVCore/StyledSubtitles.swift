@@ -27,6 +27,29 @@ public struct StyledSubtitleFrame: @unchecked Sendable, Equatable {
         let width = size.width * scale, height = size.height * scale
         return CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height)
     }
+
+    /// Position all objects in a PGS display set together. Both axes use the same scale, even in a cropped video.
+    public func pgsImageRect(in picture: CGRect, visible: CGRect, style: SubtitleStyle) -> CGRect {
+        let area = picture.intersection(visible)
+        guard !area.isEmpty, !rect.isEmpty, size.width > 0, size.height > 0 else { return .zero }
+        let canvas = canvasRect(in: picture, visible: visible)
+        let authored = canvas.width / size.width
+        let style = style.clamped
+        let factor = min(authored * style.relativeSize, area.width / rect.width, area.height / rect.height)
+        let width = min(area.width, rect.width * factor), height = min(area.height, rect.height * factor)
+        let x: CGFloat, y: CGFloat
+        if style.followsSourcePosition {
+            x = canvas.minX + rect.midX * authored - width / 2
+            y = canvas.minY + rect.midY * authored - height / 2
+        } else {
+            // Match the text overlay: centre across, grow upwards near the bottom and downwards near the top.
+            x = area.minX + area.width * style.x - width / 2
+            y = area.minY + (area.height - height) * style.y
+        }
+        return CGRect(x: min(max(area.minX, x), area.maxX - width),
+                      y: min(max(area.minY, y), area.maxY - height), width: width, height: height)
+    }
+
     public static func == (lhs: StyledSubtitleFrame, rhs: StyledSubtitleFrame) -> Bool {
         lhs.image === rhs.image && lhs.rect == rhs.rect && lhs.size == rhs.size && lhs.fitsCanvas == rhs.fitsCanvas
     }

@@ -70,7 +70,7 @@ struct MusicUpNext: View {
         let queue = music.queue
         let upcoming = queue.map { queue in Array(queue.tracks.enumerated()).filter { $0.offset > queue.index } } ?? []
         VStack(alignment: .leading, spacing: 0) {
-            header(music)
+            header(music, upcoming: upcoming.count)
             if upcoming.isEmpty {
                 EmptyResults(symbol: "list.bullet", title: L10n.text("Nothing Up Next"),
                              message: L10n.text("Play a song from search results, an album or a playlist, and the songs after it play next."), fills: true)
@@ -80,10 +80,12 @@ struct MusicUpNext: View {
         }
     }
 
-    /// "Up Next" with Shuffle and Repeat beside it, as in Music (#1281). Repeat One applies even to a single song.
-    private func header(_ music: MusicPlaybackSession) -> some View {
+    /// "Up Next" with its count and Shuffle and Repeat beside it, as in Music (#1281). Repeat One applies even to a single song.
+    private func header(_ music: MusicPlaybackSession, upcoming: Int) -> some View {
     HStack(spacing: 10) {
         Text(L10n.text("Up Next")).font(.headline)
+        // How many songs are still to come, so a long queue reads at a glance (#1898).
+        if upcoming > 0 { Text("\(upcoming)").font(.headline).monospacedDigit().foregroundStyle(.secondary) }
         Spacer()
         mode("shuffle", label: L10n.text("Shuffle"), on: music.shuffled) { music.toggleShuffle() }
             .disabled((music.queue?.tracks.count ?? 0) < 2)
