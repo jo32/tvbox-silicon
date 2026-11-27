@@ -738,6 +738,8 @@ import IOKit.pwr_mgt
                             return
                         }
                         if position > 0 { self.pendingResume = position }
+                        // A renewed source can add or replace native markers for this same episode.
+                        self.sourceSkips = reopened.skips; self.skipOffer = nil
                         self.playing = reopened; self.automatic = prepared.url
                         self.configure(reopened, url: prepared.url, generation: active)
                         return
