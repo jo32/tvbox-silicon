@@ -718,6 +718,7 @@
 "Not loaded yet" = "まだ読み込まれていません";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "このアドレスには %lld 件の配信設定があります。オフの状態で追加しました。使いたいものをオンにしてください。";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld 件の配信設定を更新できませんでした。前回のデータを引き続き使用します。";
+"%@ could not be refreshed; its last copy stays in use." = "%@ を更新できませんでした。前回のデータを引き続き使用します。";
 "Responding normally" = "正常に応答しています";
 "Slow or unreliable lately" = "最近遅いか不安定です";
 "Failing; skipped in search for now" = "失敗が続いているため、しばらく検索しません";

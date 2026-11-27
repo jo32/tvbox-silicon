@@ -719,6 +719,7 @@
 "Not loaded yet" = "Not loaded yet";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "This address lists %lld subscriptions. They were added switched off; turn on the ones you want.";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld subscriptions could not be refreshed; their last copies stay in use.";
+"%@ could not be refreshed; its last copy stays in use." = "%@ could not be refreshed; its last copy stays in use.";
 "Responding normally" = "Responding normally";
 "Slow or unreliable lately" = "Slow or unreliable lately";
 "Failing; skipped in search for now" = "Failing; skipped in search for now";

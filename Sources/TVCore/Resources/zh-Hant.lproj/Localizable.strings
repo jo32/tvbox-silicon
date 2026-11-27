@@ -718,6 +718,7 @@
 "Not loaded yet" = "尚未載入";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "此位址包含 %lld 個訂閱，已全部新增並處於關閉狀態；請開啟你想使用的訂閱。";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld 個訂閱更新失敗，將繼續使用上次的副本。";
+"%@ could not be refreshed; its last copy stays in use." = "%@ 更新失敗，將繼續使用上次的副本。";
 "Responding normally" = "回應正常";
 "Slow or unreliable lately" = "最近較慢或不穩定";
 "Failing; skipped in search for now" = "連續失敗，暫時不參與搜尋";

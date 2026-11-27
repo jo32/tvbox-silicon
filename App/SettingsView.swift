@@ -669,6 +669,13 @@ struct FormSettingsView: View {
                     // press or a right click on the Mac. Not a swipe: these rows wear the app's own fill, which a
                     // swipe leaves behind as a square slab while the row slides out of its rounded card.
                     .contextMenu {
+                        // One list changed upstream; no need to Refresh All and wait for the rest (#2198).
+                        Button {
+                            Task { await store.refreshSubscription(entry) }
+                        } label: {
+                            Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
+                        }
+                        .disabled(store.importing)
                         // On or off without opening the subscription (#730).
                         Button {
                             Task { await store.setSubscription(entry, enabled: !entry.enabled) }
@@ -2163,6 +2170,13 @@ struct SubscriptionDetailView: View {
                 }
             }
             Section {
+                // Reload this list alone, keeping the others' copies (#2198).
+                Button {
+                    Task { await store.refreshSubscription(current) }
+                } label: {
+                    Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
+                }
+                .disabled(store.importing || !current.enabled)
                 Button(L10n.text("Remove"), role: .destructive) { confirmsRemoval = true }
             }
         }.settingsRows() }
@@ -3156,6 +3170,9 @@ struct TVSubscriptionPage: View {
                     }))
                     .disabled(store.importing)
                 }
+                // Reload this list alone, keeping the others' copies (#2198).
+                TVSettingsAction(title: L10n.text("Refresh"), busy: store.importing) { Task { await store.refreshSubscription(current) } }
+                    .disabled(store.importing || !current.enabled)
             }
             if store.subscriptions.count > 1 {
                 TVSettingsSection(title: L10n.text("Order")) {
