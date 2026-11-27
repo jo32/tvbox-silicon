@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.33",
+          "buildVersion": "71",
+          "date": "2026-11-28",
+          "localizedDescription": "• 在线查找片头片尾时间\n• 更整洁的 iPhone 和 iPad 播放器\n• 播放更能自我恢复\n• 记住音轨语言\n• 画中画修复\n• 更多设置\n• 音乐、小说和网盘\n• 其他修复\n\n• Intro and outro times found online\n• A tidier iPhone and iPad player\n• Playback that recovers\n• Audio language remembered\n• Picture in Picture fixes\n• More settings\n• Music, novels and cloud files\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.33/Yingxia-1.8.33-ios.ipa",
+          "size": 187331317,
+          "sha256": "e54d75b14ff2d380edd4cb4afc5b1b28b167ecb3dec96d160d24f33e5f5ed8d4",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.32",
           "buildVersion": "70",
           "date": "2026-11-27",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-ios.ipa",
           "size": 185759887,
           "sha256": "0b2791b65e51a3cf696808f626fa170ef928731a76ef8d81e0798f28f2ae2c98",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.28",
-          "buildVersion": "66",
-          "date": "2026-11-22",
-          "localizedDescription": "• 画中画里继续看\n• 播放更顺，手机更凉\n• 跳过片头片尾，一找就到\n• 家里每个人都有自己的用户\n• 投屏到电视\n• 网盘影片以海报显示\n• 小说随心读，还能听书\n• 弹幕随你调\n• 漫画双页，音乐不断\n• 其他修复\n\n• Keep watching in Picture in Picture\n• Smoother, cooler playback\n• Skip intro and outro, easy to find\n• Profiles for everyone at home\n• Cast to your TV\n• Posters for your drive's films\n• Novels your way, and audiobooks\n• Danmaku your way\n• Manga spreads, music that keeps going\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.28/Yingxia-1.8.28-ios.ipa",
-          "size": 185712074,
-          "sha256": "3fef22ae1bdcb1ba1209c8aa5d6f4c11dada494775647e3759304807667f3782",
           "minOSVersion": "17.0"
         }
       ],
