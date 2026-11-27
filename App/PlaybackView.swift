@@ -74,7 +74,27 @@ import IOKit.pwr_mgt
             UserDefaults.standard.set(looksUpSkipsOnline, forKey: PlaybackSkipLookup.enabledKey)
             skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
             skipLookupStarted = false; remoteSkips = []; skipLookupNotBefore = .distantPast
+            onlineSkipStatus = looksUpSkipsOnline ? .waiting : .off
+            lookUpSkipsOnlineNow()
         }
+    }
+    /// Where the online lookup for this episode stands, for the Skip intro / outro sheet.
+    enum OnlineSkipStatus: Equatable {
+        /// Switched off, or nothing playing to look up.
+        case off
+        /// Switched on; starts once the episode's length is known.
+        case waiting
+        /// The video has no TMDB title (yet), so there is nothing to ask the services.
+        case unmatched
+        case looking
+        /// What the services had: empty when none had times for this episode.
+        case found([PlaybackSkip])
+    }
+    private(set) var onlineSkipStatus = OnlineSkipStatus.off
+    /// Looks the playing episode up now, not at its next time sample: the sheet holds samples back while it is open.
+    func lookUpSkipsOnlineNow() {
+        skipLookupNotBefore = .distantPast
+        loadRemoteSkipsIfNeeded(duration: duration)
     }
     /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
     /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
@@ -155,9 +175,12 @@ import IOKit.pwr_mgt
     /// Once the playing item's duration is known, ask all three marker services without delaying playback.
     private func loadRemoteSkipsIfNeeded(duration: Double) {
         guard !skipLookupStarted, looksUpSkipsOnline, Date() >= skipLookupNotBefore, duration.isFinite, duration > 0,
-              TMDBMatch.enabled, let channel = skipChannel else { return }
+              let channel = skipChannel else { return }
+        // With TMDB matching off nothing names the title for the services.
+        guard TMDBMatch.enabled else { onlineSkipStatus = .unmatched; return }
         skipLookupStarted = true
-        guard let key = skipMatchKey?(channel) else { return }
+        guard let key = skipMatchKey?(channel) else { onlineSkipStatus = .unmatched; return }
+        onlineSkipStatus = .looking
         let episodeName = channel.historyContext?.episodeName ?? channel.name
         let revision = skipLookupRevision
         skipLookup = Task { [weak self] in
@@ -167,7 +190,9 @@ import IOKit.pwr_mgt
             guard let match = PlaybackSkipLookup.Media.match(answer: answer, choice: choice) else {
                 // The video page may still be identifying a title when playback starts. Retry the local cache
                 // on a later sample, without starting another identification request or repeating a known refusal.
-                if choice == nil, answer == nil, let self, self.skipLookupRevision == revision {
+                guard let self, self.skipLookupRevision == revision else { return }
+                self.onlineSkipStatus = .unmatched
+                if choice == nil, answer == nil {
                     self.skipLookupStarted = false
                     self.skipLookup = nil
                     self.skipLookupNotBefore = Date().addingTimeInterval(30)
@@ -185,10 +210,20 @@ import IOKit.pwr_mgt
                     details = fresh
                 }
             }
-            guard !Task.isCancelled, let media = PlaybackSkipLookup.Media(match: match, details: details, episodeName: episodeName, duration: duration) else { return }
+            guard !Task.isCancelled else { return }
+            guard let media = PlaybackSkipLookup.Media(match: match, details: details, episodeName: episodeName, duration: duration) else {
+                // A title without a season and episode the services can name.
+                if let self, self.skipLookupRevision == revision { self.onlineSkipStatus = .unmatched }
+                return
+            }
             for await skips in PlaybackSkipLookup.lookup(media) {
                 guard let self, self.skipLookupRevision == revision, !Task.isCancelled else { return }
                 self.remoteSkips = skips
+                self.onlineSkipStatus = .found(skips)
+            }
+            // The stream ends when every service answered or the deadline passed.
+            if let self, self.skipLookupRevision == revision, !Task.isCancelled, self.onlineSkipStatus == .looking {
+                self.onlineSkipStatus = .found([])
             }
         }
     }
@@ -2214,7 +2249,7 @@ import IOKit.pwr_mgt
         skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
         skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
-        skipLookupStarted = false; skipChannel = nil; remoteSkips = []; skipLookupNotBefore = .distantPast
+        skipLookupStarted = false; skipChannel = nil; remoteSkips = []; skipLookupNotBefore = .distantPast; onlineSkipStatus = .off
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
         onPlaybackEnded = nil; onUnplayableFile = nil; onFallbackLine = nil
         if player.currentItem != nil {
@@ -2281,9 +2316,12 @@ import IOKit.pwr_mgt
         if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
-        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        // Before the old lookup is cancelled: a change here can't start one for the episode that is ending.
+        skipChannel = nil
         looksUpSkipsOnline = PlaybackSkipLookup.enabled
+        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
         skipLookupStarted = false; skipChannel = live ? nil : channel; remoteSkips = []; skipLookupNotBefore = .distantPast
+        onlineSkipStatus = looksUpSkipsOnline && !live ? .waiting : .off
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
         bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0

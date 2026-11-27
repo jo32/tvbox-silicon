@@ -22,8 +22,6 @@ struct EpisodeSkipSettingsView: View {
     @State private var enabled = false
     @State private var intro = ""
     @State private var outro = ""
-    /// The online intro and outro switch (#2653), for a video; saved with the rest.
-    @State private var online = false
     private var video: PlaybackSession? { book ? nil : session as? PlaybackSession }
 
     private var draft: EpisodeSkipSettings? {
@@ -56,11 +54,22 @@ struct EpisodeSkipSettingsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                if video != nil {
+                if let video {
                     Section {
-                        Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: $online)
+                        // At once, not on Save: the lookup's answer shows here while the sheet is open.
+                        Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(
+                            get: { video.looksUpSkipsOnline }, set: { video.looksUpSkipsOnline = $0 }))
                             .settingsSwitch()
                             .accessibilityIdentifier("player.skip.online")
+                        OnlineSkipResult(status: video.onlineSkipStatus, duration: session.skipDuration) { skips in
+                            if let intro = skips.first(where: { $0.kind == .intro }), intro.start < 1 {
+                                self.intro = EpisodeSkipSettings.formatTime(intro.end)
+                            }
+                            if let outro = skips.first(where: { $0.kind == .outro }), outro.end > session.skipDuration - 1 {
+                                self.outro = EpisodeSkipSettings.formatTime(outro.start)
+                            }
+                            enabled = true
+                        }
                     } footer: {
                         Text(L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves."))
                     }
@@ -95,7 +104,7 @@ struct EpisodeSkipSettingsView: View {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("Save")) {
-                        if let draft { session.applySkipSettings(draft); video?.looksUpSkipsOnline = online; dismiss() }
+                        if let draft { session.applySkipSettings(draft); dismiss() }
                     }
                     .disabled(draft == nil || (enabled && issue != nil))
                     .accessibilityIdentifier("player.skip.save")
@@ -106,7 +115,7 @@ struct EpisodeSkipSettingsView: View {
             session.beginEditingSkip()
             let value = session.skipSettings
             enabled = value.enabled
-            online = video?.looksUpSkipsOnline ?? false
+            video?.lookUpSkipsOnlineNow()
             intro = value.introEnd > 0 ? EpisodeSkipSettings.formatTime(value.introEnd) : ""
             outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(max(0, session.skipDuration - value.outroLength)) : ""
         }
@@ -132,6 +141,39 @@ struct EpisodeSkipSettingsView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             #endif
+    }
+}
+
+/// What the online lookup found for the playing episode (#2653), under its switch in the sheet.
+private struct OnlineSkipResult: View {
+    let status: PlaybackSession.OnlineSkipStatus
+    let duration: Double
+    /// Copies the times into the viewer's own, which skip by themselves.
+    let use: ([PlaybackSkip]) -> Void
+
+    var body: some View {
+        switch status {
+        case .off: EmptyView()
+        case .waiting, .looking:
+            HStack(spacing: 8) { ProgressView(); Text(L10n.text("Searching…")).foregroundStyle(.secondary) }
+        case .unmatched:
+            Text(L10n.text("This video isn't matched to a TMDB title, so there is nothing to look up."))
+                .font(.footnote).foregroundStyle(.secondary)
+        case .found(let skips) where skips.isEmpty:
+            Text(L10n.text("No intro or outro times found for this episode.")).font(.footnote).foregroundStyle(.secondary)
+        case .found(let skips):
+            ForEach(skips, id: \.self) { skip in
+                LabeledContent(skip.kind == .intro ? L10n.text("Intro") : L10n.text("Outro"),
+                               value: EpisodeSkipSettings.formatTime(skip.start) + " – " + EpisodeSkipSettings.formatTime(skip.end))
+                    .monospacedDigit()
+            }
+            // Only times that run from the start or to the end fit the viewer's own, which are an intro's end and an
+            // outro's length.
+            if skips.contains(where: { $0.kind == .intro && $0.start < 1 }) || skips.contains(where: { $0.kind == .outro && $0.end > duration - 1 }) {
+                Button(L10n.text("Use These Times")) { use(skips) }
+                    .accessibilityIdentifier("player.skip.useOnline")
+            }
+        }
     }
 }
 

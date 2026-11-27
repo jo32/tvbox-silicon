@@ -2451,3 +2451,10 @@
 // Online intro and outro times, opt-in (#2653).
 "Look Up Intro and Outro Times Online" = "在線查找片頭片尾時間";
 "Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves." = "在 TheIntroDB、IntroDB 和 TheOtherDB 中查找劇集或電影的片頭片尾時間，這些服務會因此得知你在播放什麼。它們的時間只顯示「跳過」按鈕，不會自動跳過。";
+
+// What the online intro and outro lookup found (#2653).
+"This video isn't matched to a TMDB title, so there is nothing to look up." = "這個影片沒有匹配到 TMDB 作品，所以無法查找。";
+"No intro or outro times found for this episode." = "沒有找到這一集的片頭片尾時間。";
+"Intro" = "片頭";
+"Outro" = "片尾";
+"Use These Times" = "使用這些時間";

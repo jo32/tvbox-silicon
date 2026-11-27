@@ -2451,3 +2451,10 @@
 // Online intro and outro times, opt-in (#2653).
 "Look Up Intro and Outro Times Online" = "Look Up Intro and Outro Times Online";
 "Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves." = "Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves.";
+
+// What the online intro and outro lookup found (#2653).
+"This video isn't matched to a TMDB title, so there is nothing to look up." = "This video isn't matched to a TMDB title, so there is nothing to look up.";
+"No intro or outro times found for this episode." = "No intro or outro times found for this episode.";
+"Intro" = "Intro";
+"Outro" = "Outro";
+"Use These Times" = "Use These Times";

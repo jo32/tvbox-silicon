@@ -2451,3 +2451,10 @@
 // Online intro and outro times, opt-in (#2653).
 "Look Up Intro and Outro Times Online" = "オープニングとエンディングの時間をオンラインで調べる";
 "Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves." = "ドラマのエピソードや映画のオープニングとエンディングの時間を TheIntroDB、IntroDB、TheOtherDB で調べます。これらのサービスには再生中の作品が伝わります。その時間では「スキップ」ボタンが表示されるだけで、自動ではスキップしません。";
+
+// What the online intro and outro lookup found (#2653).
+"This video isn't matched to a TMDB title, so there is nothing to look up." = "この動画は TMDB の作品と紐づいていないため、調べられません。";
+"No intro or outro times found for this episode." = "このエピソードのオープニングとエンディングの時間は見つかりませんでした。";
+"Intro" = "オープニング";
+"Outro" = "エンディング";
+"Use These Times" = "この時間を使う";
