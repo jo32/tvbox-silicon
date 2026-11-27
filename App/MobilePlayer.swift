@@ -844,8 +844,6 @@ struct MobilePlayerView: View {
                 .accessibilityLabel(L10n.text("Picture in Picture"))
                 .accessibilityIdentifier("player.pip")
             }
-            // On a watch page the episodes are on the page itself.
-            if !inline { CatalogPlaybackActions(channel: channel, session: session) }
             Menu {
                 Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
                 Button { showsDanmakuSettings = true } label: { Label(L10n.text("Danmaku Settings…"), systemImage: "slider.horizontal.3") }
@@ -886,6 +884,8 @@ struct MobilePlayerView: View {
     /// The picture, sound and subtitle settings in one menu: what AVKit's ⋯ menu held, and the stream's quality.
     private var optionsMenu: some View {
         Menu {
+            // What the catalog's own ⋯ menu held, one button fewer (on a watch page the page has them).
+            if !inline { Section { CatalogPlaybackItems(channel: channel, session: session) } }
             if session.qualities.count > 1 { Menu(L10n.text("Quality")) { QualityPicker(session: session) } }
             if pictureSwitches {
                 Section(L10n.text("Picture")) {
@@ -967,7 +967,6 @@ struct MobilePlayerView: View {
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
         }
         .chromeButton()
-        // "Playback Options" is the catalog's episode menu beside it.
         .accessibilityLabel(L10n.text("Settings"))
         .accessibilityIdentifier("player.options")
     }

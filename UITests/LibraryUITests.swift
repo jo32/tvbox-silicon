@@ -67,7 +67,7 @@ final class LibraryUITests: XCTestCase {
     }
     @MainActor private func options(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.3)).tap()
-        app.buttons["player.catalogOptions"].tap()
+        app.buttons["player.options"].tap()
     }
     @MainActor private func close(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.3)).tap()
