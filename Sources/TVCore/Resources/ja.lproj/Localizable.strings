@@ -2457,4 +2457,4 @@
 "No intro or outro times found for this episode." = "このエピソードのオープニングとエンディングの時間は見つかりませんでした。";
 "Intro" = "オープニング";
 "Outro" = "エンディング";
-"Use These Times" = "この時間を使う";
+"Found online in %@. You can change it." = "%@ で見つけた時間です。変更できます。";

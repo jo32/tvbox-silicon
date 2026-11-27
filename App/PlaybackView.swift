@@ -87,8 +87,8 @@ import IOKit.pwr_mgt
         /// The video has no TMDB title (yet), so there is nothing to ask the services.
         case unmatched
         case looking
-        /// What the services had: empty when none had times for this episode.
-        case found([PlaybackSkip])
+        /// What the services had: no skips when none had times for this episode.
+        case found(PlaybackSkipLookup.Snapshot)
     }
     private(set) var onlineSkipStatus = OnlineSkipStatus.off
     /// Looks the playing episode up now, not at its next time sample: the sheet holds samples back while it is open.
@@ -216,14 +216,14 @@ import IOKit.pwr_mgt
                 if let self, self.skipLookupRevision == revision { self.onlineSkipStatus = .unmatched }
                 return
             }
-            for await skips in PlaybackSkipLookup.lookup(media) {
+            for await snapshot in PlaybackSkipLookup.lookup(media) {
                 guard let self, self.skipLookupRevision == revision, !Task.isCancelled else { return }
-                self.remoteSkips = skips
-                self.onlineSkipStatus = .found(skips)
+                self.remoteSkips = snapshot.skips
+                self.onlineSkipStatus = .found(snapshot)
             }
             // The stream ends when every service answered or the deadline passed.
             if let self, self.skipLookupRevision == revision, !Task.isCancelled, self.onlineSkipStatus == .looking {
-                self.onlineSkipStatus = .found([])
+                self.onlineSkipStatus = .found(PlaybackSkipLookup.Snapshot())
             }
         }
     }
