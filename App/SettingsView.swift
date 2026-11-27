@@ -690,6 +690,11 @@ struct FormSettingsView: View {
                     }
                     .settingsAnchor(.subscription(entry.address))
                 }
+                // Right under the list it removes from, with the other subscription actions (#2563).
+                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
+                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+                    .settingsAnchor(.removeSubscriptions)
+                }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
                 if store.subscription != nil {
@@ -737,10 +742,6 @@ struct FormSettingsView: View {
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
                     .settingsAnchor(.arrangeSubscriptions)
-                }
-                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
-                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
-                    .settingsAnchor(.removeSubscriptions)
                 }
                 #if !os(iOS)
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
