@@ -6,17 +6,26 @@ import Foundation
 /// episodes are the video it carries, the episode-range links into its comment thread
 /// (short-drama channels post one range per comment), and any external "main line" link;
 /// playback resolves a comment or embed page to its direct video address when the public
-/// page carries one, and otherwise hands the page to the usual web detection. Private
-/// channels and invite links have no public preview and are not accepted.
+/// page carries one, and otherwise hands the page to the usual web detection. Only public
+/// channels work: the preview is all this source reads. Some public channels show nothing
+/// in it — their posts stay inside the Telegram app — so a channel whose preview comes back
+/// empty says so instead of listing nothing, and a Telegram address that names no public
+/// channel (an invite link, a private channel, a user) is refused when it is added.
 public enum TelegramSource {
     static let keyPrefix = "builtin.telegram."
     static let api = "csp_YingxiaTelegram"
+
+    /// Whether an address is on Telegram at all: `t.me`, `telegram.me`, `telegram.dog` or `www.t.me`.
+    static func isTelegramHost(_ url: URL) -> Bool {
+        guard let host = url.host()?.lowercased() else { return false }
+        return ["t.me", "telegram.me", "telegram.dog", "www.t.me"].contains(host)
+    }
 
     /// The public channel a Telegram address names: `t.me/<channel>`, its preview
     /// `t.me/s/<channel>`, or a post in it. Invite links (`t.me/+…`, `t.me/joinchat/…`)
     /// and private channels (`t.me/c/…`) name none.
     public static func channel(_ url: URL) -> String? {
-        guard let host = url.host()?.lowercased(), ["t.me", "telegram.me", "telegram.dog", "www.t.me"].contains(host) else { return nil }
+        guard isTelegramHost(url) else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard let first = parts.first else { return nil }
         let candidate: String
@@ -62,6 +71,18 @@ public enum TelegramSource {
         if let query = params["wd"]?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
             let found = posts.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.text.localizedCaseInsensitiveContains(query) }
             return ["list": .array(found.map { .object(videoFields($0)) }), "pagecount": .number(1)]
+        }
+        return try homeResponse(posts, page: page)
+    }
+
+    /// The home page for one page of posts: the Latest class and the posts. A first page with
+    /// no posts at all means the preview exposes nothing — the channel is not public, or
+    /// Telegram withholds its posts from the web — so it says so, instead of showing an empty
+    /// list as if the channel simply had nothing in it. Later pages coming back empty only end
+    /// the list.
+    static func homeResponse(_ posts: [Post], page: Int) throws -> [String: JSONValue] {
+        if page == 1, posts.isEmpty {
+            throw TVError.unsupported(L10n.text("This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview."))
         }
         // The preview page holds about twenty posts; a non-empty page may have older ones, so the count
         // stays high until a page comes back empty (#2234).

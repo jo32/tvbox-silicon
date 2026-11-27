@@ -179,6 +179,11 @@ extension HTTPClient {
         let (url, headers) = Subscription.headerSuffix(address)
         // A public Telegram channel's address is a subscription of its own; its page is not fetched as one.
         if let channel = TelegramSource.channel(url) { return .subscription(TelegramSource.subscription(channel, origin: url)) }
+        // Any other Telegram address (an invite link, a private channel, a user) has no public
+        // preview, so refuse it plainly instead of fetching its landing page and failing obscurely.
+        if TelegramSource.isTelegramHost(url) {
+            throw TVError.unsupported(L10n.text("Only public Telegram channels can be added. Invite links and private channels have no public preview."))
+        }
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent].merging(headers) { $1 },
                                              fresh: fresh, limit: Self.subscriptionLimit)
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
