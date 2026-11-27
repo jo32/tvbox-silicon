@@ -3973,10 +3973,23 @@ private struct AppColorScheme: ViewModifier {
 struct OpensAtEpisode: ViewModifier {
     let episode: Episode.ID?
     @State private var position: Episode.ID?
+    /// Whether the sheet has finished opening at the playing episode. While the centre anchor stays active,
+    /// every cell crossing the middle of a large grid is pulled back to centre, which shook the episode tiles
+    /// sideways as the viewer dragged up and down a long drama (#2561). Once placed, plain tracking only
+    /// observes which item is in view and stops re-aligning it.
+    @State private var settled = false
     init(_ episode: Episode.ID?) { self.episode = episode }
     func body(content: Content) -> some View {
-        content.scrollPosition(id: $position, anchor: .center)
-            .task { if let episode { position = episode } }
+        content
+            .scrollPosition(id: $position, anchor: settled ? nil : .center)
+            .task {
+                guard let episode else { return }
+                position = episode
+                // Let the lazy grid place the episode (setting it before layout left a long series at
+                // episode 1, #1380) before handing scrolling back to plain tracking (#2561).
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                settled = true
+            }
     }
 }
 
