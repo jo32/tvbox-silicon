@@ -210,6 +210,14 @@ import TVCore
         saveShelf()
         Task { await NovelBooks.shared.clear(entry.book) }
     }
+    /// Takes several books off at once, the way the single removal does (#1845).
+    func removeAll(_ entries: [NovelLibrary.ShelfBook]) {
+        guard !entries.isEmpty else { return }
+        let ids = Set(entries.map(\.id))
+        shelf.removeAll { ids.contains($0.id) }
+        saveShelf()
+        for entry in entries { Task { await NovelBooks.shared.clear(entry.book) } }
+    }
 
     /// Where reading stopped. Reading a book puts it on the shelf, most recent first.
     func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double, seconds: Double? = nil) {
