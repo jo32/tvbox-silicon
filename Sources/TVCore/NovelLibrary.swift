@@ -79,12 +79,26 @@ public enum NovelLibrary {
     /// False when `old` isn't on the shelf.
     @discardableResult
     public static func switchSource(_ shelf: inout [ShelfBook], from old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) -> Bool {
-        guard let index = shelf.firstIndex(where: { $0.id == old.match }) ?? shelf.firstIndex(where: { $0.book.sameBook(as: old) }) else { return false }
+        guard let index = shelf.firstIndex(where: { $0.id == old.match }) ?? looseIndex(shelf, for: old) else { return false }
         var entry = shelf.remove(at: index)
         entry.follow(book, chapters: chapters)
         shelf.removeAll { $0.id == entry.id }
         shelf.insert(entry, at: min(index, shelf.count))
         return true
+    }
+
+    /// The one shelf entry that is the same book spelled differently (#2308). Nil when none is, or when more than one
+    /// could be: a title alone, with no author on one side, mustn't put one book's place on another of the same name.
+    public static func looseIndex(_ shelf: [ShelfBook], for book: NovelBook) -> Int? {
+        let matches = shelf.indices.filter { shelf[$0].book.sameBook(as: book) }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// The shelf as saved, without the second entry of a book saved twice under two spellings of its author, which
+    /// now count as one (the first, most recent, is kept).
+    public static func distinct(_ shelf: [ShelfBook]) -> [ShelfBook] {
+        var seen = Set<String>()
+        return shelf.filter { seen.insert($0.id).inserted }
     }
 
     public static func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
