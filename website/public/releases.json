@@ -1,6 +1,144 @@
 {
   "releases": [
     {
+      "version": "1.8.33",
+      "build": 71,
+      "date": "2026-11-28",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "forward.end",
+          "title": {
+            "en": "Intro and outro times found online",
+            "zh-Hans": "在线查找片头片尾时间",
+            "zh-Hant": "線上查找片頭片尾時間",
+            "ja": "オープニングとエンディングをオンラインで検索"
+          },
+          "detail": {
+            "en": "Turn on Look Up Intro and Outro Times Online, in the player's menu or the Skip Intro / Outro sheet, and the player finds this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB and offers a Skip button. What it finds fills the sheet's times, labeled with where it came from, so you can adjust them and save them for the whole series. An intro and an outro now each have a start and an end: a cold open before the intro plays, and so does a scene after the credits.",
+            "zh-Hans": "在播放器菜单或“跳过片头片尾”里打开“在线查找片头片尾时间”，播放器会在 TheIntroDB、IntroDB 和 TheOtherDB 里查找这一集的片头片尾，并显示“跳过”按钮。查到的时间会填进设置里，注明来源，你可以修改后保存给整部剧。片头和片尾现在都有开始和结束时间：片头前的开场戏照常播放，片尾后的彩蛋也不会错过。",
+            "zh-Hant": "在播放器選單或「跳過片頭片尾」裡開啟「線上查找片頭片尾時間」，播放器會在 TheIntroDB、IntroDB 和 TheOtherDB 裡查找這一集的片頭片尾，並顯示「跳過」按鈕。查到的時間會填進設定裡，註明來源，你可以修改後儲存給整部劇。片頭和片尾現在都有開始和結束時間：片頭前的開場戲照常播放，片尾後的彩蛋也不會錯過。",
+            "ja": "プレーヤーのメニューか「オープニング／エンディングをスキップ」で「オープニングとエンディングをオンラインで検索」をオンにすると、TheIntroDB・IntroDB・TheOtherDB でこのエピソードのオープニングとエンディングを探し、「スキップ」ボタンを表示します。見つかった時間は出典付きで設定欄に入り、調整してシリーズ全体に保存できます。オープニングとエンディングには開始と終了の両方を設定できるようになり、オープニング前のアバンやエンディング後のおまけシーンも再生されます。"
+          }
+        },
+        {
+          "symbol": "slider.horizontal.3",
+          "title": {
+            "en": "A tidier iPhone and iPad player",
+            "zh-Hans": "更整洁的 iPhone 和 iPad 播放器",
+            "zh-Hant": "更整潔的 iPhone 和 iPad 播放器",
+            "ja": "すっきりした iPhone・iPad プレーヤー"
+          },
+          "detail": {
+            "en": "The full-screen player has one settings menu instead of two side by side, with auto-play, chapters and skipping in it. Its buttons are one size, with a gear for Settings and a speech bubble for danmaku. Center skip buttons step aside when double-tap skip is on, and the playing episode is highlighted in the episode grid.",
+            "zh-Hans": "全屏播放器的两个菜单合成了一个设置菜单，自动连播、章节和跳过都在里面。按钮大小统一，设置用齿轮图标，弹幕用气泡图标。打开双击快进快退后，中间的快进快退按钮会隐藏；选集列表会高亮正在播放的一集。",
+            "zh-Hant": "全螢幕播放器的兩個選單合成了一個設定選單，自動連播、章節和跳過都在裡面。按鈕大小統一，設定用齒輪圖示，彈幕用氣泡圖示。開啟點兩下快轉倒轉後，中間的快轉倒轉按鈕會隱藏；選集列表會標示正在播放的一集。",
+            "ja": "フルスクリーンのプレーヤーは横並びの 2 つのメニューが 1 つの設定メニューにまとまり、自動再生・チャプター・スキップもここにあります。ボタンの大きさがそろい、設定は歯車、弾幕は吹き出しのアイコンになりました。ダブルタップでのスキップがオンのときは中央のスキップボタンが隠れ、エピソード一覧では再生中のエピソードが強調表示されます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "arrow.triangle.branch",
+          "title": {
+            "en": "Playback that recovers",
+            "zh-Hans": "播放更能自我恢复",
+            "zh-Hant": "播放更能自我恢復",
+            "ja": "再生がより粘り強く"
+          },
+          "detail": {
+            "en": "When a line fails, the player tries the episode's other lines, and an error says what went wrong. Plugin links that expire are renewed, paused video stays paused after the app comes back from the background, and the waiting screen goes away at the first frame. Repackaged streams no longer play sound without picture or the same audio twice, and Dolby Vision MP4s that failed to open now play.",
+            "zh-Hans": "某条线路失败时，播放器会尝试这一集的其他线路，出错时会说明具体原因。插件链接过期会自动续上，暂停的视频从后台回来后保持暂停，第一帧出现时等待画面立刻消失。重新封装的流不再只有声音没有画面，也不再重复播放音频，之前打不开的杜比视界 MP4 现在也能播放。",
+            "zh-Hant": "某條線路失敗時，播放器會嘗試這一集的其他線路，出錯時會說明具體原因。外掛連結過期會自動續上，暫停的影片從背景回來後保持暫停，第一格畫面出現時等待畫面立刻消失。重新封裝的串流不再只有聲音沒有畫面，也不再重複播放音訊，之前打不開的杜比視界 MP4 現在也能播放。",
+            "ja": "ラインが失敗するとエピソードの別のラインを試し、エラーでは具体的な原因を表示します。期限切れのプラグインリンクは更新され、一時停止中の動画はバックグラウンドから戻っても一時停止のまま、最初のフレームが出た時点で待機画面が消えます。再パッケージしたストリームで映像なしの音声だけになったり音声が二重になったりしなくなり、開けなかったドルビービジョンの MP4 も再生できます。"
+          }
+        },
+        {
+          "symbol": "speaker.wave.2",
+          "title": {
+            "en": "Audio language remembered",
+            "zh-Hans": "记住音轨语言",
+            "zh-Hant": "記住音軌語言",
+            "ja": "音声の言語を記憶"
+          },
+          "detail": {
+            "en": "The audio language you pick carries on to the next episodes. When a stream's tracks arrive late, one plays at a time and you can pick between them.",
+            "zh-Hans": "你选的音轨语言会沿用到后面的剧集。流的音轨较晚出现时，一次只播放一条，并且可以在它们之间切换。",
+            "zh-Hant": "你選的音軌語言會沿用到後面的劇集。串流的音軌較晚出現時，一次只播放一條，並且可以在它們之間切換。",
+            "ja": "選んだ音声の言語は次のエピソードにも引き継がれます。ストリームの音声トラックが遅れて届いた場合も、一度に 1 つだけ再生し、切り替えることができます。"
+          }
+        },
+        {
+          "symbol": "pip",
+          "title": {
+            "en": "Picture in Picture fixes",
+            "zh-Hans": "画中画修复",
+            "zh-Hant": "子母畫面修正",
+            "ja": "ピクチャ・イン・ピクチャの修正"
+          },
+          "detail": {
+            "en": "On iPhone, returning from Picture in Picture goes straight back into the open player, in landscape. On the Mac, the player window hides during Picture in Picture instead of showing black.",
+            "zh-Hans": "在 iPhone 上从画中画返回会直接回到打开的播放器，并保持横屏。在 Mac 上，画中画时播放器窗口会隐藏，不再显示黑屏。",
+            "zh-Hant": "在 iPhone 上從子母畫面返回會直接回到打開的播放器，並保持橫向。在 Mac 上，子母畫面時播放器視窗會隱藏，不再顯示黑畫面。",
+            "ja": "iPhone ではピクチャ・イン・ピクチャから戻ると、開いていたプレーヤーに横向きのまま直接戻ります。Mac ではピクチャ・イン・ピクチャ中にプレーヤーのウインドウが黒く表示されず、隠れるようになりました。"
+          },
+          "platforms": [
+            "ios",
+            "macos"
+          ]
+        },
+        {
+          "symbol": "gearshape",
+          "title": {
+            "en": "More settings",
+            "zh-Hans": "更多设置",
+            "zh-Hant": "更多設定",
+            "ja": "設定が充実"
+          },
+          "detail": {
+            "en": "Choose a light, dark or system appearance, and the page the app opens on. Refresh one subscription on its own; Add Subscription is at the top and its sheet opens full height. Subscription chips stay above the Sources list, and hidden-source groups fold away.",
+            "zh-Hans": "可以选择浅色、深色或跟随系统外观，以及打开 App 时的首页。可以单独刷新某个订阅；“添加订阅”放到了最上面，打开时直接全高显示。订阅标签固定在来源列表上方，隐藏的来源分组可以折叠。",
+            "zh-Hant": "可以選擇淺色、深色或跟隨系統外觀，以及打開 App 時的首頁。可以單獨重新整理某個訂閱；「新增訂閱」放到了最上面，打開時直接全高顯示。訂閱標籤固定在來源列表上方，隱藏的來源群組可以收合。",
+            "ja": "外観をライト・ダーク・システムから選べ、起動時に開くページも選べます。サブスクリプションを個別に更新でき、「サブスクリプションを追加」は一番上に移動し、シートは最初から全画面で開きます。サブスクリプションのチップはソース一覧の上に固定され、非表示ソースのグループは折りたためます。"
+          }
+        },
+        {
+          "symbol": "books.vertical",
+          "title": {
+            "en": "Music, novels and cloud files",
+            "zh-Hans": "音乐、小说和网盘",
+            "zh-Hant": "音樂、小說和雲端硬碟",
+            "ja": "ミュージック・小説・クラウドファイル"
+          },
+          "detail": {
+            "en": "Music has a Recently Played page, Up Next counts the songs to come, and the scrubber follows your finger. Pin folders and files to the top of Cloud Files. Remove several novels from the bookshelf at once, and a novel keeps your place when a source spells the author differently.",
+            "zh-Hans": "音乐新增“最近播放”页面，“待播清单”会显示还有几首，进度条跟手拖动。网盘文件可以把文件夹和文件置顶。书架上可以一次移除多本小说，换了作者写法不同的源也会保留阅读进度。",
+            "zh-Hant": "音樂新增「最近播放」頁面，「待播清單」會顯示還有幾首，進度列跟手拖動。雲端檔案可以把資料夾和檔案置頂。書架上可以一次移除多本小說，換了作者寫法不同的來源也會保留閱讀進度。",
+            "ja": "ミュージックに「最近再生した項目」ページが加わり、「次はこちら」に残りの曲数が表示され、シークバーが指の動きに追従します。クラウドファイルではフォルダやファイルを先頭に固定できます。本棚から複数の小説をまとめて削除でき、作者名の表記が違うソースでも読書位置が保たれます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Bilibili video pages work for automatic danmaku. Sources match TMDB titles by their other names, and a source's own synopsis fills in when TMDB has none. Telegram channels read through the proxy their address names. On the Mac, dragging the seek bar no longer moves the window and arrow keys no longer wake the controls. Episode tiles stop shaking while you scroll, light mode's season picker is readable, and plenty of smaller fixes.",
+            "zh-Hans": "自动弹幕支持哔哩哔哩视频页。来源会按 TMDB 的其他名称匹配，TMDB 没有简介时会用来源自己的简介。Telegram 频道会通过地址中指定的代理读取。在 Mac 上，拖动进度条不再移动窗口，方向键也不再唤出控制栏。滚动时剧集方块不再抖动，浅色模式下的季选择器文字清晰可读，另有许多小修复。",
+            "zh-Hant": "自動彈幕支援嗶哩嗶哩影片頁。來源會按 TMDB 的其他名稱配對，TMDB 沒有簡介時會用來源自己的簡介。Telegram 頻道會透過位址中指定的代理讀取。在 Mac 上，拖動進度列不再移動視窗，方向鍵也不再喚出控制列。捲動時劇集方塊不再抖動，淺色模式下的季選擇器文字清晰可讀，另有許多小修正。",
+            "ja": "自動弾幕が bilibili の動画ページに対応しました。ソースは TMDB の別名でも照合され、TMDB にあらすじがないときはソース自身のあらすじを表示します。Telegram チャンネルはアドレスで指定したプロキシ経由で読み込みます。Mac ではシークバーのドラッグでウインドウが動かず、矢印キーで操作ボタンが表示されなくなりました。スクロール中にエピソードのタイルが揺れず、ライトモードのシーズン選択も読みやすくなりました。ほかにも細かな修正を多数行いました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.32",
       "build": 70,
       "date": "2026-11-27",
