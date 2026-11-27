@@ -121,8 +121,12 @@ struct MobilePlayerView: View {
     var body: some View {
         ZStack {
             PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
-                // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
-                .onChange(of: pip.active) { _, active in session.subtitles.native = active }
+                // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there and the
+                // ML enhancer steps aside while PiP runs.
+                .onChange(of: pip.active) { _, active in
+                    session.subtitles.native = active
+                    session.enhancer.suspended = active
+                }
                 // Playing in its window or on another device: the seek bar's preview opens no second reader (#1600).
                 .onChange(of: pip.active || playingOn != nil, initial: true) { _, away in clock.streamPreviews = !away }
                 .onChange(of: allowsPictureInPicture, initial: true) { _, allowed in pip.startsWhenLeaving = allowed }
@@ -1831,9 +1835,10 @@ private struct BatteryGauge: View {
 @MainActor @Observable final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
-    private(set) var active = false
-    /// The window is up (from its start until it closes): the player screen can go, and the video plays on in it.
-    private(set) var floating = false
+    private(set) var state = MobilePiPState()
+    var active: Bool { state.active }
+    /// The window is up over the app (started from the player's button): the player screen can go while it floats.
+    var floating: Bool { state.floating }
     /// The view of the layer the window shows, kept for a player screen opened again while it floats.
     @ObservationIgnored private(set) var layerView: PlayerLayerUIView?
     @ObservationIgnored private var controller: AVPictureInPictureController?
@@ -1868,7 +1873,12 @@ private struct BatteryGauge: View {
 
     func toggle() {
         guard let controller else { return }
-        if controller.isPictureInPictureActive { controller.stopPictureInPicture() } else { controller.startPictureInPicture() }
+        if controller.isPictureInPictureActive {
+            controller.stopPictureInPicture()
+        } else {
+            state.beginManualStart()
+            controller.startPictureInPicture()
+        }
     }
 
     /// Brings the video back from the window into its player.
@@ -1876,16 +1886,26 @@ private struct BatteryGauge: View {
         if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
     }
 
+    /// Switching back to Yingxia via the home bar or app switcher after automatic PiP returns the video straight
+    /// into the open player instead of leaving it floating over the app (#2441, #2483).
+    func returnIfAutomatic() {
+        guard state.shouldStopOnAppActive() else { return }
+        stop()
+    }
+
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.active = true }
+        Task { @MainActor [weak self] in self?.state.willStart() }
     }
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.floating = true }
+        Task { @MainActor [weak self] in self?.state.didStart() }
+    }
+    nonisolated func pictureInPictureControllerWillStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.state.willStop() }
     }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            active = false; floating = false
+            state.didStop()
             FloatingPlayback.shared.stopped(self)
         }
     }
@@ -1900,7 +1920,10 @@ private struct BatteryGauge: View {
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         let detail = Diagnostics.describe(error)
-        Task { @MainActor in Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)") }
+        Task { @MainActor [weak self] in
+            self?.state.didFailToStart()
+            Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)")
+        }
     }
 }
 

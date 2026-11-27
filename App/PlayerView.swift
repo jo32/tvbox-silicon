@@ -61,6 +61,7 @@ struct PlaybackView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     /// With Start in Full Screen on, a player that opens as its own screen (a Discover search, say, rather than a
     /// watch page) turns for the video the moment its picture appears. Watch pages apply it on their own.
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
@@ -207,11 +208,16 @@ struct PlaybackView: View {
             #endif
         }
         #if os(iOS)
-        // Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
+        // Manual Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
         .onChange(of: pip.floating) { _, floating in
             guard floating, session.error == nil else { return }
             FloatingPlayback.shared.park(channel, session: session, pip: pip, store: store)
             if let watch { watch.leave() } else { dismiss() }
+        }
+        // Automatic Picture in Picture started when leaving the app: returning to Yingxia (e.g. via the home bar,
+        // #2441) brings the video straight back into the open player in its landscape orientation (#2483).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { pip.returnIfAutomatic() }
         }
         #endif
         #if DEBUG && os(iOS)

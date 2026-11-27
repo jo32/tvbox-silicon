@@ -2188,6 +2188,7 @@ struct VideoDetailView: View {
     #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @State private var fullScreen = false
     /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
     @State private var turnedFullScreen = false
@@ -3315,7 +3316,7 @@ struct VideoDetailView: View {
     /// it upright again returns to the page. The watch page holds the interface upright (`PlayerOrientation`), so it
     /// doesn't turn by itself: this listens to the phone's own turning instead.
     private func phoneTurned() {
-        guard watchChannel != nil, PlayerOrientation.available else { return }
+        guard watchChannel != nil, PlayerOrientation.available, scenePhase == .active else { return }
         switch UIDevice.current.orientation {
         case .landscapeLeft, .landscapeRight:
             guard !fullScreen else { return }
