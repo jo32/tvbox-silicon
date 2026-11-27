@@ -49,5 +49,11 @@ struct ErrorPresentationTests {
         }
         // Specific TVError messages stay untouched.
         #expect(ErrorPresentation.reason(for: TVError.http(502), language: "en") == "The server returned HTTP 502.")
+        // Underlying URL errors (such as a failed fallback line resolve) are localized instead of leaking raw English.
+        let wrapped = NSError(domain: "CatalogError", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "The request timed out.",
+            NSUnderlyingErrorKey: NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut),
+        ])
+        #expect(ErrorPresentation.reason(for: wrapped, language: "zh-Hans") == "服务器响应超时，请重试或换一个来源。")
     }
 }

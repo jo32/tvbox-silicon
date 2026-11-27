@@ -1266,8 +1266,9 @@ import TVCore
             } catch {
                 guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
                 Diagnostics.shared.failure("catalog", "episode \(catalog.client.reportContext) flag=\(episode.flag)", error)
-                self.episodeError = error.localizedDescription
-                failed?(error.localizedDescription)
+                let reason = ErrorPresentation.reason(for: error)
+                self.episodeError = reason
+                failed?(reason)
             }
         }
     }

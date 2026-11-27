@@ -567,7 +567,7 @@ import IOKit.pwr_mgt
         let summary = PlaybackFailure.describe(failure, httpStatus: status, host: host, upstream: upstream,
                                                isLoopback: loopback, refused: expired)
         let isDolbyVisionRefusal = Remux.isDolbyVision(url) && Self.refusedContent(failure)
-        if !isDolbyVisionRefusal, tryCatalogFallback(after: failure, channel: channel) { return }
+        if !isDolbyVisionRefusal, tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
         loading = false
         errorSymbol = isDolbyVisionRefusal ? "play.slash.fill" : summary.symbol
         errorDetails = summary.details
@@ -698,8 +698,8 @@ import IOKit.pwr_mgt
                 }
                 let fallbackError = NSError(domain: NSURLErrorDomain, code: code)
                 if self.tryNextLine(after: fallbackError) { return }
-                if self.tryCatalogFallback(after: fallbackError, channel: channel) { return }
                 let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                if self.tryCatalogFallback(after: fallbackError, channel: channel, details: summary.details) { return }
                 self.errorSymbol = summary.symbol; self.errorDetails = summary.details
                 self.error = summary.message; self.loading = false; return
             }
@@ -719,8 +719,8 @@ import IOKit.pwr_mgt
                 if let failure { Diagnostics.shared.failure("player", "loopback relisten", failure) }
                 let fallbackError = failure ?? NSError(domain: NSURLErrorDomain, code: code)
                 if self.tryNextLine(after: fallbackError) { return }
-                if self.tryCatalogFallback(after: fallbackError, channel: channel) { return }
                 let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                if self.tryCatalogFallback(after: fallbackError, channel: channel, details: summary.details) { return }
                 self.errorSymbol = summary.symbol; self.errorDetails = summary.details
                 self.error = summary.message; self.loading = false; return
             }
@@ -828,8 +828,8 @@ import IOKit.pwr_mgt
             }
             guard let remuxed else {
                 if self.tryNextLine(after: failure) { return }
-                if self.tryCatalogFallback(after: failure, channel: channel) { return }
                 let summary = PlaybackFailure.describe(failure, host: self.transfer.host ?? channel.url.host())
+                if self.tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
                 self.loading = false
                 self.errorSymbol = summary.symbol
                 self.errorDetails = summary.details
@@ -875,9 +875,10 @@ import IOKit.pwr_mgt
             case .webPage:
                 Diagnostics.shared.record(.warning, "player.webpage", "a web page, not a video host=\(url.host() ?? "-") source=\(channel.historyContext?.sourceKey ?? "-")")
                 if self.tryNextLine(after: failure) { return }
-                if self.tryCatalogFallback(after: failure, channel: channel) { return }
+                let details = PlaybackFailure.describe(failure, host: url.host()).details
+                if self.tryCatalogFallback(after: failure, channel: channel, details: details) { return }
                 self.loading = false; self.errorSymbol = "safari"
-                self.errorDetails = PlaybackFailure.describe(failure, host: url.host()).details
+                self.errorDetails = details
                 self.error = L10n.text("This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.")
                 return
             case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
@@ -958,9 +959,12 @@ import IOKit.pwr_mgt
     }
 
     /// Shows the waiting state while switching to another line of the same episode (#2560).
-    func beginLineSwitch(to line: String, failedFlag: String? = nil) {
+    /// Keeps any earlier `errorDetails` (or records `preservingDetails`) so if the switch itself fails to resolve,
+    /// the viewer still sees the technical details from the original playback failure.
+    func beginLineSwitch(to line: String, failedFlag: String? = nil, preservingDetails details: String? = nil) {
         let target = line.isEmpty ? L10n.text("another line") : line
-        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true
+        if let details { errorDetails = details }
+        error = nil; errorSymbol = "play.slash.fill"; loading = true
         if let failed = failedFlag, !failed.isEmpty {
             switchNotice = L10n.text("%@ didn't play. Trying %@.", failed, target)
         } else {
@@ -970,20 +974,20 @@ import IOKit.pwr_mgt
 
     /// Tries the next safe line of the same catalog episode (bounded by `PlaybackLineFallback`), returning true if
     /// a switch started (#2560). Offline failures affect every line and never trigger an automatic switch.
-    private func tryCatalogFallback(after failure: Error?, channel: Channel) -> Bool {
+    private func tryCatalogFallback(after failure: Error?, channel: Channel, details: String? = nil) -> Bool {
         guard PlaybackFailure.describe(failure).allowsAutomaticLineSwitch else { return false }
         guard let next = onFallbackLine?() else { return false }
         retrying(via: "catalog-line")
         detachItem(); observation = nil
-        beginLineSwitch(to: next, failedFlag: channel.historyContext?.episodeFlag)
+        beginLineSwitch(to: next, failedFlag: channel.historyContext?.episodeFlag, preservingDetails: details)
         Diagnostics.shared.record(.warning, "player", "catalog line failed \(failure.map(Self.describe) ?? "-"); switching to \(next)")
         return true
     }
 
-    /// The other line could not be resolved either: show why instead of loading forever.
+    /// The other line could not be resolved either: show why instead of loading forever, keeping earlier technical details.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
-        switchNotice = nil; errorDetails = nil; error = message; loading = false
+        switchNotice = nil; error = message; loading = false
     }
 
     func setSpeed(_ speed: Float) {
@@ -1376,7 +1380,7 @@ import IOKit.pwr_mgt
                 if self.tryNextLine(after: error) { return }
                 let loopback = ["127.0.0.1", "localhost"].contains(channel.url.host() ?? "")
                 let summary = PlaybackFailure.describe(error, host: channel.url.host(), isLoopback: loopback)
-                if self.tryCatalogFallback(after: error, channel: channel) { return }
+                if self.tryCatalogFallback(after: error, channel: channel, details: summary.details) { return }
                 self.errorSymbol = summary.symbol; self.errorDetails = summary.details
                 self.error = summary.message; self.loading = false; return
             }
@@ -1725,7 +1729,7 @@ import IOKit.pwr_mgt
                 let summary = PlaybackFailure.describe(failure, httpStatus: self.transfer.httpStatus ?? logStatus,
                                                        host: host, upstream: self.transfer.failure,
                                                        isLoopback: loopback, refused: refused)
-                if self.tryCatalogFallback(after: failure, channel: channel) { return }
+                if self.tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
                 self.errorSymbol = summary.symbol
                 self.errorDetails = summary.details
                 self.error = failure == nil ? L10n.text("Playback was interrupted.") : summary.message
