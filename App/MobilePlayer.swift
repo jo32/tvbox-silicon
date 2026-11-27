@@ -2018,6 +2018,50 @@ private struct BatteryGauge: View {
     }
 }
 
+/// Carries a live playback session across a watch-page to full-screen layout switch (unfolding iPhone Duo to its
+/// inner display, #1967, #1528, #2103) without stopping or reloading the stream.
+@MainActor final class PlaybackHandoff {
+    static let shared = PlaybackHandoff()
+    struct Entry {
+        let channel: Channel
+        let session: PlaybackSession
+        let pip: PictureInPicture
+    }
+    private var entry: Entry?
+    private var expiry: Task<Void, Never>?
+
+    /// Holds `session` briefly for the replacement `PlaybackView`; stops it if nothing claims it.
+    func park(_ channel: Channel, session: PlaybackSession, pip: PictureInPicture) {
+        if let existing = entry, existing.session !== session { existing.session.stop() }
+        entry = Entry(channel: channel, session: session, pip: pip)
+        expiry?.cancel()
+        expiry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self, let pending = self.entry, pending.session === session else { return }
+            self.entry = nil
+            pending.session.stop()
+        }
+    }
+
+    func holds(_ session: PlaybackSession) -> Bool { entry?.session === session }
+
+    func peek(for channel: Channel) -> Entry? { entry?.channel == channel ? entry : nil }
+
+    func take(_ session: PlaybackSession) -> Bool {
+        guard entry?.session === session else { return false }
+        entry = nil
+        expiry?.cancel(); expiry = nil
+        return true
+    }
+
+    func discard() {
+        expiry?.cancel(); expiry = nil
+        let pending = entry
+        entry = nil
+        pending?.session.stop()
+    }
+}
+
 #endif
 
 // Shared with the Mac player, which draws the same controls (DesktopPlaybackView).

@@ -19,13 +19,15 @@ struct PlaybackView: View {
     @State private var session: PlaybackSession
     @State private var pip: PictureInPicture
 
-    /// A video still playing in Picture in Picture after its player closed comes back to the new player as it is.
+    /// A video still playing in Picture in Picture after its player closed, or handed off across an iPhone Duo fold
+    /// transition (#1967, #2103), comes back to the new player as it is.
     init(channel: Channel, watch: WatchPlayback? = nil) {
         self.channel = channel
         self.watch = watch
         let parked = FloatingPlayback.shared.parked(for: channel)
-        _session = State(initialValue: parked?.session ?? PlaybackSession())
-        _pip = State(initialValue: parked?.pip ?? PictureInPicture())
+        let handedOff = parked == nil ? PlaybackHandoff.shared.peek(for: channel) : nil
+        _session = State(initialValue: parked?.session ?? handedOff?.session ?? PlaybackSession())
+        _pip = State(initialValue: parked?.pip ?? handedOff?.pip ?? PictureInPicture())
     }
     #else
     @State private var session = PlaybackSession()
@@ -191,14 +193,26 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
+            if watch == nil {
+                store.fullScreenPlayerPresented = true
+                PlayerOrientation.setStandalonePlayer(true)
+            }
             if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
                 // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
-                // Only for a player of its own screen; a watch page turns for itself.
-                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
+                // Only for a player of its own screen (a watch page turns for itself), and not on a foldable's
+                // large inner screen, which plays the way it is held (#1967).
+                if parked.landscape, playerLayout == .screen, PlayerOrientation.available,
+                   horizontalSizeClass == .compact || verticalSizeClass == .compact {
+                    PlayerOrientation.set(landscape: true)
+                }
+            } else if PlaybackHandoff.shared.take(session) {
+                // Handed off across an iPhone Duo layout transition: keep the live session playing (#1967, #2103).
+                startCatalogPlayback(session, channel: channel, store: store, resuming: true)
             } else {
                 FloatingPlayback.shared.end()
+                PlaybackHandoff.shared.discard()
                 startCatalogPlayback(session, channel: channel, store: store)
             }
             showOnStart()
@@ -233,9 +247,11 @@ struct PlaybackView: View {
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         // Start in Full Screen (#2097): a player that opened as its own screen turns as soon as its picture appears,
-        // as the watch page's player does. Watch pages apply the setting themselves, so only the standalone player.
+        // as the watch page's player does. Watch pages apply the setting themselves, so only the standalone player
+        // on a compact phone screen (not iPad or iPhone Duo's inner display).
         .onChange(of: session.showsPicture) { _, showing in
-            guard showing, startsFullScreen, playerLayout == .screen, session.error == nil else { return }
+            guard showing, startsFullScreen, playerLayout == .screen, session.error == nil,
+                  PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact else { return }
             let size = session.player.currentItem?.presentationSize ?? .zero
             PlayerOrientation.set(landscape: size.height == 0 || size.width >= size.height)
         }
@@ -246,20 +262,28 @@ struct PlaybackView: View {
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection()
             #if os(iOS)
-            if !FloatingPlayback.shared.holds(session) { session.stop() }
+            if watch == nil {
+                store.fullScreenPlayerPresented = false
+                PlayerOrientation.setStandalonePlayer(false)
+            }
+            // Unfolding iPhone Duo replaces the watch page with the regular detail page: hand the live session over
+            // to the full-screen cover so playback never stops (#1967, #1528, #2103).
+            if watch != nil, WatchPage.isLargeDisplay, store.playing == channel, session.error == nil,
+               !FloatingPlayback.shared.holds(session) {
+                PlaybackHandoff.shared.park(channel, session: session, pip: pip)
+            }
+            if !FloatingPlayback.shared.holds(session), !PlaybackHandoff.shared.holds(session) { session.stop() }
+            ExternalDisplay.shared.detach(session.player)
+            PlayerOrientation.release(forcePortrait: !WatchPage.isLargeDisplay)
             #else
             session.stop()
-            #endif
-            #if os(iOS)
-            ExternalDisplay.shared.detach(session.player)
-            PlayerOrientation.release()
             #endif
         }
         #if os(iOS)
         // Opening iPhone Duo moves the app to the inner display, which ignores orientations: drop a
-        // landscape lock so the outer display isn't left in landscape when it closes again.
+        // landscape lock without forcing portrait (#1967, #1528).
         .onChange(of: horizontalSizeClass == .regular && verticalSizeClass == .regular) { _, large in
-            if large { PlayerOrientation.release() }
+            if large { PlayerOrientation.release(forcePortrait: false) }
         }
         #endif
     }
@@ -840,34 +864,54 @@ private struct PlayerSurface: NSViewRepresentable {
 /// The iPhone player's rotate button. While it holds landscape the app allows landscape only, so the phone
 /// held upright (or Portrait Orientation Lock) doesn't turn it back; the button or closing the player does.
 @MainActor enum PlayerOrientation {
-    static private(set) var mask: UIInterfaceOrientationMask = .allButUpsideDown
-    static var available: Bool { UIDevice.current.userInterfaceIdiom == .phone }
-    /// An iPhone watch page is on screen: it stays upright, and only its Full Screen turns the phone.
-    static private var holdsPortrait = false
-
-    static func set(landscape: Bool) {
-        guard let scene = UIApplication.shared.appWindowScene else { return }
-        mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown
-        var controller = scene.keyWindow?.rootViewController
-        while let next = controller?.presentedViewController { controller = next }
-        controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
-        // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait)) { @Sendable error in
-            Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
+    private static var policy = OrientationPolicy()
+    static var mask: UIInterfaceOrientationMask {
+        switch policy.allowed {
+        case .allButUpsideDown: .allButUpsideDown
+        case .landscape: .landscape
+        case .portrait: .portrait
         }
     }
+    static var available: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
-    /// Back to portrait when the player closes, if the button turned it.
-    static func release() {
-        if mask == .landscape { set(landscape: false) }
+    static func set(landscape: Bool) {
+        apply(policy.set(landscape: landscape))
+    }
+
+    /// Back to portrait (or unlocked on a large display) when the player closes, if landscape was held.
+    static func release(forcePortrait: Bool = true) {
+        if let request = policy.release(forcePortrait: forcePortrait) { apply(request) }
     }
 
     /// While a watch page shows, the app stays upright (the page turns to landscape for Full Screen only).
     static func holdPortrait(_ hold: Bool) {
-        guard holdsPortrait != hold else { return }
-        holdsPortrait = hold
-        if mask != .landscape { set(landscape: false) }
+        if let request = policy.holdPortrait(hold) { apply(request) }
+    }
+
+    /// While a standalone full-screen player cover is on screen, any watch page underneath must not hold portrait.
+    static func setStandalonePlayer(_ active: Bool) {
+        if let request = policy.setStandalonePlayer(active) { apply(request) }
+    }
+
+    private static func apply(_ request: OrientationPolicy.Request) {
+        guard let scene = UIApplication.shared.appWindowScene else { return }
+        // Invalidate the whole controller chain, not only the topmost presented controller (which may be dismissing).
+        var controller = scene.keyWindow?.rootViewController
+        while let current = controller {
+            current.setNeedsUpdateOfSupportedInterfaceOrientations()
+            controller = current.presentedViewController
+        }
+        let target: UIInterfaceOrientationMask? = switch request {
+        case .refresh: nil
+        case .landscape: .landscape
+        case .portrait: .portrait
+        }
+        guard let target else { return }
+        // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
+        // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { @Sendable error in
+            Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
+        }
     }
 }
 #else
