@@ -3221,10 +3221,11 @@ struct VideoDetailView: View {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
-    /// Where the viewer stopped last time, for Continue. From visible history only (#2202): a hidden source's entry
-    /// must not resume the page, its watched line, or the cover's Play.
+    /// Where the viewer stopped last time, for Continue. All history, a hidden source's too: its page is only reached
+    /// on purpose (its own page, a favorite), and there resuming is what the viewer wants. Only Discover, which
+    /// matches across sources by title, keeps to visible history (#2202).
     private var watchHistory: PlaybackHistoryEntry? {
-        store.visibleHistory.first { watchScopes.contains($0.context.id) }
+        store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
     }
     /// Where an episode stopped last time, when it is the one watched last, on its line or another (#1300); any other
     /// starts at 0.
