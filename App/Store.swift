@@ -134,6 +134,14 @@ import TVCore
     /// is resolved 30 seconds before its end for the queue, as before.
     static let nextAheadLength: Double = 10 * 60
     var section: AppSection = .home
+    /// The page the app opens on, kept per profile; Watch Now when unset (#1673, #2008, #2246).
+    var launchSection: AppSection? {
+        get { AppSection(rawValue: defaults.string(forKey: "launchSection") ?? "") }
+        set {
+            if let value = newValue { defaults.set(value.rawValue, forKey: "launchSection") }
+            else { defaults.removeObject(forKey: "launchSection") }
+        }
+    }
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
     var hidesSidebar = false
@@ -236,6 +244,8 @@ import TVCore
         playbackDefaults = library.playback
         playbackHistory = library.history
         profileFolder = library.folder
+        // A saved launch page beats Watch Now; QA's forced section still overrides it later.
+        if let saved = AppSection(rawValue: library.defaults.string(forKey: "launchSection") ?? "") { section = saved }
         pinnedSources = PinnedSources(defaults: library.playback)
         hiddenSources = HiddenSources(defaults: library.playback)
         hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
@@ -344,7 +354,7 @@ import TVCore
         // The new lists' revisions can match the old ones', so the cached rows go by hand.
         rememberSiteLists("")
         loadSubscriptions(resetting: true)
-        section = .home
+        section = launchSection ?? .home
         if profile.isMain { setUpCloudSync() }
         cloudSync?.isSuspended = !profile.isMain
         Diagnostics.shared.record(.info, "profile", "opened \(profile.isMain ? "main" : "other") profile")
