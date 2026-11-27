@@ -1073,6 +1073,7 @@
 "Brightness" = "明るさ";
 "Slide for Brightness and Volume" = "スライドで明るさと音量を調整";
 "Tab Bar Labels" = "タブバーのラベル";
+"Launch Page" = "起動ページ";
 "Collapse Tab Bar When Scrolling" = "スクロール時にタブバーを縮小";
 "Off shows only the icons in the tab bar along the bottom." = "オフにすると、下部のタブバーにアイコンだけを表示します。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "動画の左側を上下にスライドすると明るさ、右側では音量を調整できます。";
