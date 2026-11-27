@@ -2416,4 +2416,4 @@
 
 "Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";
 
-"PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position." = "PGS 點陣字幕共用這裡的大小和位置。選「自動」時，每條字幕會依片源指定的位置顯示。";
+"PGS bitmap subtitles use this size and position." = "PGS 點陣字幕共用這裡的大小和位置。";

@@ -44,7 +44,9 @@ import SwiftUI
         return (bounds, bands)
     }
 
-    func testBilingualPGSPreviewAndLiveStyleChanges() throws {
+    func testTwoLineSubtitlePreviewAndLivePGSStyleChanges() throws {
+        XCTAssertEqual(SubtitleSpot.allCases, [.top, .middle, .bottom])
+        XCTAssertEqual(SubtitlePreview.sample, [L10n.text("This is how subtitles will look"), L10n.text("on every video you play")])
         let cues = SubtitleCues()
         let previous = SubtitleStyle.load()
         defer { previous.save() }

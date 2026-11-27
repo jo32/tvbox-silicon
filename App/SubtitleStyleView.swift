@@ -37,17 +37,16 @@ struct SubtitleStyleView: View {
 
 /// The positions one choice puts a subtitle back to, centred across.
 enum SubtitleSpot: CaseIterable, Hashable {
-    case automatic, top, middle, bottom
+    case top, middle, bottom
     private var y: Double {
         switch self {
         case .top: SubtitleStyle.top
         case .middle: SubtitleStyle.middle
-        case .automatic, .bottom: SubtitleStyle.bottom
+        case .bottom: SubtitleStyle.bottom
         }
     }
     var title: String {
         switch self {
-        case .automatic: L10n.text("Automatic")
         case .top: L10n.text("Top")
         case .middle: L10n.text("Middle")
         case .bottom: L10n.text("Bottom")
@@ -55,12 +54,11 @@ enum SubtitleSpot: CaseIterable, Hashable {
     }
     /// The spot `style` sits at, or nil when it was moved somewhere else.
     static func of(_ style: SubtitleStyle) -> SubtitleSpot? {
-        if style.followsSourcePosition { return .automatic }
-        return allCases.first { $0 != .automatic && abs(style.x - 0.5) < 0.001 && abs(style.y - $0.y) < 0.001 }
+        allCases.first { abs(style.x - 0.5) < 0.001 && abs(style.y - $0.y) < 0.001 }
     }
 
     func apply(to style: inout SubtitleStyle) {
-        style.place(at: self == .automatic ? nil : CGPoint(x: 0.5, y: y))
+        style.place(at: CGPoint(x: 0.5, y: y))
     }
 }
 
@@ -115,7 +113,7 @@ struct SubtitlePreview: View {
     @State private var start: SubtitleStyle?
 
     private static let picture = "subtitlePreview.picture"
-    static let sample = ["我们快到了。", "We're almost there."]
+    static var sample: [String] { [L10n.text("This is how subtitles will look"), L10n.text("on every video you play")] }
 
     var body: some View {
         GeometryReader { proxy in
@@ -215,7 +213,7 @@ private struct FormSubtitleStylePage: View {
         Form {
             Group {
                 Section {
-                    Picker(L10n.text("Position"), selection: Binding(get: { SubtitleSpot.of(style) },
+                    Picker(L10n.text("Position"), selection: Binding(get: { style.followsSourcePosition ? nil : SubtitleSpot.of(style) },
                                                                   set: { if let spot = $0 { spot.apply(to: &style) } })) {
                         ForEach(SubtitleSpot.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
                     }
@@ -226,7 +224,7 @@ private struct FormSubtitleStylePage: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.text("Drag the subtitle on the picture to put it anywhere. It snaps to the center line."))
-                        Text(L10n.text("PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position."))
+                        Text(L10n.text("PGS bitmap subtitles use this size and position."))
                     }
                 }
                 Section {
@@ -399,14 +397,15 @@ private struct TVSubtitleStylePage: View {
                 VStack(alignment: .leading, spacing: 48) {
                     TVSettingsSection(title: L10n.text("Position"),
                                       footer: L10n.text("Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select.")) {
-                        TVSettingsAction(title: L10n.text("Position"), value: style.positionTitle) {
+                        TVSettingsAction(title: L10n.text("Position"), value: style.followsSourcePosition ? nil : style.positionTitle) {
                             let spots = SubtitleSpot.allCases
-                            let next = SubtitleSpot.of(style).flatMap { spots.firstIndex(of: $0) }.map { spots[($0 + 1) % spots.count] } ?? .bottom
+                            let current = style.followsSourcePosition ? nil : SubtitleSpot.of(style)
+                            let next = current.flatMap { spots.firstIndex(of: $0) }.map { spots[($0 + 1) % spots.count] } ?? .top
                             next.apply(to: &style)
                         }
                         TVSettingsAction(title: L10n.text("Adjust Position")) { positioning = true }
                     }
-                    TVSettingsSection(title: L10n.text("Text"), footer: L10n.text("PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position.")) {
+                    TVSettingsSection(title: L10n.text("Text"), footer: L10n.text("PGS bitmap subtitles use this size and position.")) {
                         TVSettingsAction(title: L10n.text("Size"), value: style.sizeTitle) {
                             style.size = Self.sizes.first { $0 > style.size + 0.01 } ?? Self.sizes[0]
                         }
