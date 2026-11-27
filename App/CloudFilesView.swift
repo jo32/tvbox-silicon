@@ -95,14 +95,15 @@ struct CloudFolderView: View {
     var body: some View {
         Group {
             if let files, !files.isEmpty, showsPosters, Self.hasTitles(files, drive) {
-                posterGrid(files)
+                posterGrid(files, shown: CloudPins.shared.arrange(files, drive: drive))
             } else if let files, !files.isEmpty {
                 FilesList {
                     FilesSection(title: nil, footer: nil) {
                         #if os(tvOS)
                         if Self.hasTitles(files, drive) { layoutButton.glassRow() }
                         #endif
-                        ForEach(files) { row($0, in: files) }
+                        // Pinned items first; playback still steps through the drive's own order (#1715).
+                        ForEach(CloudPins.shared.arrange(files, drive: drive)) { row($0, in: files) }
                     }
                 }
                 #if os(iOS)
@@ -174,8 +175,8 @@ struct CloudFolderView: View {
     }
 
     /// The folder's folders and videos as posters; its other files stay in the list.
-    private func posterGrid(_ files: [CloudFile]) -> some View {
-        let shown = files.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
+    private func posterGrid(_ files: [CloudFile], shown arranged: [CloudFile]) -> some View {
+        let shown = arranged.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
         let client = CloudFilesSource.client(drive, origin: store.subscription?.origin ?? URL(string: "\(CloudFiles.scheme)://\(drive.key)")!)
         return ScrollView {
             VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -233,7 +234,6 @@ struct CloudFolderView: View {
         let pinned = CloudPins.shared.contains(drive: drive, file: file)
         return Button {
             CloudPins.shared.toggle(drive: drive, file: file)
-            if let files { self.files = CloudPins.shared.arrange(files, drive: drive) }
         } label: {
             Label(L10n.text(pinned ? "Unpin" : "Pin to Top"), systemImage: pinned ? "pin.slash" : "pin")
         }
@@ -253,7 +253,7 @@ struct CloudFolderView: View {
 
     private func load(password: String? = nil) async {
         do {
-            files = CloudPins.shared.arrange(try await CloudFiles.list(drive, folder: folder, password: password), drive: drive)
+            files = try await CloudFiles.list(drive, folder: folder, password: password)
             failure = nil
         } catch CloudFilesError.passwordRequired {
             self.password = ""

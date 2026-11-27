@@ -14,9 +14,9 @@ import Observation
     }
 
     private func key(_ drive: CloudFilesDrive, _ file: CloudFile) -> String { drive.key + "|" + file.id }
-    public func contains(_ drive: CloudFilesDrive, _ file: CloudFile) -> Bool { keys.contains(key(drive, file)) }
+    public func contains(drive: CloudFilesDrive, file: CloudFile) -> Bool { keys.contains(key(drive, file)) }
 
-    public func toggle(_ drive: CloudFilesDrive, _ file: CloudFile) {
+    public func toggle(drive: CloudFilesDrive, file: CloudFile) {
         let key = self.key(drive, file)
         if keys.contains(key) { keys.remove(key) } else { keys.insert(key) }
         defaults.set(Array(keys), forKey: "cloudPins.v1")
@@ -25,6 +25,6 @@ import Observation
     /// The pinned items first, the rest in the drive's own order.
     public func arrange(_ files: [CloudFile], drive: CloudFilesDrive) -> [CloudFile] {
         guard !keys.isEmpty else { return files }
-        return files.filter { contains(drive, $0) } + files.filter { !contains(drive, $0) }
+        return files.filter { contains(drive: drive, file: $0) } + files.filter { !contains(drive: drive, file: $0) }
     }
 }
