@@ -974,3 +974,44 @@ struct MusicLikedView: View {
         }
     }
 }
+
+/// Everything played recently, on its own page: the Music home keeps only the first twenty entries,
+/// so a long history stops pushing the rest of the page down (#2004). The rows are the home's, each
+/// removable from its menu, and Clear empties the list as it always did.
+struct MusicRecentlyPlayedView: View {
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        let library = store.music.library
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
+                HStack {
+                    SectionHeader(title: L10n.text("Recently Played"))
+                    Spacer()
+                    Button(L10n.text("Clear")) { library.clearHistory() }.controlButton()
+                }
+                .padding(.bottom, 8)
+                .tvFocusSection()
+                ForEach(library.history) { entry in
+                    if let collection = entry.collection {
+                        MusicCollectionRow(collection: collection) { library.remove(entry) }
+                    } else if let track = entry.track {
+                        MusicTrackRow(track: track, removeFromHistory: { library.remove(entry) }) { store.music.play(track) }
+                    }
+                }
+            }
+            .glassRowInsets()
+            .pageContainer()
+        }
+        .screenBackdrop()
+        .screenTitle(L10n.text("Recently Played"))
+        #if os(macOS)
+        // The section header names it, as on the other Music pages.
+        .toolbar(removing: .title)
+        #endif
+        .musicPlayerInset()
+        #if os(tvOS)
+        .onPlayPauseCommand { store.music.toggle() }
+        #endif
+    }
+}
