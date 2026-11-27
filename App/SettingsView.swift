@@ -650,6 +650,13 @@ struct FormSettingsView: View {
             #endif
 
             Section {
+                #if os(iOS)
+                // Keep adding a subscription within reach even when the list is long (#2530).
+                Button { addingSubscription = true } label: {
+                    FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
+                }
+                .settingsAnchor(.addSubscription)
+                #endif
                 ForEach(store.subscriptions) { entry in
                     let failure = store.subscriptionErrors[entry.address]
                     FormLink(symbol: failure == nil ? "list.bullet.rectangle.fill" : "exclamationmark.triangle.fill",
@@ -726,13 +733,7 @@ struct FormSettingsView: View {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
                     .settingsAnchor(.removeSubscriptions)
                 }
-                #if os(iOS)
-                // One row instead of an always-open field and three text buttons; the address goes in a sheet.
-                Button { addingSubscription = true } label: {
-                    FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
-                }
-                .settingsAnchor(.addSubscription)
-                #else
+                #if !os(iOS)
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
                     .labelsHidden()
                     .autocorrectionDisabled()
