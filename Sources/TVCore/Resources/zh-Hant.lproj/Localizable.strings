@@ -2118,6 +2118,7 @@
 "This address doesn't hold a subscription. Add it as a new one instead." = "此網址不是訂閱，請作為新的訂閱加入。";
 "Couldn't load this address: %@" = "無法載入此網址：%@";
 "Use New Address" = "改用新網址";
+"Subscription address updated." = "訂閱網址已更新。";
 "File" = "檔案";
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "映匣會保存這個檔案的副本。之後修改原檔案不會同步到映匣；需要更新時，請再次用映匣打開它。";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "已新增洛雪音源「%@」，音樂會透過它播放歌曲。可在「音樂設定 › 洛雪音樂自訂源」中管理。";
