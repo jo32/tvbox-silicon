@@ -599,7 +599,7 @@ struct MobilePlayerView: View {
             // Locked, the button says what it undoes: with every control hidden, a bare padlock left people stuck
             // in a player that seemed frozen (#729, #731).
             HStack(spacing: 8) {
-                Image(systemName: locked ? "lock.fill" : "lock.open.fill").font(.headline).frame(width: 22, height: 22)
+                Image(systemName: locked ? "lock.fill" : "lock.open.fill").font(.playerGlyph).frame(width: 24, height: 24)
                     .contentTransition(.symbolEffect(.replace))
                 if locked { Text(L10n.text("Unlock Controls")).font(.subheadline.weight(.semibold)).fixedSize() }
             }
@@ -762,7 +762,7 @@ struct MobilePlayerView: View {
     @ViewBuilder private var topRow: some View {
         if inline {
             HStack(spacing: 8) {
-                Button(action: close) { Image(systemName: "chevron.backward").font(.headline).frame(width: 22, height: 22) }
+                Button(action: close) { Image(systemName: "chevron.backward").font(.playerGlyph).frame(width: 24, height: 24) }
                     .chromeButton(reach: 8)
                     .accessibilityLabel(L10n.text("Back"))
                     .accessibilityIdentifier("player.close")
@@ -778,7 +778,7 @@ struct MobilePlayerView: View {
     private var screenTopRow: some View {
         PlayerTopBar {
             // The way out takes a touch that only comes near it (#1149): 64 points around its 44-point circle.
-            Button(action: close) { Image(systemName: "chevron.backward").font(.headline).frame(width: 22, height: 22) }
+            Button(action: close) { Image(systemName: "chevron.backward").font(.playerGlyph).frame(width: 24, height: 24) }
                 .chromeButton(reach: 10)
                 .accessibilityLabel(L10n.text("Back"))
                 .accessibilityIdentifier("player.close")
@@ -837,7 +837,7 @@ struct MobilePlayerView: View {
             }
             if pip.supported && allowsPictureInPicture {
                 Button { pip.toggle() } label: {
-                    Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.headline).frame(width: 22, height: 22)
+                    Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.playerGlyph).frame(width: 24, height: 24)
                 }
                 .chromeButton()
                 .disabled(!pip.possible && !pip.active)
@@ -856,7 +856,8 @@ struct MobilePlayerView: View {
                     .disabled(session.danmaku.isEmpty)
             } label: {
                 // A wide, tall mark: a size down it sits level with AirPlay and the options beside it.
-                Image(systemName: DanmakuPreference.symbol).font(.system(size: 16, weight: .semibold)).frame(width: 22, height: 22)
+                // A text bubble, filled while comments show: the state at a glance. Here no subtitles bubble sits beside it.
+                Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.playerGlyph).frame(width: 24, height: 24)
             }
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))
@@ -869,7 +870,7 @@ struct MobilePlayerView: View {
                     decidedCacheOrientation = true
                     PlayerOrientation.set(landscape: !landscape)
                 } label: {
-                    Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate").font(.headline).frame(width: 22, height: 22)
+                    Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate").font(.playerGlyph).frame(width: 24, height: 24)
                 }
                 .chromeButton()
                 .accessibilityLabel(L10n.text(landscape ? "Rotate to Portrait" : "Rotate to Landscape"))
@@ -963,7 +964,7 @@ struct MobilePlayerView: View {
                 if showsStatus { Toggle(L10n.text("Battery Percentage"), isOn: $batteryPercentage) }
             }
         } label: {
-            Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
+            Image(systemName: "gearshape").font(.playerGlyph).frame(width: 24, height: 24)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
         }
         .chromeButton()
@@ -1551,7 +1552,7 @@ private struct AirPlayButton: UIViewRepresentable {
 private final class AirPlayMarkView: UIView {
     private let picker = AVRoutePickerView()
     private let mark = UIImageView(image: UIImage(systemName: "airplay.video",
-                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)))
     /// As `ChromeButtonStyle` in a button group: a faint circle while pressed.
     private let pressed = UIView()
     private weak var button: UIButton?
