@@ -532,6 +532,9 @@ import IOKit.pwr_mgt
         guard let item else { return }
         UngroupedAudio.play(id, in: item)
         audioChoice = UngroupedAudio.playing(item)
+        if let id = audioChoice, let choice = audioChoices.first(where: { $0.id == id }) {
+            AudioChoice.remember(choice, for: subtitleScope)
+        }
     }
 
     /// Plays the stream at `quality` (nil: automatic) from where it is now.
@@ -1360,16 +1363,26 @@ import IOKit.pwr_mgt
         return nil
     }
 
-    /// Selects a detailed audio option from the tvOS transport-bar menu (#2388).
+    /// Selects a detailed audio option from the Audio menu, remembered for the next episode (#2388, #2184).
     func chooseAudioTrack(_ option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) {
         guard let item, player.currentItem === item, let tracks = mediaTracks.audio, tracks.group == group,
               tracks.options.contains(option) else { return }
         guard item.currentMediaSelection.selectedMediaOption(in: group) != option else { return }
+        let description = tracks.options.firstIndex(of: option).map { tracks.descriptions[$0] }
         mediaTracks.select(option, in: tracks)
+        AudioChoice.remember(description, for: subtitleScope)
     }
 
     /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
     func chooseSubtitle(_ option: AVMediaSelectionOption?, in group: AVMediaSelectionGroup) {
+        if let audio = mediaTracks.audio, audio.group == group {
+            // AVKit has already switched; only remember the viewer's pick (#2184).
+            if let option, let index = audio.options.firstIndex(of: option) {
+                AudioChoice.remember(audio.descriptions[index], for: subtitleScope)
+            }
+            mediaTracks.selectionChanged()
+            return
+        }
         guard let item, player.currentItem === item, let tracks = mediaTracks.legible, tracks.group == group else { return }
         let description: TrackLabel.Option?
         if let option {
@@ -1400,6 +1413,27 @@ import IOKit.pwr_mgt
         if let group = tracks?.group, item.currentMediaSelection.selectedMediaOption(in: group) != option {
             item.select(option, in: group)
         }
+        return true
+    }
+
+    /// A missing track may fall back for this episode. Only the viewer can change the remembered choice.
+    private func restoreAudioChoice(_ item: AVPlayerItem, tracks: MediaTracks.Group?, scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope) else { return false }
+        guard let tracks, let index = choice.match(tracks.descriptions, in: scope) else { return false }
+        let option = tracks.options[index]
+        if item.currentMediaSelection.selectedMediaOption(in: tracks.group) != option {
+            item.select(option, in: tracks.group)
+        }
+        return true
+    }
+
+    /// The remembered dub of a file whose tracks AVFoundation offers no choice between. Only the viewer can change
+    /// the remembered choice; `audioChoice` follows only the item playing, not one queued for later.
+    private func restoreUngroupedAudioChoice(_ item: AVPlayerItem, choices: [UngroupedAudio.Choice], scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope), let id = choice.match(choices, in: scope) else { return false }
+        guard UngroupedAudio.playing(item) != id else { return true }
+        UngroupedAudio.play(id, in: item)
+        if item === self.item { audioChoice = id }
         return true
     }
 
@@ -1822,6 +1856,7 @@ import IOKit.pwr_mgt
             }
             self.audioChoices = choices
             self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+            if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
         }
         if !force, item.status == .readyToPlay {
             Task { [weak self] in
@@ -1865,9 +1900,13 @@ import IOKit.pwr_mgt
                     Task { [weak self] in
                         guard let self, self.item === item else { return }
                         await self.mediaTracks.load(item)
-                        guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
-                        if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                        guard self.generation == activeGeneration, self.item === item else { return }
+                        if !self.externalSubtitles.manuallyChoseFile,
+                           self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
                             self.externalSubtitles.nativeChosen()
+                        }
+                        if self.audioChoices.isEmpty, UngroupedAudio.trackIDs(item).count <= (self.mediaTracks.audio?.options.count ?? 0) {
+                            _ = self.restoreAudioChoice(item, tracks: self.mediaTracks.audio, scope: self.subtitleScope)
                         }
                     }
                     self.checkingPicture = Self.repackagable(url)
@@ -2601,6 +2640,15 @@ extension PlaybackSession {
                             let tracks = await MediaTracks.subtitleGroup(queued)
                             guard let self, self.upcoming?.item === queued else { return }
                             _ = self.restoreSubtitleChoice(queued, tracks: tracks, scope: Self.subtitleScope(for: next))
+                            // Our own picker's tracks when the file has them, else its selection group's.
+                            let choices = await UngroupedAudio.choices(queued)
+                            if !choices.isEmpty {
+                                if self.upcoming?.item === queued {
+                                    _ = self.restoreUngroupedAudioChoice(queued, choices: choices, scope: Self.subtitleScope(for: next))
+                                }
+                            } else if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
+                                _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
+                            }
                         }
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
