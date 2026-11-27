@@ -33,7 +33,7 @@ public enum LiveRepair {
     }
 
     /// The playlist on the server behind an address from `address`.
-    static func upstream(_ url: URL) -> URL? {
+    public static func upstream(_ url: URL) -> URL? {
         guard loads(url), var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         components.scheme = url.scheme?.hasSuffix(plainSuffix) == true ? "http" : "https"
         return components.url
@@ -60,7 +60,7 @@ public enum LiveRepair {
     /// Whether `url` is an address from `address` for a live playlist to repair.
     static func repairs(_ url: URL) -> Bool { [scheme, scheme + plainSuffix].contains(url.scheme ?? "") }
     /// Whether `url` is an address from `address` for a playlist whose ads are cut.
-    static func skipsAds(_ url: URL) -> Bool { [adScheme, adScheme + plainSuffix].contains(url.scheme ?? "") }
+    public static func skipsAds(_ url: URL) -> Bool { [adScheme, adScheme + plainSuffix].contains(url.scheme ?? "") }
 
     nonisolated(unsafe) private static var segmentNames: [String: [Int: String]] = [:]
     private static let hostsKey = "liveRepairHosts"

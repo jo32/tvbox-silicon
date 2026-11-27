@@ -19,13 +19,15 @@ struct PlaybackView: View {
     @State private var session: PlaybackSession
     @State private var pip: PictureInPicture
 
-    /// A video still playing in Picture in Picture after its player closed comes back to the new player as it is.
+    /// A video still playing in Picture in Picture after its player closed, or handed off across an iPhone Duo fold
+    /// transition (#1967, #2103), comes back to the new player as it is.
     init(channel: Channel, watch: WatchPlayback? = nil) {
         self.channel = channel
         self.watch = watch
         let parked = FloatingPlayback.shared.parked(for: channel)
-        _session = State(initialValue: parked?.session ?? PlaybackSession())
-        _pip = State(initialValue: parked?.pip ?? PictureInPicture())
+        let handedOff = parked == nil ? PlaybackHandoff.shared.peek(for: channel) : nil
+        _session = State(initialValue: parked?.session ?? handedOff?.session ?? PlaybackSession())
+        _pip = State(initialValue: parked?.pip ?? handedOff?.pip ?? PictureInPicture())
     }
     #else
     @State private var session = PlaybackSession()
@@ -61,6 +63,7 @@ struct PlaybackView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     /// With Start in Full Screen on, a player that opens as its own screen (a Discover search, say, rather than a
     /// watch page) turns for the video the moment its picture appears. Watch pages apply it on their own.
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
@@ -101,7 +104,8 @@ struct PlaybackView: View {
                                  lines: session.lines.indices.map { L10n.text("Line %@", "\($0 + 1)") }, line: session.line,
                                  chooseLine: { session.choose(line: $0) }, transportBar: transportBar,
                                  titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store)),
-                                 findDanmaku: danmakuFinder).ignoresSafeArea()
+                                 findDanmaku: danmakuFinder,
+                                 onReadyForDisplay: { session.setDisplayReady($0) }).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -190,14 +194,26 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
+            if watch == nil {
+                store.fullScreenPlayers += 1
+                PlayerOrientation.setStandalonePlayer(true)
+            }
             if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
                 // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
-                // Only for a player of its own screen; a watch page turns for itself.
-                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
+                // Only for a player of its own screen (a watch page turns for itself), and not on a foldable's
+                // large inner screen, which plays the way it is held (#1967).
+                if parked.landscape, playerLayout == .screen, PlayerOrientation.available,
+                   horizontalSizeClass == .compact || verticalSizeClass == .compact {
+                    PlayerOrientation.set(landscape: true)
+                }
+            } else if PlaybackHandoff.shared.take(session) {
+                // Handed off across an iPhone Duo layout transition: keep the live session playing (#1967, #2103).
+                startCatalogPlayback(session, channel: channel, store: store, resuming: true)
             } else {
                 FloatingPlayback.shared.end()
+                PlaybackHandoff.shared.discard()
                 startCatalogPlayback(session, channel: channel, store: store)
             }
             showOnStart()
@@ -207,11 +223,16 @@ struct PlaybackView: View {
             #endif
         }
         #if os(iOS)
-        // Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
+        // Manual Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
         .onChange(of: pip.floating) { _, floating in
             guard floating, session.error == nil else { return }
             FloatingPlayback.shared.park(channel, session: session, pip: pip, store: store)
             if let watch { watch.leave() } else { dismiss() }
+        }
+        // Automatic Picture in Picture started when leaving the app: returning to Yingxia (e.g. via the home bar,
+        // #2441) brings the video straight back into the open player in its landscape orientation (#2483).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { pip.returnIfAutomatic() }
         }
         #endif
         #if DEBUG && os(iOS)
@@ -227,9 +248,11 @@ struct PlaybackView: View {
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         // Start in Full Screen (#2097): a player that opened as its own screen turns as soon as its picture appears,
-        // as the watch page's player does. Watch pages apply the setting themselves, so only the standalone player.
+        // as the watch page's player does. Watch pages apply the setting themselves, so only the standalone player
+        // on a compact phone screen (not iPad or iPhone Duo's inner display).
         .onChange(of: session.showsPicture) { _, showing in
-            guard showing, startsFullScreen, playerLayout == .screen, session.error == nil else { return }
+            guard showing, startsFullScreen, playerLayout == .screen, session.error == nil,
+                  PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact else { return }
             let size = session.player.currentItem?.presentationSize ?? .zero
             PlayerOrientation.set(landscape: size.height == 0 || size.width >= size.height)
         }
@@ -240,20 +263,28 @@ struct PlaybackView: View {
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection()
             #if os(iOS)
-            if !FloatingPlayback.shared.holds(session) { session.stop() }
+            if watch == nil {
+                store.fullScreenPlayers = max(0, store.fullScreenPlayers - 1)
+                PlayerOrientation.setStandalonePlayer(false)
+            }
+            // Unfolding iPhone Duo replaces the watch page with the regular detail page: hand the live session over
+            // to the full-screen cover so playback never stops (#1967, #1528, #2103).
+            if watch != nil, WatchPage.isLargeDisplay, store.playing == channel, session.error == nil,
+               !FloatingPlayback.shared.holds(session) {
+                PlaybackHandoff.shared.park(channel, session: session, pip: pip)
+            }
+            if !FloatingPlayback.shared.holds(session), !PlaybackHandoff.shared.holds(session) { session.stop() }
+            ExternalDisplay.shared.detach(session.player)
+            PlayerOrientation.release(forcePortrait: !WatchPage.isLargeDisplay)
             #else
             session.stop()
-            #endif
-            #if os(iOS)
-            ExternalDisplay.shared.detach(session.player)
-            PlayerOrientation.release()
             #endif
         }
         #if os(iOS)
         // Opening iPhone Duo moves the app to the inner display, which ignores orientations: drop a
-        // landscape lock so the outer display isn't left in landscape when it closes again.
+        // landscape lock without forcing portrait (#1967, #1528).
         .onChange(of: horizontalSizeClass == .regular && verticalSizeClass == .regular) { _, large in
-            if large { PlayerOrientation.release() }
+            if large { PlayerOrientation.release(forcePortrait: false) }
         }
         #endif
     }
@@ -834,34 +865,54 @@ private struct PlayerSurface: NSViewRepresentable {
 /// The iPhone player's rotate button. While it holds landscape the app allows landscape only, so the phone
 /// held upright (or Portrait Orientation Lock) doesn't turn it back; the button or closing the player does.
 @MainActor enum PlayerOrientation {
-    static private(set) var mask: UIInterfaceOrientationMask = .allButUpsideDown
-    static var available: Bool { UIDevice.current.userInterfaceIdiom == .phone }
-    /// An iPhone watch page is on screen: it stays upright, and only its Full Screen turns the phone.
-    static private var holdsPortrait = false
-
-    static func set(landscape: Bool) {
-        guard let scene = UIApplication.shared.appWindowScene else { return }
-        mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown
-        var controller = scene.keyWindow?.rootViewController
-        while let next = controller?.presentedViewController { controller = next }
-        controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
-        // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait)) { @Sendable error in
-            Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
+    private static var policy = OrientationPolicy()
+    static var mask: UIInterfaceOrientationMask {
+        switch policy.allowed {
+        case .allButUpsideDown: .allButUpsideDown
+        case .landscape: .landscape
+        case .portrait: .portrait
         }
     }
+    static var available: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
-    /// Back to portrait when the player closes, if the button turned it.
-    static func release() {
-        if mask == .landscape { set(landscape: false) }
+    static func set(landscape: Bool) {
+        apply(policy.set(landscape: landscape))
+    }
+
+    /// Back to portrait (or unlocked on a large display) when the player closes, if landscape was held.
+    static func release(forcePortrait: Bool = true) {
+        if let request = policy.release(forcePortrait: forcePortrait) { apply(request) }
     }
 
     /// While a watch page shows, the app stays upright (the page turns to landscape for Full Screen only).
     static func holdPortrait(_ hold: Bool) {
-        guard holdsPortrait != hold else { return }
-        holdsPortrait = hold
-        if mask != .landscape { set(landscape: false) }
+        if let request = policy.holdPortrait(hold) { apply(request) }
+    }
+
+    /// While a standalone full-screen player cover is on screen, any watch page underneath must not hold portrait.
+    static func setStandalonePlayer(_ active: Bool) {
+        if let request = policy.setStandalonePlayer(active) { apply(request) }
+    }
+
+    private static func apply(_ request: OrientationPolicy.Request) {
+        guard let scene = UIApplication.shared.appWindowScene else { return }
+        // Invalidate the whole controller chain, not only the topmost presented controller (which may be dismissing).
+        var controller = scene.keyWindow?.rootViewController
+        while let current = controller {
+            current.setNeedsUpdateOfSupportedInterfaceOrientations()
+            controller = current.presentedViewController
+        }
+        let target: UIInterfaceOrientationMask? = switch request {
+        case .refresh: nil
+        case .landscape: .landscape
+        case .portrait: .portrait
+        }
+        guard let target else { return }
+        // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
+        // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { @Sendable error in
+            Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
+        }
     }
 }
 #else
@@ -980,12 +1031,15 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var titleRow: AnyView? = nil
     /// The danmaku picker (#1089), last in the Danmaku menu, which it brings even before any comments load.
     var findDanmaku: (() -> AnyView)? = nil
+    var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
         var subtitles: SubtitleCues?
         var transportBar: TransportBarVisibility?
         var chooseSubtitle: ((AVMediaSelectionOption?, AVMediaSelectionGroup) -> Void)?
+        var readyObservation: NSKeyValueObservation?
+        var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
         #if os(tvOS)
         func playerViewController(_ playerViewController: AVPlayerViewController, didSelect mediaSelectionOption: AVMediaSelectionOption?,
                                   in mediaSelectionGroup: AVMediaSelectionGroup) {
@@ -1018,6 +1072,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         controller.delegate = context.coordinator
         context.coordinator.subtitles = subtitles
         context.coordinator.transportBar = transportBar
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
+        context.coordinator.readyObservation = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak coordinator = context.coordinator] _, change in
+            let ready = change.newValue ?? false
+            Task { @MainActor [weak coordinator] in coordinator?.onReadyForDisplay(ready) }
+        }
         let host = UIHostingController(rootView: overlay)
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
@@ -1044,6 +1103,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let gravity: AVLayerVideoGravity = fills.wrappedValue ? .resizeAspectFill : .resizeAspect
         if controller.videoGravity != gravity { controller.videoGravity = gravity }
         context.coordinator.host?.rootView = overlay
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         context.coordinator.chooseSubtitle = chooseSubtitle
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
@@ -1140,7 +1200,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 + qualities.map { option in UIAction(title: option.label, state: quality == option.id ? .on : .off) { _ in choose(option.id) } }
             items.append(UIMenu(title: L10n.text("Quality") + " · " + current, image: UIImage(systemName: "sparkles.tv"), children: options))
         }
-        if let audioTracks, audioTracks.options.count > 1 {
+        if audio.count <= 1, let audioTracks, audioTracks.options.count > 1 {
             let chooseAudioTrack = chooseAudioTrack
             let selected = selectedAudioTrack
             let options = audioTracks.options.map { option in
@@ -1154,8 +1214,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if audio.count > 1 {
             let chooseAudio = chooseAudio
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
-            let title = (audioTracks?.options.count ?? 0) > 1 ? L10n.text("Other Audio") : L10n.text("Audio")
-            items.append(UIMenu(title: title, image: UIImage(systemName: "speaker.wave.2"), children: options))
+            let current = audio.first { $0.id == audioChoice }.map { L10n.text("Audio") + " · " + $0.name } ?? L10n.text("Audio")
+            items.append(UIMenu(title: current, image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         // Always there (but for live): adding a file by its address starts here (#576).
         if let external, !live { items.append(Self.subtitleFilesMenu(external, ownSubtitles: ownSubtitles, presenter: controller)) }
@@ -1225,7 +1285,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                               state: info.wrappedValue ? .on : .off) { _ in info.wrappedValue.toggle() })
         controller.transportBarCustomMenuItems = items
     }
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { coordinator.criteria?.reset() }
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.readyObservation = nil
+        coordinator.criteria?.reset()
+    }
 
     /// Off and the files, then the chosen one's timing, frame rate and encoding. A file comes from the source (a drive's
     /// folder), a subtitle source, or an address typed with the remote or an iPhone's keyboard; there is no file panel here.
@@ -1402,6 +1465,9 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     static let shared = PlayerWindowController()
     private var window: PlaybackWindow?
     private let session = PlaybackSession()
+    /// Owned here so hiding the window for Picture in Picture never stops it (#2533, #2318, #1847).
+    private let pip = DesktopPictureInPicture()
+    private var pipWindow = MacPiPWindowState()
     private var onClose: (() -> Void)?
     private weak var store: Store?
     /// The channel the window was given last, so the store setting the same one again doesn't start it over.
@@ -1427,6 +1493,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     private func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
         self.onClose = onClose
+        let previous = presented
         presented = channel
         let target: PlaybackWindow
         if let window { target = window }
@@ -1448,14 +1515,63 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             // A new window: its first picture takes the Default Window Size; later ones keep what the viewer has.
             target.sizesFirstPicture = true
             window = target
+            wirePiP()
         }
         target.title = channel.name
         // The next episode updates the view in place: a new one would rebuild the player view, a flash between episodes.
-        let root = DesktopPlaybackRoot(channel: channel, session: session, window: target, store: store)
+        let root = DesktopPlaybackRoot(channel: channel, session: session, pip: pip, window: target, store: store)
         if let host = target.contentView as? DesktopHostingView<DesktopPlaybackRoot> { host.rootView = root }
         else { target.contentView = DesktopHostingView(rootView: root) }
         startCatalogPlayback(session, channel: channel, store: store)
-        target.makeKeyAndOrderFront(nil)
+        let continuing = isContinuing(channel, after: previous, store: store)
+        switch pipWindow.willPresent(continuing: continuing) {
+        case .restoreWindow:
+            target.makeKeyAndOrderFront(nil)
+        case .stopPiPAndShowWindow:
+            pip.stop()
+            target.makeKeyAndOrderFront(nil)
+        case .none, .hideWindow, .exitFullScreenThenHide, .closeWindow:
+            break
+        }
+    }
+
+    /// True when `channel` continues the current playback (the next episode of the same series, or the next file in
+    /// the same Cloud Files folder) so Picture in Picture plays on without popping the large window back up (#1847).
+    private func isContinuing(_ channel: Channel, after previous: Channel?, store: Store) -> Bool {
+        guard let previous else { return false }
+        if let scope = channel.skipScope, scope == previous.skipScope { return true }
+        if let files = store.filesFolder?.files,
+           files.contains(where: { $0.id == channel.id }),
+           files.contains(where: { $0.id == previous.id }) { return true }
+        return false
+    }
+
+    private func wirePiP() {
+        pip.subtitles = session.subtitles
+        pip.enhancer = session.enhancer
+        pip.onDidStart = { [weak self] in
+            guard let self, let window = self.window, self.session.error == nil else { return }
+            switch self.pipWindow.didStart(windowIsFullScreen: window.styleMask.contains(.fullScreen)) {
+            case .hideWindow:
+                window.orderOut(nil)
+            case .exitFullScreenThenHide:
+                window.toggleFullScreen(nil)
+            case .none, .restoreWindow, .closeWindow, .stopPiPAndShowWindow:
+                break
+            }
+        }
+        pip.onRestore = { [weak self] in
+            guard let self else { return }
+            if self.pipWindow.willRestore() == .restoreWindow {
+                self.window?.makeKeyAndOrderFront(nil)
+            }
+        }
+        pip.onDidStop = { [weak self] in
+            guard let self else { return }
+            if self.pipWindow.didStop() == .closeWindow {
+                self.close()
+            }
+        }
     }
 
     private func close() { window?.close() }
@@ -1466,8 +1582,14 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     func windowWillStartLiveResize(_ notification: Notification) { window?.startsDrag() }
 
+    func windowDidExitFullScreen(_ notification: Notification) {
+        if pipWindow.didExitFullScreen() == .hideWindow { window?.orderOut(nil) }
+    }
+
     func windowWillClose(_ notification: Notification) {
         presented = nil
+        pipWindow.windowClosed()
+        pip.reset()
         session.stop()
         window?.contentView = nil
         window = nil
@@ -1869,22 +1991,23 @@ private struct DesktopBoostLabel: View {
 private struct DesktopPlaybackRoot: View {
     let channel: Channel
     let session: PlaybackSession
+    let pip: DesktopPictureInPicture
     let window: PlaybackWindow
     let store: Store
-    var body: some View { DesktopPlaybackView(channel: channel, session: session, window: window).environment(store) }
+    var body: some View { DesktopPlaybackView(channel: channel, session: session, pip: pip, window: window).environment(store) }
 }
 
 private struct DesktopPlaybackView: View {
     @Environment(Store.self) private var store
     let channel: Channel
     @Bindable var session: PlaybackSession
+    let pip: DesktopPictureInPicture
     let window: PlaybackWindow
     @State private var fillsFrame = false
     @State private var floats = false
     @State private var idle = ChromeIdle()
     /// The seek bar's position and the frame over its handle, as on iPhone.
     @State private var clock = PlayerClock()
-    @State private var pip = DesktopPictureInPicture()
     /// The seek bar held: the middle buttons and the logo's row make way for the frame over the handle, as on iPhone.
     @State private var scrubbing = false
     @State private var speed: Float = 1
@@ -1937,7 +2060,7 @@ private struct DesktopPlaybackView: View {
         ZStack(alignment: .top) {
             ZStack {
                 Color.black
-                DesktopVideoView(player: session.player, fillsFrame: fillsFrame, pip: pip)
+                DesktopVideoView(player: session.player, fillsFrame: fillsFrame, pip: pip) { session.setDisplayReady($0) }
                 // Over the picture and under everything else, and the mouse goes through them to the picture, whose
                 // click plays or pauses (PlaybackWindow).
                 Group {
@@ -1995,17 +2118,6 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
-        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
-        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
-        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
-        .onChange(of: pip.floating) { _, floating in
-            if floating {
-                guard session.error == nil else { return }
-                window.miniaturize(nil)
-            } else {
-                window.deminiaturize(nil)
-            }
-        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -2027,6 +2139,7 @@ private struct DesktopPlaybackView: View {
             clock.attach(session.player)
             speed = session.player.defaultRate
             pip.subtitles = session.subtitles
+            pip.enhancer = session.enhancer
         }
         // Played here again (Space, say): the other device no longer has it to itself.
         .onChange(of: session.paused) { _, paused in
@@ -2044,7 +2157,9 @@ private struct DesktopPlaybackView: View {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
         .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environment(store) }
-        .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach(); clock.detach(); pip.stop() }
+        // Do not stop PiP here: hiding the window for Picture in Picture (`orderOut`) must leave the floating window
+        // playing (#2533, #2318). `PlayerWindowController.windowWillClose` stops PiP when the window actually closes.
+        .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach(); clock.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
         .dropDestination(for: URL.self) { urls, _ in
@@ -2454,18 +2569,43 @@ private struct DesktopVideoView: NSViewRepresentable {
     let player: AVPlayer
     let fillsFrame: Bool
     let pip: DesktopPictureInPicture
+    var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+    @MainActor final class Coordinator {
+        weak var pip: DesktopPictureInPicture?
+        var observation: NSKeyValueObservation?
+        var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+        weak var layer: AVPlayerLayer?
+        func watch(_ layer: AVPlayerLayer) {
+            guard self.layer !== layer else { return }
+            self.layer = layer
+            observation = layer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] _, change in
+                let ready = change.newValue ?? false
+                Task { @MainActor [weak self] in self?.onReadyForDisplay(ready) }
+            }
+        }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> DesktopVideoNSView {
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         let view = DesktopVideoNSView()
         view.playerLayer.player = player
+        context.coordinator.pip = pip
         pip.attach(view.playerLayer)
+        context.coordinator.watch(view.playerLayer)
         return view
     }
     func updateNSView(_ view: DesktopVideoNSView, context: Context) {
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         if view.playerLayer.player !== player { view.playerLayer.player = player }
         let gravity: AVLayerVideoGravity = fillsFrame ? .resizeAspectFill : .resizeAspect
         if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
+        context.coordinator.pip = pip
+        context.coordinator.watch(view.playerLayer)
     }
-    static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: ()) { view.playerLayer.player = nil }
+    static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: Coordinator) {
+        coordinator.observation = nil
+        if coordinator.pip?.active != true { view.playerLayer.player = nil }
+    }
 }
 
 /// Hosts the Mac player's SwiftUI controls: `mouseDownCanMoveWindow` is false so dragging SwiftUI controls like
@@ -2492,11 +2632,13 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
-    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
-    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
-    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
+    /// Suspended while PiP runs so the enhancement surface doesn't draw or process frames off screen.
+    @ObservationIgnored var enhancer: VideoEnhancer?
+    @ObservationIgnored var onDidStart: (() -> Void)?
+    @ObservationIgnored var onRestore: (() -> Void)?
+    @ObservationIgnored var onDidStop: (() -> Void)?
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var observation: NSKeyValueObservation?
 
@@ -2526,29 +2668,57 @@ private final class DesktopVideoNSView: NSView {
         if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
     }
 
+    func reset() {
+        stop()
+        observation = nil
+        controller?.delegate = nil
+        controller = nil
+        possible = false
+        active = false
+        subtitles?.native = false
+        enhancer?.suspended = false
+        onDidStart = nil
+        onRestore = nil
+        onDidStop = nil
+    }
+
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = true
             self?.subtitles?.native = true
+            self?.enhancer?.suspended = true
         }
     }
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.floating = true }
+        Task { @MainActor [weak self] in
+            self?.onDidStart?()
+        }
     }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
-            self?.active = false
-            self?.floating = false
-            self?.subtitles?.native = false
+            guard let self else { return }
+            active = false
+            subtitles?.native = false
+            enhancer?.suspended = false
+            onDidStop?()
         }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController,
                                                restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
-        completionHandler(true)
+        nonisolated(unsafe) let done = completionHandler
+        Task { @MainActor [weak self] in
+            self?.onRestore?()
+            done(true)
+        }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         let detail = Diagnostics.describe(error)
-        Task { @MainActor in Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)") }
+        Task { @MainActor [weak self] in
+            self?.active = false
+            self?.subtitles?.native = false
+            self?.enhancer?.suspended = false
+            Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)")
+        }
     }
 }
 
@@ -2590,19 +2760,18 @@ struct MediaAudioMenus: View {
     let session: PlaybackSession
 
     var body: some View {
-        if let audio = session.mediaTracks.audio, audio.options.count > 1 {
-            Menu(L10n.text("Audio")) {
-                Picker(L10n.text("Audio"), selection: Binding(get: { session.mediaTracks.selected(in: audio) },
-                                                              set: { session.mediaTracks.select($0, in: audio) })) {
-                    ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
-                }
-                .pickerStyle(.inline)
-            }
-        }
         if session.audioChoices.count > 1 {
             Menu(L10n.text("Audio")) {
                 Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
                     ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .pickerStyle(.inline)
+            }
+        } else if let audio = session.mediaTracks.audio, audio.options.count > 1 {
+            Menu(L10n.text("Audio")) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.mediaTracks.selected(in: audio) },
+                                                              set: { session.mediaTracks.select($0, in: audio) })) {
+                    ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                 }
                 .pickerStyle(.inline)
             }

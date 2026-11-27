@@ -113,8 +113,14 @@ import TVCore
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
     var watchPageScopes: Set<String> = []
+    /// A standalone full-screen player cover is already on screen: a watch page appearing underneath it (for example
+    /// when folding iPhone Duo from its inner display to its outer display, #1967, #1528, #2103) must not steal
+    /// playback from the cover or mount a second player underneath it.
+    /// Counted, not a flag: a cover replacing another can appear before the old one disappears (#1967).
+    var fullScreenPlayers = 0
+    var fullScreenPlayerPresented: Bool { fullScreenPlayers > 0 }
     func playsInWatchPage(_ channel: Channel?) -> Bool {
-        guard let scope = channel?.historyContext?.id else { return false }
+        guard !fullScreenPlayerPresented, let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
     }
     /// The catalog search sheets on screen, the topmost last: a video picked in one plays in that sheet, so the
@@ -346,7 +352,7 @@ import TVCore
         playing = nil
         cancelEpisodeSelection(); cancelResume()
         nextAheadTask?.task.cancel(); nextAheadTask = nil; nextAhead = nil
-        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; episodeError = nil
+        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; fullScreenPlayers = 0; episodeError = nil
         // The main profile's last changes go up before iCloud stops listening to it.
         if profile.isMain { cloudSync?.flushPending() }
         Profiles.shared.select(target)

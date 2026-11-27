@@ -2217,6 +2217,7 @@ struct VideoDetailView: View {
     #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @State private var fullScreen = false
     /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
     @State private var turnedFullScreen = false
@@ -3289,10 +3290,15 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
-            // Leaving the page ends its playback, as the full-screen player's Back does.
-            if watchChannel != nil { store.playing = nil }
+            let unfolded = WatchPage.isLargeDisplay
+            // Leaving the page ends its playback, as the full-screen player's Back does. Unfolding iPhone Duo to its
+            // inner display hands playback over to the full-screen cover instead (#1967, #1528, #2103).
+            if !unfolded, watchChannel != nil { store.playing = nil }
             store.watchPageScopes.subtract(watchScopes)
-            if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
+            if fullScreen {
+                fullScreen = false
+                if unfolded { PlayerOrientation.release(forcePortrait: false) } else { PlayerOrientation.set(landscape: false) }
+            }
             turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
@@ -3327,7 +3333,7 @@ struct VideoDetailView: View {
             }
             if covered { watchCover.transition(.opacity) }
         }
-        .animation(.easeOut(duration: 0.35), value: covered)
+        .animation(covered ? .easeOut(duration: 0.35) : nil, value: covered)
     }
 
     /// The cover's words while it waits: the source finding the episode's link, then the page's player getting it ready.
@@ -3353,7 +3359,7 @@ struct VideoDetailView: View {
     /// it upright again returns to the page. The watch page holds the interface upright (`PlayerOrientation`), so it
     /// doesn't turn by itself: this listens to the phone's own turning instead.
     private func phoneTurned() {
-        guard watchChannel != nil, PlayerOrientation.available else { return }
+        guard watchChannel != nil, PlayerOrientation.available, scenePhase == .active else { return }
         switch UIDevice.current.orientation {
         case .landscapeLeft, .landscapeRight:
             guard !fullScreen else { return }
@@ -3519,9 +3525,13 @@ struct VideoDetailView: View {
 
 /// The iPhone watch page's 选集 row. Discover's title page shows it too (`DetailEmbed`), on iPad and the Mac as well.
 extension VideoDetailView {
-    /// What plays at the top of the page: one of this video's episodes.
+    /// What plays at the top of the page: one of this video's episodes, unless a standalone full-screen cover already
+    /// owns playback (for example after folding iPhone Duo from its inner display to its outer display).
     private var watchChannel: Channel? {
-        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
+        #if os(iOS)
+        guard !store.fullScreenPlayerPresented else { return nil }
+        #endif
+        return store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
     }
     /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
     private var currentEpisodeID: Episode.ID? {
@@ -4062,6 +4072,13 @@ enum WatchPage {
 
     @MainActor static func applies(_ horizontal: UserInterfaceSizeClass?, _ vertical: UserInterfaceSizeClass?) -> Bool {
         UIDevice.current.userInterfaceIdiom == .phone && !(horizontal == .regular && vertical == .regular)
+    }
+
+    /// Reads the live window scene's size classes directly: inside `onDisappear` after unfolding iPhone Duo, SwiftUI's
+    /// `@Environment` on the removed view can still hold the outer display's compact size class (#1967, #1528, #2103).
+    @MainActor static var isLargeDisplay: Bool {
+        guard let traits = UIApplication.shared.appWindowScene?.traitCollection else { return false }
+        return traits.horizontalSizeClass == .regular && traits.verticalSizeClass == .regular
     }
 
     /// iPad, where Play Automatically opens the player full screen (#1168). Not the iPad app on a Mac, whose page
