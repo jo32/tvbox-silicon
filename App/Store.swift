@@ -58,6 +58,7 @@ import TVCore
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
         didSet {
+            episodeError = nil
             if let channel = playing {
                 if let context = channel.historyContext { lineFallback.track(context) } else { lineFallback.reset() }
                 if let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) }
@@ -1206,6 +1207,40 @@ import TVCore
             }
         }
         return label
+    }
+
+    /// Re-resolves the playing catalog episode from its source when the viewer taps Try Again, so expired links
+    /// and dead plugin loopback ports get a fresh address instead of retrying the stale URL (#1642).
+    /// Returns false when `channel` isn't a re-resolvable catalog episode, so the caller restarts it directly.
+    @discardableResult
+    func retryPlayback(for channel: Channel, session: PlaybackSession, fallback: @escaping @MainActor () -> Void) -> Bool {
+        lineFallback.reset()
+        guard playing == channel, let context = channel.historyContext, let catalog = catalog(for: channel),
+              !LiveCatalog.isRoom(channel.url),
+              let episode = catalog.video.episodes.first(where: { $0.id == context.episodeID && $0.flag == context.episodeFlag })
+                ?? catalog.video.episodes.first(where: { $0.id == context.episodeID }) else { return false }
+        session.saveHistory()
+        let resume = session.position > 1 ? session.position
+            : (playbackHistory.entries.first(where: { $0.id == context.id })?.resumePosition(for: episode) ?? channel.resumePosition)
+        session.beginRetry()
+        cancelEpisodeSelection()
+        let request = episodeRequest
+        resolvingEpisode = episode; episodeError = nil
+        episodeTask = Task { [weak self, weak session] in
+            guard let self else { return }
+            defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
+            do {
+                let resolved = try await catalog.client.playback(episode)
+                guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
+                let fresh = self.catalogChannel(resolved, video: catalog.video, episode: episode, client: catalog.client, resumePosition: resume)
+                if fresh == channel { fallback() } else { self.playing = fresh }
+            } catch {
+                guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
+                Diagnostics.shared.failure("catalog", "retry episode \(catalog.client.reportContext) flag=\(episode.flag)", error)
+                if session != nil { fallback() }
+            }
+        }
+        return true
     }
 
     func selectEpisode(_ episode: Episode, from channel: Channel, failed: ((String) -> Void)? = nil) {

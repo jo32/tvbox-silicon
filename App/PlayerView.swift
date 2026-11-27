@@ -528,7 +528,7 @@ struct PlaybackView: View {
         if let error = session.error {
             #if os(tvOS)
             TVPlaybackFailureView(channelName: channel.name, message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol, backdrop: waitContent,
-                                  retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                                  retry: { retryCatalogPlayback(session, channel: channel, store: store) },
                                   switchLine: switchLineAction,
                                   goBack: { dismiss() })
             #elseif os(iOS)
@@ -539,7 +539,7 @@ struct PlaybackView: View {
                     Text(error).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
                         .multilineTextAlignment(.center)
                     HStack(spacing: 10) {
-                        Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
+                        Button { retryCatalogPlayback(session, channel: channel, store: store) } label: {
                             Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
                         }
                         .controlButton(prominent: true).tint(Brand.accent)
@@ -608,7 +608,7 @@ struct PlaybackView: View {
             }
             #else
             ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
-                       retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                       retry: { retryCatalogPlayback(session, channel: channel, store: store) },
                        alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) },
                        goBack: { dismiss() }, backTitle: L10n.text("Close"))
                 .padding(30).frame(maxWidth: 480)
@@ -627,7 +627,7 @@ struct PlaybackView: View {
 
     #if os(iOS)
     @ViewBuilder private var mobileFailureActions: some View {
-        Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
+        Button { retryCatalogPlayback(session, channel: channel, store: store) } label: {
             Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
         }
         .controlButton(prominent: true).tint(Brand.accent)
@@ -1968,7 +1968,7 @@ private struct DesktopPlaybackView: View {
                 .animation(.easeOut(duration: 0.2), value: showsChrome)
                 if let error = session.error {
                     ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
-                               retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                               retry: { retryCatalogPlayback(session, channel: channel, store: store) },
                                alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) })
                         .padding(28).frame(maxWidth: 460)
                         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous)).padding()
@@ -2417,7 +2417,7 @@ private struct DesktopOptionsMenu: View, Equatable {
                 .accessibilityIdentifier("player.saveFrame")
             Divider()
             Button(L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
-            Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }
+            Button(L10n.text("Retry")) { retryCatalogPlayback(session, channel: channel, store: store) }
             Divider()
             Text(L10n.text("Space: Play / Pause"))
             Text(L10n.text("← / →: Seek 10s · Shift: 60s"))
@@ -2647,6 +2647,16 @@ extension Store {
             return PlayerStep(name: other.name, busy: false, channel: true) { [weak self] in self?.playing = other }
         }
         return nil
+    }
+}
+
+/// Re-resolves a failed catalog episode from its source when Try Again is tapped (getting a fresh link or waking a
+/// plugin's loopback server, #1642), and falls back to restarting the current channel otherwise.
+@MainActor private func retryCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store) {
+    if !store.retryPlayback(for: channel, session: session, fallback: {
+        startCatalogPlayback(session, channel: channel, store: store)
+    }) {
+        startCatalogPlayback(session, channel: channel, store: store)
     }
 }
 

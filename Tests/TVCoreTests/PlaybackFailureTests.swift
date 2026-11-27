@@ -141,5 +141,20 @@ struct PlaybackFailureTests {
         let ep2 = context(flag: "Line A", name: "第2集", id: "a2")
         let ep2Candidates = [Episode(id: "c2", name: "第2集", address: "u6", flag: "Line C")]
         #expect(fallback.nextAutomatic(for: ep2, candidates: ep2Candidates)?.flag == "Line C")
+
+        // Explicit reset clears tried flags and automatic count for retry.
+        fallback.reset()
+        #expect(fallback.triedFlags.isEmpty && fallback.automaticSwitches == 0)
+    }
+
+    @Test func detectsPluginLoopbackRefusalsAfterSuspension() {
+        let local = URL(string: "http://127.0.0.1:19979/proxy?id=1")!
+        let localhost = URL(string: "http://localhost:8080/video.m3u8")!
+        let remote = URL(string: "https://cdn.example.com/video.m3u8")!
+        #expect(PlaybackFailure.isLoopbackRefusal(local, errorCode: NSURLErrorCannotConnectToHost))
+        #expect(PlaybackFailure.isLoopbackRefusal(localhost, errorCode: NSURLErrorNetworkConnectionLost))
+        #expect(!PlaybackFailure.isLoopbackRefusal(local, errorCode: NSURLErrorTimedOut))
+        #expect(!PlaybackFailure.isLoopbackRefusal(local, errorCode: nil))
+        #expect(!PlaybackFailure.isLoopbackRefusal(remote, errorCode: NSURLErrorCannotConnectToHost))
     }
 }

@@ -17,6 +17,15 @@ public struct PlaybackFailure: Equatable, Sendable {
     /// Offline errors affect every line, so fail immediately without cycling lines.
     public var allowsAutomaticLineSwitch: Bool { kind != .offline }
 
+    /// Whether `url` is a loopback HTTP address whose connection was refused or dropped (e.g. a plugin's
+    /// own local playback server after iOS background suspension, #1642).
+    public static func isLoopbackRefusal(_ url: URL, errorCode: Int?) -> Bool {
+        guard let errorCode, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(errorCode),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = url.host()?.lowercased(), ["127.0.0.1", "localhost"].contains(host) else { return false }
+        return true
+    }
+
     public init(kind: Kind, message: String, details: String? = nil, symbol: String = "play.slash.fill") {
         self.kind = kind
         self.message = message

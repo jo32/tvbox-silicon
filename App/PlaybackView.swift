@@ -652,20 +652,57 @@ import IOKit.pwr_mgt
     }
 
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy or a saved download refusing
-    /// (-1004) and gives up 30 s later.
-    /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
-    /// a server that stays down shows its error.
+    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy, a saved download, or a
+    /// plugin's own local playback server (e.g. 127.0.0.1:19979, #1642) refusing (-1004) and gives up 30 s later.
+    /// Yingxia's own servers listen again on a new port; a plugin's own loopback server is asked for a fresh link
+    /// via `renewLink` so the plugin can rebind or return a live address. At most once a minute, so a server that
+    /// stays down falls back to another line or shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
-        guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true || PlaybackRescue.owns(url),
+        guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code) else { return false }
+        let ownLoopback = Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true || PlaybackRescue.owns(url)
+        let pluginLoopback = !ownLoopback && PlaybackFailure.isLoopbackRefusal(url, errorCode: code) && renewLink != nil
+        guard ownLoopback || pluginLoopback,
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
         loopbackRecovered = .now; retrying(via: "loopback")
-        let position = player.currentTime().seconds
+        let current = player.currentTime().seconds
+        let position = current.isFinite && current > 0 ? current : (pendingResume ?? 0)
         detachItem(); observation = nil; loading = true
-        Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
+        Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) own=\(ownLoopback) at=\(position.isFinite ? Int(position) : -1)s; recovering")
         let adapter = proxy.flatMap { $0.serves(url) ? $0 : nil }
         preparation = Task { [weak self] in
+            if pluginLoopback {
+                guard let self else { return }
+                // Give a waking plugin server a brief beat, then ask the source for a fresh playback link.
+                try? await Task.sleep(for: .milliseconds(500))
+                guard self.generation == active, !Task.isCancelled else { return }
+                let renewed = await self.renewLink?(channel)
+                guard self.generation == active, !Task.isCancelled else { return }
+                if let renewed {
+                    let reopened = Channel(name: channel.name, group: channel.group, url: renewed.url, logo: channel.logo,
+                                           headers: renewed.headers, skipScope: channel.skipScope, historyContext: channel.historyContext,
+                                           resumePosition: position > 0 ? position : channel.resumePosition,
+                                           subtitles: renewed.subtitles.isEmpty ? channel.subtitles : renewed.subtitles,
+                                           skips: renewed.skips.isEmpty ? channel.skips : renewed.skips,
+                                           bilibiliPart: channel.bilibiliPart)
+                    do {
+                        let prepared = try await self.prepare(reopened)
+                        guard self.generation == active, !Task.isCancelled, !prepared.matroska else { return Self.stopAdapter(prepared) }
+                        if position > 0 { self.pendingResume = position }
+                        self.playing = reopened; self.automatic = prepared.url
+                        self.configure(reopened, url: prepared.url, generation: active)
+                        return
+                    } catch {
+                        guard self.generation == active, !Task.isCancelled else { return }
+                        Diagnostics.shared.failure("player", "loopback renew prepare", error)
+                    }
+                }
+                let fallbackError = NSError(domain: NSURLErrorDomain, code: code)
+                if self.tryNextLine(after: fallbackError) { return }
+                if self.tryCatalogFallback(after: fallbackError, channel: channel) { return }
+                let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
+            }
             var fresh: URL?, failure: Error?
             do {
                 if let adapter { fresh = try await adapter.relisten(url) }
@@ -680,7 +717,12 @@ import IOKit.pwr_mgt
             guard let self, self.generation == active, !Task.isCancelled else { return }
             guard let fresh else {
                 if let failure { Diagnostics.shared.failure("player", "loopback relisten", failure) }
-                self.error = failure?.localizedDescription ?? L10n.text("Playback was interrupted."); self.loading = false; return
+                let fallbackError = failure ?? NSError(domain: NSURLErrorDomain, code: code)
+                if self.tryNextLine(after: fallbackError) { return }
+                if self.tryCatalogFallback(after: fallbackError, channel: channel) { return }
+                let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
             }
             if position.isFinite, position > 0 { self.pendingResume = position }
             if self.automatic == url { self.automatic = fresh }
@@ -907,6 +949,12 @@ import IOKit.pwr_mgt
         else if channel.historyContext != nil { fresh = await renewLink?(channel) }
         guard generation == active, let fresh else { return nil }
         return (url: fresh.url, headers: fresh.headers.merging(CloudStreams.playlistHeaders(for: fresh.url) ?? [:]) { $1 })
+    }
+
+    /// Clears the failure state immediately while asking the source for a fresh link on Retry (#1642).
+    func beginRetry() {
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
+        loading = true; showsPicture = false; openedAt = .now
     }
 
     /// Shows the waiting state while switching to another line of the same episode (#2560).
@@ -1245,8 +1293,8 @@ import IOKit.pwr_mgt
     static weak var current: PlaybackSession?
     func start(_ channel: Channel) {
         Self.current = self
-        // The queue has already moved on to this episode by itself.
-        if let advanced, advanced == channel { self.advanced = nil; return }
+        // The queue has already moved on to this episode by itself; never swallow an explicit restart after an error.
+        if let advanced, advanced == channel, error == nil { self.advanced = nil; return }
         lines = channel.alternates.isEmpty ? [] : channel.lines
         line = 0; triedLines = [0]
         open(channel)
@@ -1360,6 +1408,7 @@ import IOKit.pwr_mgt
     }
     private func configure(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
         clockMark = nil
+        error = nil; errorDetails = nil
         #if !os(macOS)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -1911,6 +1960,7 @@ import IOKit.pwr_mgt
         lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
         transfer = Transfer(); steps = []
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
         if let proxy { Task { await proxy.stop() } }; proxy = nil
         observation = nil
         timeObservation = nil
@@ -2412,7 +2462,7 @@ extension PlaybackSession {
         let activeGeneration = generation
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
-        error = nil; errorDetails = nil; switchNotice = nil; quality = nil
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil; quality = nil
         // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
         attempt = PlayAttempt(live: false, address: channel.url)
