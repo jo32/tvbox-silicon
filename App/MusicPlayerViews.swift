@@ -303,6 +303,13 @@ struct MusicNowPlaying: View {
             }
             .frame(height: 22)
             .opacity(music.hasStream && music.duration != nil ? 1 : 0.5)
+            // Nothing to seek before the song has a stream and a length, as the slider here was disabled.
+            .allowsHitTesting(music.hasStream && music.duration != nil)
+            // The slider it replaced was adjustable with VoiceOver; the bar is too, as MusicScrubber is.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.text("Playback Position"))
+            .accessibilityValue(MusicTime.text(scrubbing ?? min(music.seekingTo ?? music.position, total)) + " / " + MusicTime.text(total))
+            .accessibilityAdjustableAction { direction in music.skip(by: direction == .increment ? 10 : -10) }
             #endif
             Text(music.duration.map(MusicTime.text) ?? "--:--").font(.caption).monospacedDigit().foregroundStyle(.secondary)
         }
@@ -629,6 +636,10 @@ struct MusicLyricsTiming: View {
 struct MusicScrubber: View {
     @Environment(Store.self) private var store
     @State private var dragging: Double?
+    /// Where a drag began: the song's place on the bar and the finger's x. A drag moves from there by the finger's
+    /// travel, as the video player's bar does, instead of jumping to where the finger landed (#2485); a tap still
+    /// goes to its point.
+    @State private var origin: (fraction: Double, x: CGFloat)?
 
     var body: some View {
         let music = store.music
@@ -650,10 +661,20 @@ struct MusicScrubber: View {
                 .frame(maxHeight: .infinity)
                 .contentShape(.rect)
                 .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { value in if total > 0 { dragging = min(1, max(0, value.location.x / proxy.size.width)) } }
-                    .onEnded { _ in
-                        if let dragging { music.seek(to: dragging * total) }
-                        dragging = nil
+                    .onChanged { value in
+                        let width = proxy.size.width
+                        guard total > 0, width > 0 else { return }
+                        let start = origin ?? (fraction, value.startLocation.x)
+                        origin = start
+                        dragging = min(1, max(0, start.fraction + Double((value.location.x - start.x) / width)))
+                    }
+                    .onEnded { value in
+                        defer { dragging = nil; origin = nil }
+                        let width = proxy.size.width
+                        guard total > 0, width > 0 else { return }
+                        let tapped = hypot(value.translation.width, value.translation.height) < 6
+                        let target = tapped ? min(1, max(0, Double(value.startLocation.x / width))) : dragging
+                        if let target { music.seek(to: target * total) }
                     })
                 .animation(.easeOut(duration: 0.15), value: dragging == nil)
             }
