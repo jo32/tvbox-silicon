@@ -1945,18 +1945,15 @@ private struct BatteryGauge: View {
 
     func holds(_ session: PlaybackSession) -> Bool { parked?.session === session }
 
-    /// The video floating, for a player screen opening on `channel`. A parked session that failed while floating is
-    /// discarded so the reopened player starts fresh instead of showing a stale error (#1642).
-    func parked(for channel: Channel) -> Parked? {
-        guard let parked, parked.channel == channel else { return nil }
-        guard parked.session.error == nil else { end(); return nil }
-        return parked
-    }
+    /// The video floating, for a player screen opening on `channel`.
+    func parked(for channel: Channel) -> Parked? { parked?.channel == channel ? parked : nil }
 
     /// A player screen opened with the floating session: it is the screen's again, and the caller learns whether it
-    /// was turned landscape before it floated (#2483). Nil for any other session.
+    /// was turned landscape before it floated (#2483). Nil for any other session, or when the floating session failed
+    /// while parked: it is ended here, in `.onAppear`, not in `init`, so the reopened player starts fresh (#1642).
     func take(_ session: PlaybackSession) -> Parked? {
         guard let parked, parked.session === session else { return nil }
+        guard parked.session.error == nil else { end(); return nil }
         self.parked = nil
         // Opened from the app rather than the window's button: the video comes back from the window.
         if restoring == nil { parked.pip.stop() }
