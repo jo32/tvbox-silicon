@@ -1945,6 +1945,8 @@
 "Refresh List" = "重新整理列表";
 "Refreshed." = "已重新整理。";
 "Remove from Bookshelf" = "從書架移除";
+"Remove %lld books" = "移除 %lld 本";
+"Remove %lld books from the Bookshelf?" = "要從書架移除 %lld 本？";
 "Search All Sources" = "搜尋全部書源";
 "Search Books" = "搜尋書籍";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "搜尋會詢問所有已開啟的書源。關掉從不回應的書源可以搜得更快。";

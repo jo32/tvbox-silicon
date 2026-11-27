@@ -1945,6 +1945,8 @@
 "Refresh List" = "リストを更新";
 "Refreshed." = "更新しました。";
 "Remove from Bookshelf" = "本棚から削除";
+"Remove %lld books" = "%lld 冊を削除";
+"Remove %lld books from the Bookshelf?" = "本棚から %lld 冊を削除しますか？";
 "Search All Sources" = "すべてのソースを検索";
 "Search Books" = "本を検索";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "検索はオンのソースすべてに問い合わせます。応答しないソースをオフにすると速くなります。";
