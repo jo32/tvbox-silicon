@@ -621,6 +621,8 @@
 "Pinned" = "已置頂";
 "Pin source" = "置頂來源";
 "Unpin source" = "取消置頂";
+"Pin to Top" = "置頂";
+"Unpin" = "取消置頂";
 "Pinned Group" = "置頂";
 "Hide Source" = "隱藏來源";
 "Open Subscription" = "開啟所屬訂閱";
@@ -716,6 +718,7 @@
 "Not loaded yet" = "尚未載入";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "此位址包含 %lld 個訂閱，已全部新增並處於關閉狀態；請開啟你想使用的訂閱。";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld 個訂閱更新失敗，將繼續使用上次的副本。";
+"%@ could not be refreshed; its last copy stays in use." = "%@ 更新失敗，將繼續使用上次的副本。";
 "Responding normally" = "回應正常";
 "Slow or unreliable lately" = "最近較慢或不穩定";
 "Failing; skipped in search for now" = "連續失敗，暫時不參與搜尋";
@@ -1071,6 +1074,7 @@
 "Brightness" = "亮度";
 "Slide for Brightness and Volume" = "滑動調整亮度和音量";
 "Tab Bar Labels" = "標籤列文字";
+"Launch Page" = "啟動頁面";
 "Collapse Tab Bar When Scrolling" = "捲動時收合標籤列";
 "Off shows only the icons in the tab bar along the bottom." = "關閉後，底部標籤列只顯示圖示。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "在影片左側上下滑動調整亮度，在右側上下滑動調整音量。";
@@ -1945,6 +1949,8 @@
 "Refresh List" = "重新整理列表";
 "Refreshed." = "已重新整理。";
 "Remove from Bookshelf" = "從書架移除";
+"Remove %lld books" = "移除 %lld 本";
+"Remove %lld books from the Bookshelf?" = "要從書架移除 %lld 本？";
 "Search All Sources" = "搜尋全部書源";
 "Search Books" = "搜尋書籍";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "搜尋會詢問所有已開啟的書源。關掉從不回應的書源可以搜得更快。";
@@ -2353,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram 回傳了映匣無法讀取的頁面。";
 "This Telegram post is no longer in the channel's public preview." = "這則 Telegram 貼文已不在頻道的公開預覽中。";
 "This Telegram post has no playable video." = "這則 Telegram 貼文沒有可播放的影片。";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "這個 Telegram 頻道的公開預覽是空的。只有公開頻道能加入，而且有些公開頻道不會在網頁預覽中顯示貼文。";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "只能加入公開的 Telegram 頻道。邀請連結和私密頻道沒有公開預覽。";
 "Telegram post" = "Telegram 貼文";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "影片自帶的字幕在對話氣泡按鈕裡。";
@@ -2438,3 +2446,4 @@
 "%@ didn't play. Trying %@." = "%@ 無法播放，正在嘗試 %@。";
 "Trying %@…" = "正在嘗試 %@…";
 "another line" = "其他線路";
+"PGS bitmap subtitles use this size and position." = "PGS 點陣字幕共用這裡的大小和位置。";

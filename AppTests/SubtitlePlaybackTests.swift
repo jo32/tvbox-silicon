@@ -1,9 +1,7 @@
 import AVFoundation
 import TVCore
 import XCTest
-#if os(macOS)
 import SwiftUI
-#endif
 @testable import PlaybackHistoryQA
 
 @MainActor final class SubtitlePlaybackTests: XCTestCase {
@@ -22,6 +20,59 @@ import SwiftUI
         try await wait("loading subtitle tracks for " + file) { session.mediaTracks.legible != nil }
         session.player.pause()
         return try XCTUnwrap(session.mediaTracks.legible)
+    }
+
+    /// Ink bounds in top-left pixel coordinates and the number of separate horizontal bands of ink.
+    private func ink(in image: CGImage) throws -> (bounds: CGRect, bands: Int) {
+        var rgba = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        try rgba.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: image.width, height: image.height,
+                                                  bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        }
+        var bounds = CGRect.null, bands = 0, previousRow = false
+        for y in 0..<image.height {
+            var hasInk = false
+            for x in 0..<image.width where rgba[(y * image.width + x) * 4 + 3] > 160 {
+                hasInk = true
+                bounds = bounds.union(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+            if hasInk && !previousRow { bands += 1 }
+            previousRow = hasInk
+        }
+        return (bounds, bands)
+    }
+
+    func testTwoLineSubtitlePreviewAndLivePGSStyleChanges() throws {
+        XCTAssertEqual(SubtitleSpot.allCases, [.top, .middle, .bottom])
+        XCTAssertEqual(SubtitlePreview.sample, [L10n.text("This is how subtitles will look"), L10n.text("on every video you play")])
+        let cues = SubtitleCues()
+        let previous = SubtitleStyle.load()
+        defer { previous.save() }
+        let lines = SubtitleLines(lines: SubtitlePreview.sample, style: SubtitleStyle(), letters: 40, oneLine: true)
+        let image = try XCTUnwrap(ImageRenderer(content: lines.fixedSize().padding(4)).cgImage)
+        let authored = try ink(in: image)
+        XCTAssertGreaterThanOrEqual(authored.bands, 2)
+        let picture = CGRect(x: 0, y: 0, width: 1280, height: 720)
+        let sample = StyledSubtitleFrame(image: image, rect: CGRect(x: 80, y: 100, width: image.width, height: image.height),
+                                         size: picture.size, fitsCanvas: true)
+        var custom = SubtitleStyle()
+        custom.size = 7.5
+        SubtitleSpot.bottom.apply(to: &custom)
+        for style in [custom, SubtitleStyle()] {
+            style.save()
+            XCTAssertEqual(cues.style, style)
+            let cue = PGSSubtitleImage(frame: sample, style: cues.style, picture: picture, visible: picture)
+            let renderer = ImageRenderer(content: cue.frame(width: picture.width, height: picture.height))
+            let drawn = try ink(in: XCTUnwrap(renderer.cgImage))
+            let rect = sample.pgsImageRect(in: picture, visible: picture, style: style)
+            XCTAssertGreaterThanOrEqual(drawn.bands, 2)
+            XCTAssertEqual(drawn.bounds.minX, rect.minX + authored.bounds.minX * style.relativeSize, accuracy: 2)
+            XCTAssertEqual(drawn.bounds.minY, rect.minY + authored.bounds.minY * style.relativeSize, accuracy: 2)
+            XCTAssertEqual(drawn.bounds.width, authored.bounds.width * style.relativeSize, accuracy: 2)
+            XCTAssertEqual(drawn.bounds.height, authored.bounds.height * style.relativeSize, accuracy: 2)
+        }
     }
 
     func testTrackMenuAndPerSeriesChoicesWithRealMatroska() async throws {
@@ -58,6 +109,13 @@ import SwiftUI
         let frame = try XCTUnwrap(session.subtitles.styled.frame)
         let canvas = frame.canvasRect(in: movie, visible: movie)
         XCTAssertEqual(canvas.width / frame.size.width, canvas.height / frame.size.height, accuracy: 0.0001)
+        var custom = SubtitleStyle()
+        custom.size = 6.25
+        custom.place(at: CGPoint(x: 0.15, y: 1))
+        let moved = frame.pgsImageRect(in: movie, visible: movie, style: custom)
+        XCTAssertTrue(movie.contains(moved))
+        XCTAssertEqual(moved.maxY, movie.maxY, accuracy: 0.001)
+        XCTAssertEqual(moved.width / moved.height, frame.rect.width / frame.rect.height, accuracy: 0.001)
         XCTAssertTrue(movie.contains(canvas))
         XCTAssertEqual(canvas.height, movie.height, accuracy: 0.01)
 

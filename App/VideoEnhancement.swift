@@ -93,6 +93,9 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     @ObservationIgnored private var displayState = ""
     /// Called when what the screen should do changes: smoothing, its rate, or the first known format.
     @ObservationIgnored var onDisplayChange: (() -> Void)?
+    /// True while Picture in Picture owns the video: the floating window shows AVPlayer's own layer, so the
+    /// enhancement surface steps aside instead of drawing a second picture or running ML frames off screen (#2318, #1847).
+    @ObservationIgnored var suspended = false { didSet { if suspended != oldValue { refresh() } } }
 
     /// Smoothed frames need the screen at `rate`; nil when the screen should follow the video as usual.
     var displayRequest: (rate: Double, format: CMFormatDescription)? {
@@ -204,7 +207,7 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     /// the hand: there the machine-learning frames stop as soon as it gets warm (`fair`), rather than once the system
     /// already slows it down (`serious`), which a hand feels as a hot phone (#1428, #1384).
     private func allowed(_ player: AVPlayer) -> Bool {
-        if player.isExternalPlaybackActive { return false }
+        if suspended || player.isExternalPlaybackActive { return false }
         #if os(iOS)
         let warm = ProcessInfo.ThermalState.fair
         #else

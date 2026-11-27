@@ -91,3 +91,14 @@ private func toc(_ titles: [String], volumes: Set<Int> = []) -> [NovelChapter] {
     #expect(single.count == 1 && single[0].book == moved)
     #expect(!NovelLibrary.switchSource(&single, from: old, to: moved, chapters: chapters))
 }
+
+/// A title alone matches a shelf book only when it can be just one: two books of that name stay apart (#2308).
+@Test func novelShelfMatchesASpellingOnlyWhenItIsTheOneBook() {
+    let shelf = [NovelLibrary.ShelfBook(book: NovelBook(sourceKey: "a", url: "https://a/1", name: "书", author: "张三")),
+                 NovelLibrary.ShelfBook(book: NovelBook(sourceKey: "a", url: "https://a/2", name: "书", author: "李四"))]
+    #expect(NovelLibrary.looseIndex(shelf, for: NovelBook(sourceKey: "b", url: "https://b/1", name: "书", author: "作者：张三")) == 0)
+    #expect(NovelLibrary.looseIndex(shelf, for: NovelBook(sourceKey: "b", url: "https://b/2", name: "书", author: "")) == nil)
+    #expect(NovelLibrary.looseIndex(Array(shelf.prefix(1)), for: NovelBook(sourceKey: "b", url: "https://b/2", name: "书", author: "")) == 0)
+    let twice = [shelf[0], NovelLibrary.ShelfBook(book: NovelBook(sourceKey: "a", url: "https://a/1", name: "书", author: "张三著"))]
+    #expect(NovelLibrary.distinct(twice).count == (twice[0].id == twice[1].id ? 1 : 2))
+}

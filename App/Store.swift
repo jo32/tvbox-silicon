@@ -113,8 +113,14 @@ import TVCore
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
     var watchPageScopes: Set<String> = []
+    /// A standalone full-screen player cover is already on screen: a watch page appearing underneath it (for example
+    /// when folding iPhone Duo from its inner display to its outer display, #1967, #1528, #2103) must not steal
+    /// playback from the cover or mount a second player underneath it.
+    /// Counted, not a flag: a cover replacing another can appear before the old one disappears (#1967).
+    var fullScreenPlayers = 0
+    var fullScreenPlayerPresented: Bool { fullScreenPlayers > 0 }
     func playsInWatchPage(_ channel: Channel?) -> Bool {
-        guard let scope = channel?.historyContext?.id else { return false }
+        guard !fullScreenPlayerPresented, let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
     }
     /// The catalog search sheets on screen, the topmost last: a video picked in one plays in that sheet, so the
@@ -143,6 +149,19 @@ import TVCore
     /// is resolved 30 seconds before its end for the queue, as before.
     static let nextAheadLength: Double = 10 * 60
     var section: AppSection = .home
+    /// The page the app opens on, kept per profile; Watch Now when unset (#1673, #2008, #2246).
+    /// Stored, so the Settings picker shows a new choice at once (a value read from UserDefaults isn't observed).
+    var launchSection: AppSection? {
+        didSet {
+            if let value = launchSection { defaults.set(value.rawValue, forKey: "launchSection") }
+            else { defaults.removeObject(forKey: "launchSection") }
+        }
+    }
+    /// Where the app opens: the launch page, unless it is hidden now (Music before extras, Manga or Novels with no
+    /// list), which would open on a tab that isn't there.
+    private var openingSection: AppSection {
+        launchSection.flatMap { hiddenSections.contains($0) ? nil : $0 } ?? .home
+    }
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
     var hidesSidebar = false
@@ -245,6 +264,8 @@ import TVCore
         playbackDefaults = library.playback
         playbackHistory = library.history
         profileFolder = library.folder
+        // A saved launch page beats Watch Now; QA's forced section still overrides it later.
+        launchSection = AppSection(rawValue: library.defaults.string(forKey: "launchSection") ?? "")
         pinnedSources = PinnedSources(defaults: library.playback)
         hiddenSources = HiddenSources(defaults: library.playback)
         hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
@@ -285,6 +306,8 @@ import TVCore
         MusicDownloadLibrary.shared.wake()
         setUpListening()
         if profile.isMain { setUpCloudSync() } else { cloudSync?.isSuspended = true }
+        // The launch page (#1673), now that every list that hides a section is read.
+        section = openingSection
     }
     /// Reads the open profile's subscription list and the saved copy of each, then merges them.
     private func loadSubscriptions(resetting: Bool) {
@@ -329,7 +352,7 @@ import TVCore
         playing = nil
         cancelEpisodeSelection(); cancelResume()
         nextAheadTask?.task.cancel(); nextAheadTask = nil; nextAhead = nil
-        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; episodeError = nil
+        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; fullScreenPlayers = 0; episodeError = nil
         // The main profile's last changes go up before iCloud stops listening to it.
         if profile.isMain { cloudSync?.flushPending() }
         Profiles.shared.select(target)
@@ -353,7 +376,8 @@ import TVCore
         // The new lists' revisions can match the old ones', so the cached rows go by hand.
         rememberSiteLists("")
         loadSubscriptions(resetting: true)
-        section = .home
+        launchSection = AppSection(rawValue: defaults.string(forKey: "launchSection") ?? "")
+        section = openingSection
         if profile.isMain { setUpCloudSync() }
         cloudSync?.isSuspended = !profile.isMain
         Diagnostics.shared.record(.info, "profile", "opened \(profile.isMain ? "main" : "other") profile")
@@ -649,6 +673,17 @@ import TVCore
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil && !ImportedFiles.isMissing($0.address) }.count
         if failed > 0 { notice = L10n.text("%lld subscriptions could not be refreshed; their last copies stay in use.", failed) }
     }
+    /// Reloads one subscription on its own, leaving the others' copies untouched (#2198). Only an enabled
+    /// one has a copy to replace; a switched-off one is fetched when it is switched on.
+    func refreshSubscription(_ entry: SubscriptionEntry) async {
+        guard !importing, entry.enabled else { return }
+        importing = true; importError = nil; notice = nil
+        defer { importing = false }
+        await fetch([entry])
+        if subscriptionErrors[entry.address] != nil, !ImportedFiles.isMissing(entry.address) {
+            notice = L10n.text("%@ could not be refreshed; its last copy stays in use.", entry.title)
+        }
+    }
     func setSubscription(_ entry: SubscriptionEntry, enabled: Bool) async {
         guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
         subscriptions[index].enabled = enabled
@@ -736,7 +771,7 @@ import TVCore
         saveSubscriptionList()
         rebuildSubscription()
     }
-    /// Moves a subscription to the top or the bottom of the list.
+    /// Moves a subscription to the top or the bottom of the list (Apple TV's subscription page, which has no drag).
     func moveSubscription(_ entry: SubscriptionEntry, toTop: Bool) {
         guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
         moveSubscriptions(fromOffsets: IndexSet(integer: index), toOffset: toTop ? 0 : subscriptions.count)
@@ -943,13 +978,15 @@ import TVCore
         playFile(cloud, in: CloudFilesFolder(drive: drive, id: file.folderID, name: file.folderName, files: [cloud]))
     }
 
-    /// The Watch Now source row: pinned, then built-in, then the sources page's subscription order.
+    /// The Watch Now source row: pinned, then built-in, then the Telegram group, then the sources
+    /// page's subscription order. Telegram channels ride with their group rather than the built-ins,
+    /// so the row reads the way the sources page does.
     func recommendationSites(_ config: Subscription) -> [Site] {
         let stamp = currentSiteListStamp()
         if stamp == siteListStamp, let cached = recommendationCache { return cached }
         let leading = automaticSites(config)
         let pinned = leading.filter { pinnedSources.contains($0, origin: config.origin) }
-        let builtIn = leading.filter { $0.isBuiltIn && !pinnedSources.contains($0, origin: config.origin) }
+        let builtIn = leading.filter { $0.isBuiltIn && !$0.isTelegram && !pinnedSources.contains($0, origin: config.origin) }
         let groups = sourceGroups(includeHidden: false)
         let result = SourceGroups.homeRow(pinned: pinned, builtIn: builtIn, groups: groups)
         rememberSiteLists(stamp)

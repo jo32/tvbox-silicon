@@ -550,6 +550,7 @@ struct FormSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    @AppStorage("app.appearance") private var appearance = "system"
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     #if os(macOS)
     @State private var choosesFile = false
@@ -650,6 +651,13 @@ struct FormSettingsView: View {
             #endif
 
             Section {
+                #if os(iOS)
+                // Keep adding a subscription within reach even when the list is long (#2530).
+                Button { addingSubscription = true } label: {
+                    FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
+                }
+                .settingsAnchor(.addSubscription)
+                #endif
                 ForEach(store.subscriptions) { entry in
                     let failure = store.subscriptionErrors[entry.address]
                     FormLink(symbol: failure == nil ? "list.bullet.rectangle.fill" : "exclamationmark.triangle.fill",
@@ -661,6 +669,14 @@ struct FormSettingsView: View {
                     // press or a right click on the Mac. Not a swipe: these rows wear the app's own fill, which a
                     // swipe leaves behind as a square slab while the row slides out of its rounded card.
                     .contextMenu {
+                        // One list changed upstream; no need to Refresh All and wait for the rest (#2198).
+                        Button {
+                            Task { await store.refreshSubscription(entry) }
+                        } label: {
+                            Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
+                        }
+                        // A switched-off list isn't refreshed (the store skips it), so the item isn't offered.
+                        .disabled(store.importing || !entry.enabled)
                         // On or off without opening the subscription (#730).
                         Button {
                             Task { await store.setSubscription(entry, enabled: !entry.enabled) }
@@ -673,6 +689,11 @@ struct FormSettingsView: View {
                             .tint(.red)
                     }
                     .settingsAnchor(.subscription(entry.address))
+                }
+                // Right under the list it removes from, with the other subscription actions (#2563).
+                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
+                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+                    .settingsAnchor(.removeSubscriptions)
                 }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
@@ -722,17 +743,7 @@ struct FormSettingsView: View {
                     FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
                     .settingsAnchor(.arrangeSubscriptions)
                 }
-                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
-                    FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
-                    .settingsAnchor(.removeSubscriptions)
-                }
-                #if os(iOS)
-                // One row instead of an always-open field and three text buttons; the address goes in a sheet.
-                Button { addingSubscription = true } label: {
-                    FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
-                }
-                .settingsAnchor(.addSubscription)
-                #else
+                #if !os(iOS)
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
                     .labelsHidden()
                     .autocorrectionDisabled()
@@ -863,6 +874,15 @@ struct FormSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
+                Picker(selection: $appearance) {
+                    Text(L10n.text("System")).tag("system")
+                    Text(L10n.text("Light")).tag("light")
+                    Text(L10n.text("Dark")).tag("dark")
+                } label: {
+                    FormLabel(symbol: "circle.lefthalf.filled", tint: .gray, title: L10n.text("Appearance"))
+                }
+                .accessibilityIdentifier("settings.appearance")
+                .settingsAnchor(.appearance)
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
                     .settingsAnchor(.playback)
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
@@ -881,6 +901,13 @@ struct FormSettingsView: View {
                     .accessibilityIdentifier("settings.collapseTabBar")
                     .settingsAnchor(.collapseTabBar)
                 }
+                Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
+                    ForEach(AppSection.launchChoices.filter { !store.hiddenSections.contains($0) }) { Text($0.title).tag($0) }
+                } label: {
+                    FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
+                }
+                .accessibilityIdentifier("settings.launchPage")
+                .settingsAnchor(.launchPage)
             }
             #else
             Section {
@@ -896,6 +923,22 @@ struct FormSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
+                Picker(selection: $appearance) {
+                    Text(L10n.text("System")).tag("system")
+                    Text(L10n.text("Light")).tag("light")
+                    Text(L10n.text("Dark")).tag("dark")
+                } label: {
+                    FormLabel(symbol: "circle.lefthalf.filled", tint: .gray, title: L10n.text("Appearance"))
+                }
+                .accessibilityIdentifier("settings.appearance")
+                .settingsAnchor(.appearance)
+                Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
+                    ForEach(AppSection.launchChoices.filter { !store.hiddenSections.contains($0) }) { Text($0.title).tag($0) }
+                } label: {
+                    FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
+                }
+                .accessibilityIdentifier("settings.launchPage")
+                .settingsAnchor(.launchPage)
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 languagePickerRows
@@ -1312,9 +1355,11 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case watchNow
     case appIcon
     case colorTheme
+    case appearance
     case playback
     case playURL
     case editTabBar
+    case launchPage
     case tabBarLabels
     case collapseTabBar
     case language
@@ -1617,6 +1662,8 @@ private extension FormSettingsView {
         }
         add(.colorTheme, title: L10n.text("Color Theme"), section: secGeneral, subtitle: ColorThemes.shared.current.title,
             keywords: ["color", "theme", "appearance", "dark", "主题", "配色", "外观"])
+        add(.appearance, title: L10n.text("Appearance"), section: secGeneral,
+            keywords: ["appearance", "light", "dark", "mode", "外观", "深色", "浅色", "夜间"])
 
         #if os(iOS)
         add(.playback, title: L10n.text("Playback"), section: secPlayback,
@@ -1625,6 +1672,8 @@ private extension FormSettingsView {
             keywords: ["url", "stream", "link", "播放链接", "串流"])
         add(.editTabBar, title: L10n.text("Edit Tab Bar"), section: secGeneral, subtitle: L10n.text("Choose your tabs and their order."),
             keywords: ["tab", "tabs", "order", "标签栏", "底部", "菜单"])
+        add(.launchPage, title: L10n.text("Launch Page"), section: secGeneral,
+            keywords: ["launch", "start", "open on", "home", "tab", "启动", "打开", "首页", "默认页"])
         add(.tabBarLabels, title: L10n.text("Tab Bar Labels"), section: secGeneral,
             keywords: ["tab", "labels", "标签栏", "文字"])
         if #available(iOS 26, *) {
@@ -1634,6 +1683,8 @@ private extension FormSettingsView {
         #else
         add(.language, title: L10n.text("Language"), section: secGeneral,
             keywords: ["language", "locale", "chinese", "english", "japanese", "语言", "中文", "英文"])
+        add(.launchPage, title: L10n.text("Launch Page"), section: secGeneral,
+            keywords: ["launch", "start", "open on", "home", "tab", "启动", "打开", "首页", "默认页"])
         #endif
 
         #if os(macOS)
@@ -2044,7 +2095,6 @@ struct SubscriptionDetailView: View {
     }
     var body: some View {
         let current = store.subscriptions.first { $0.address == address } ?? entry
-        let index = store.subscriptions.firstIndex { $0.address == address } ?? 0
         let failure = store.subscriptionErrors[address]
         let copy = store.documents[address]
         let edited = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2112,15 +2162,14 @@ struct SubscriptionDetailView: View {
                 else if let failure { Text(L10n.text("Couldn't refresh: %@", failure)) }
                 else if let copy { Text(L10n.text("Sources: %lld · Live playlists: %lld", copy.sites.count, copy.lives.count)) }
             }
-            if store.subscriptions.count > 1 {
-                Section(L10n.text("Order")) {
-                    if index > 1 { Button(L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
-                    if index > 0 { Button(L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
-                    if index < store.subscriptions.count - 1 { Button(L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
-                    if index < store.subscriptions.count - 2 { Button(L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
-                }
-            }
             Section {
+                // Reload this list alone, keeping the others' copies (#2198).
+                Button {
+                    Task { await store.refreshSubscription(current) }
+                } label: {
+                    Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
+                }
+                .disabled(store.importing || !current.enabled)
                 Button(L10n.text("Remove"), role: .destructive) { confirmsRemoval = true }
             }
         }.settingsRows() }
@@ -3114,7 +3163,11 @@ struct TVSubscriptionPage: View {
                     }))
                     .disabled(store.importing)
                 }
+                // Reload this list alone, keeping the others' copies (#2198).
+                TVSettingsAction(title: L10n.text("Refresh"), busy: store.importing) { Task { await store.refreshSubscription(current) } }
+                    .disabled(store.importing || !current.enabled)
             }
+            // Apple TV has no Arrange Subscriptions (drag) and no source chips, so the order is set here (#1184).
             if store.subscriptions.count > 1 {
                 TVSettingsSection(title: L10n.text("Order")) {
                     if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
@@ -3229,6 +3282,8 @@ private struct TVPlayURLPage: View {
     static let shared = ContributorList()
     /// At most this many rows; the list is ranked, so the rest have the fewest commits.
     static let shown = 20
+    /// Rows shown before the reader asks for the rest; the remainder folds behind a Show All row.
+    static let collapsed = 3
     private(set) var people: [Contributor]
     private var checking = false
     private let defaults: UserDefaults
@@ -3279,11 +3334,12 @@ private struct ContributorAvatar: View {
 #if os(tvOS)
 /// Everyone with commits in the last 30 days, most first. Apple TV can't open their GitHub pages, so the rows only show them.
 struct ContributorsSection: View {
+    @State private var expanded = false
     private var list: ContributorList { .shared }
     var body: some View {
         if !list.people.isEmpty {
             TVSettingsSection(title: L10n.text("Contributors"), footer: L10n.text("Ranked by commits in the last 30 days.")) {
-                ForEach(list.people.prefix(ContributorList.shown)) { person in
+                ForEach(list.people.prefix(expanded ? ContributorList.shown : ContributorList.collapsed)) { person in
                     HStack(spacing: 18) {
                         ContributorAvatar(person: person, size: 52)
                         Text(person.login).font(.system(size: 29, weight: .medium)).lineLimit(1)
@@ -3295,6 +3351,9 @@ struct ContributorsSection: View {
                     .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
                     .accessibilityElement(children: .combine)
                 }
+                if list.people.count > ContributorList.collapsed {
+                    TVSettingsAction(title: L10n.text(expanded ? "Show Less" : "Show All")) { withAnimation { expanded.toggle() } }
+                }
             }
         }
     }
@@ -3303,11 +3362,12 @@ struct ContributorsSection: View {
 /// Everyone with commits in the last 30 days, most first; a row opens the person's GitHub page.
 struct ContributorsSection: View {
     @Environment(\.openURL) private var openURL
+    @State private var expanded = false
     private var list: ContributorList { .shared }
     var body: some View {
         if !list.people.isEmpty {
             Section {
-                ForEach(list.people.prefix(ContributorList.shown)) { person in
+                ForEach(list.people.prefix(expanded ? ContributorList.shown : ContributorList.collapsed)) { person in
                     Button { if let profile = person.profile { openURL(profile) } } label: {
                         HStack(spacing: 8) {
                             Label { Text(person.login).lineLimit(1) } icon: { ContributorAvatar(person: person, size: FormMetrics.icon) }
@@ -3317,6 +3377,13 @@ struct ContributorsSection: View {
                         }
                     }
                     .tint(.primary)
+                    .formRowButton()
+                }
+                if list.people.count > ContributorList.collapsed {
+                    Button { withAnimation { expanded.toggle() } } label: {
+                        Label(L10n.text(expanded ? "Show Less" : "Show All"), systemImage: expanded ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(.primary)
+                    }
                     .formRowButton()
                 }
             } header: {
