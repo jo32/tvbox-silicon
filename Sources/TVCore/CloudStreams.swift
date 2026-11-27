@@ -136,10 +136,12 @@ public enum CloudStreams {
     }
 
     /// HEVC that an MP4 tags `hev1` (Dolby Vision: `dvhe`) plays only its sound: AVFoundation decodes
-    /// those sample entries inside HLS alone. Tagged `hvc1` (`dvh1`) the picture plays; the decoder
-    /// settings are in the entry's configuration box either way. A sample entry is the tag after a
-    /// plausible box size, then six reserved zero bytes and data reference 1, which media data
-    /// practically never repeats. An entry split across two chunks stays as it is.
+    /// those sample entries inside HLS alone. Tagged `hvc1` (`dvh1`) the picture plays, when the entry's
+    /// configuration box holds the decoder settings. Dolby's packager leaves that box without them (they are in
+    /// the stream): tagged `hvc1`, AVPlayer fails at once with CoreMedia error -4 (#769, #1644), so such an entry
+    /// stays `hev1` and the player repackages the file, which completes the box (`Remux.showsPicture`).
+    /// A sample entry is the tag after a plausible box size, then six reserved zero bytes and data reference 1,
+    /// which media data practically never repeats. An entry split across two chunks stays as it is.
     static func playableSampleEntries(_ data: Data) -> Data {
         var result = data
         for (tag, playable) in [("hev1", "hvc1"), ("dvhe", "dvh1")] {
@@ -151,10 +153,34 @@ public enum CloudStreams {
                 let size = data[at - 4..<at].reduce(0) { $0 << 8 | Int($1) }
                 let reserved = data[found.upperBound..<found.upperBound + 6], reference = data[found.upperBound + 6..<found.upperBound + 8]
                 guard (86..<65_536).contains(size), reserved.allSatisfy({ $0 == 0 }), reference.elementsEqual([0, 1]) else { continue }
+                let end = at - 4 + size
+                if end <= data.endIndex, lacksParameterSets(data[at - 4..<end]) { continue }
                 result.replaceSubrange(at..<found.upperBound, with: Data(playable.utf8))
             }
         }
         return result
+    }
+
+    /// Whether an HEVC sample entry's hvcC box lists no SPS or no PPS. An entry without the box isn't judged.
+    static func lacksParameterSets(_ entry: Data) -> Bool {
+        guard let tag = entry.range(of: Data("hvcC".utf8)), tag.lowerBound - 4 >= entry.startIndex else { return false }
+        let bytes = [UInt8](entry[(tag.lowerBound - 4)...])
+        let size = min(bytes.count, Int(bytes[0]) << 24 | Int(bytes[1]) << 16 | Int(bytes[2]) << 8 | Int(bytes[3]))
+        guard size >= 8 + 23 else { return false }
+        func u16(_ at: Int) -> Int { Int(bytes[at]) << 8 | Int(bytes[at + 1]) }
+        var sps = 0, pps = 0, at = 8 + 23
+        for _ in 0..<Int(bytes[8 + 22]) {
+            guard at + 3 <= size else { return true }
+            let type = bytes[at] & 0x3f, count = u16(at + 1)
+            at += 3
+            for _ in 0..<count {
+                guard at + 2 <= size else { return true }
+                at += 2 + u16(at)
+                guard at <= size else { return true }
+                if type == 33 { sps += 1 } else if type == 34 { pps += 1 }
+            }
+        }
+        return sps == 0 || pps == 0
     }
 
     /// The container AVFoundation should parse, from the file's first bytes rather than its name.

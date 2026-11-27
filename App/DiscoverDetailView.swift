@@ -30,6 +30,13 @@ struct DiscoverDetailView: View {
     @State private var tvOverviewShown = false
     #endif
     private var details: TMDBMatch.Details? { model.details }
+    /// The overview: TMDB's when it has one, else the matched source's synopsis (#2367).
+    /// A source's synopsis comes from vod_content, so it only helps when the source sends one.
+    private var overview: String {
+        let tmdb = details?.overview ?? item.overview
+        if !tmdb.isEmpty { return tmdb }
+        return sources?.chosen?.video.synopsis ?? ""
+    }
     private var dark: Bool { model.paint?.isDark ?? true }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
     private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
@@ -69,7 +76,7 @@ struct DiscoverDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         Text(details?.name ?? item.name).font(.title2.bold())
                         if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).foregroundStyle(.secondary) }
-                        Text(details?.overview ?? item.overview).font(.body).lineSpacing(5).selectable()
+                        Text(overview).font(.body).lineSpacing(5).selectable()
                     }.padding(24)
                 }.navigationTitle(L10n.text("Overview"))
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
@@ -210,7 +217,7 @@ struct DiscoverDetailView: View {
                 if item.mediaType == .tv { DiscoverFollowButton(item: followItem) }
             }
             Button { overviewShown = true } label: {
-                Text(details?.overview ?? item.overview).font(.system(size: 12)).lineLimit(3)
+                Text(overview).font(.system(size: 12)).lineLimit(3)
                     .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.overview")
@@ -1189,7 +1196,7 @@ extension DiscoverDetailView {
                     }
                 }.frame(width: 368).focusSection()
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(details?.overview ?? item.overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
+                    Text(overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
                     Text(metadata).font(.system(size: 26)).opacity(0.65).lineLimit(1)
                     if let rating = details?.rating ?? item.rating {
                         HStack(spacing: 10) {
@@ -1225,7 +1232,7 @@ extension DiscoverDetailView {
             VStack(alignment: .leading, spacing: 24) {
                 Text(details?.name ?? item.name).font(.system(size: 56, weight: .bold)).lineLimit(2)
                 if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.system(size: 30, weight: .medium)).opacity(0.7) }
-                Text(details?.overview ?? item.overview).font(.system(size: 30)).lineSpacing(6).lineLimit(14)
+                Text(overview).font(.system(size: 30)).lineSpacing(6).lineLimit(14)
                 Text(metadata).font(.system(size: 26)).opacity(0.6)
             }
             .frame(maxWidth: 1300, alignment: .leading)

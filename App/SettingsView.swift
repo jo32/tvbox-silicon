@@ -1994,7 +1994,10 @@ struct AddSubscriptionSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Full height only (#2146): with [.medium, .large] the sheet opened half-screen, then the
+        // keyboard (raised at once by the autofocus below) forced it up to .large, so it visibly
+        // jumped. Autofocus stays: it is what makes the paste-address flow work.
+        .presentationDetents([.large])
         .onAppear { store.importError = nil; focused = true }
         .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
             guard case .success(let file) = result else { return }
