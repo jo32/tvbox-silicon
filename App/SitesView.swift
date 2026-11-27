@@ -3295,7 +3295,7 @@ struct VideoDetailView: View {
             }
             if covered { watchCover.transition(.opacity) }
         }
-        .animation(.easeOut(duration: 0.35), value: covered)
+        .animation(covered ? .easeOut(duration: 0.35) : nil, value: covered)
     }
 
     /// The cover's words while it waits: the source finding the episode's link, then the page's player getting it ready.

@@ -232,6 +232,36 @@ import IOKit.pwr_mgt
     var buffering = false
     /// Whether the picture has started moving: the waiting screen stays until then, so no black frame shows between.
     private(set) var showsPicture = false
+    @ObservationIgnored private var pictureReadiness = PictureReadiness()
+    /// Whether `checkSegmentedPicture` is still watching a playlist that has shown no video frames yet.
+    @ObservationIgnored private var checkingSegmentsActive = false
+    /// Whether `repackageSegments` is currently opening `HLSRemux`.
+    @ObservationIgnored private var repackagingSegments = false
+    /// Called by the player layer / controller when `isReadyForDisplay` changes, so the waiting backdrop drops on the
+    /// exact frame the video appears (#2636, #1629, #1956) instead of lagging behind it.
+    func setDisplayReady(_ ready: Bool) {
+        pictureReadiness.displayChanged(ready)
+        if ready { revealPictureIfReady() }
+    }
+    private func revealPictureIfReady() {
+        guard !showsPicture, let item, player.currentItem === item else { return }
+        let hasFrameRate = item.tracks.contains { $0.assetTrack?.mediaType == .video && $0.isEnabled && $0.currentVideoFrameRate > 0 }
+        guard pictureReadiness.shouldReveal(itemReady: item.status == .readyToPlay,
+                                            pendingResume: pendingResume != nil || restoringPosition,
+                                            checkingPicture: checkingPicture,
+                                            repackagingSegments: repackagingSegments,
+                                            hasVideoFrameRate: hasFrameRate) else { return }
+        showPicture(delay: 0)
+    }
+    private func showPicture(delay: TimeInterval) {
+        guard !showsPicture else { return }
+        showsPicture = true
+        countPlay(.started)
+        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
+        let seconds = player.currentTime().seconds
+        let waited = max(0, Date().timeIntervalSince(openedAt) - delay)
+        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", waited))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+    }
     /// When this episode (or line) began to open: the waiting screen counts from here until the first frame.
     private(set) var openedAt = Date()
     /// The SF Symbol that names the latest failure for the error screen.
@@ -465,6 +495,7 @@ import IOKit.pwr_mgt
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
+        checkingSegmentsActive = false; repackagingSegments = false
         sampler?.cancel(); sampler = nil
     }
 
@@ -1358,7 +1389,7 @@ import IOKit.pwr_mgt
 
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
-        stop(); error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
+        stop(); error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; pictureReadiness.reset(); openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         let live = channel.replay == nil && (LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live"))
         begin(channel, live: live)
         isLive = live
@@ -1695,6 +1726,7 @@ import IOKit.pwr_mgt
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
+                    self.revealPictureIfReady()
                     Diagnostics.shared.record(.info, "player", "ready host=\(self.transfer.host ?? channel.url.host() ?? "-")")
                     if !self.rescueAttempt.ready, url == self.rescueAttempt.address, let rung = self.rescueAttempt.rung, let began = self.rescueAttempt.began {
                         Diagnostics.shared.record(.warning, "player", "rescued rung=\(rung) trouble=\(self.rescueAttempt.trouble?.rawValue ?? "-") host=\(self.rescueAttempt.origin?.host() ?? "-") after=\(began.duration(to: .now).components.seconds)s")
@@ -1706,7 +1738,7 @@ import IOKit.pwr_mgt
                         // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
                         // jump to the saved position and play this item's sound with no picture until then (#515).
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item) }
+                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady() }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
@@ -1792,18 +1824,25 @@ import IOKit.pwr_mgt
                 self.displayAwake.hold(!paused)
                 #endif
                 if paused { self.clearBoost(); self.saveHistory() }
-                // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 // A queued episode the queue moved to plays under the picture already on screen.
                 if playing, self.showsPicture { self.countPlay(.started) }
                 if playing, !self.showsPicture {
-                    Task { @MainActor [weak self] in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing, !self.showsPicture else { return }
-                        self.showsPicture = true
-                        self.countPlay(.started)
-                        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
-                        let seconds = self.player.currentTime().seconds
-                        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", Date().timeIntervalSince(self.openedAt) - 0.35))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+                    self.revealPictureIfReady()
+                    if !self.showsPicture {
+                        Task { @MainActor [weak self] in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing,
+                                  !self.showsPicture, let item = self.item, self.player.currentItem === item else { return }
+                            self.revealPictureIfReady()
+                            guard !self.showsPicture,
+                                  self.pictureReadiness.shouldRevealWithoutFrame(itemReady: item.status == .readyToPlay,
+                                                                                 playing: true,
+                                                                                 pendingResume: self.pendingResume != nil || self.restoringPosition,
+                                                                                 checkingPicture: self.checkingPicture,
+                                                                                 checkingSegments: self.checkingSegmentsActive,
+                                                                                 repackagingSegments: self.repackagingSegments) else { return }
+                            self.showPicture(delay: 0.35)
+                        }
                     }
                 }
             }
@@ -1971,6 +2010,7 @@ import IOKit.pwr_mgt
         mediaTracks.follow(nil)
         subtitleScope = nil
         historyContext = nil; pendingResume = nil; restoringPosition = false
+        checkingSegmentsActive = false; repackagingSegments = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         skipNotice = nil; introNoticeUntil = nil
@@ -2058,6 +2098,7 @@ import IOKit.pwr_mgt
         // return to. Waiting for one left "loading" on and the player paused for good (#683, #717): play it from its live edge.
         if item.duration.isIndefinite {
             pendingResume = nil; soughtAhead = nil; loading = false
+            revealPictureIfReady()
             if !editingSkip, !recoveryPause.consumeStayPaused() { player.play() }
             return
         }
@@ -2069,6 +2110,7 @@ import IOKit.pwr_mgt
         if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - 10.5, landed <= target + 0.5 {
             pendingResume = nil; loading = false
             restoredPosition = landed
+            revealPictureIfReady()
             Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(landed) opened there")
             Task { await self.playRestored(item, generation: activeGeneration) }
             return
@@ -2088,6 +2130,7 @@ import IOKit.pwr_mgt
                     return
                 }
                 self.restoredPosition = self.player.currentTime().seconds
+                self.revealPictureIfReady()
                 Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(self.restoredPosition ?? -1)")
                 await self.playRestored(item, generation: activeGeneration)
             }

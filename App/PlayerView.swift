@@ -104,7 +104,8 @@ struct PlaybackView: View {
                                  lines: session.lines.indices.map { L10n.text("Line %@", "\($0 + 1)") }, line: session.line,
                                  chooseLine: { session.choose(line: $0) }, transportBar: transportBar,
                                  titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store)),
-                                 findDanmaku: danmakuFinder).ignoresSafeArea()
+                                 findDanmaku: danmakuFinder,
+                                 onReadyForDisplay: { session.setDisplayReady($0) }).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -1030,12 +1031,15 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var titleRow: AnyView? = nil
     /// The danmaku picker (#1089), last in the Danmaku menu, which it brings even before any comments load.
     var findDanmaku: (() -> AnyView)? = nil
+    var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
         var subtitles: SubtitleCues?
         var transportBar: TransportBarVisibility?
         var chooseSubtitle: ((AVMediaSelectionOption?, AVMediaSelectionGroup) -> Void)?
+        var readyObservation: NSKeyValueObservation?
+        var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
         #if os(tvOS)
         func playerViewController(_ playerViewController: AVPlayerViewController, didSelect mediaSelectionOption: AVMediaSelectionOption?,
                                   in mediaSelectionGroup: AVMediaSelectionGroup) {
@@ -1068,6 +1072,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         controller.delegate = context.coordinator
         context.coordinator.subtitles = subtitles
         context.coordinator.transportBar = transportBar
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
+        context.coordinator.readyObservation = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak coordinator = context.coordinator] _, change in
+            let ready = change.newValue ?? false
+            Task { @MainActor [weak coordinator] in coordinator?.onReadyForDisplay(ready) }
+        }
         let host = UIHostingController(rootView: overlay)
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
@@ -1094,6 +1103,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let gravity: AVLayerVideoGravity = fills.wrappedValue ? .resizeAspectFill : .resizeAspect
         if controller.videoGravity != gravity { controller.videoGravity = gravity }
         context.coordinator.host?.rootView = overlay
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         context.coordinator.chooseSubtitle = chooseSubtitle
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
@@ -1275,7 +1285,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                               state: info.wrappedValue ? .on : .off) { _ in info.wrappedValue.toggle() })
         controller.transportBarCustomMenuItems = items
     }
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { coordinator.criteria?.reset() }
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.readyObservation = nil
+        coordinator.criteria?.reset()
+    }
 
     /// Off and the files, then the chosen one's timing, frame rate and encoding. A file comes from the source (a drive's
     /// folder), a subtitle source, or an address typed with the remote or an iPhone's keyboard; there is no file panel here.
@@ -2047,7 +2060,7 @@ private struct DesktopPlaybackView: View {
         ZStack(alignment: .top) {
             ZStack {
                 Color.black
-                DesktopVideoView(player: session.player, fillsFrame: fillsFrame, pip: pip)
+                DesktopVideoView(player: session.player, fillsFrame: fillsFrame, pip: pip) { session.setDisplayReady($0) }
                 // Over the picture and under everything else, and the mouse goes through them to the picture, whose
                 // click plays or pauses (PlaybackWindow).
                 Group {
@@ -2556,22 +2569,41 @@ private struct DesktopVideoView: NSViewRepresentable {
     let player: AVPlayer
     let fillsFrame: Bool
     let pip: DesktopPictureInPicture
-    final class Coordinator { weak var pip: DesktopPictureInPicture? }
+    var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+    @MainActor final class Coordinator {
+        weak var pip: DesktopPictureInPicture?
+        var observation: NSKeyValueObservation?
+        var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+        weak var layer: AVPlayerLayer?
+        func watch(_ layer: AVPlayerLayer) {
+            guard self.layer !== layer else { return }
+            self.layer = layer
+            observation = layer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] _, change in
+                let ready = change.newValue ?? false
+                Task { @MainActor [weak self] in self?.onReadyForDisplay(ready) }
+            }
+        }
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> DesktopVideoNSView {
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         let view = DesktopVideoNSView()
         view.playerLayer.player = player
         context.coordinator.pip = pip
         pip.attach(view.playerLayer)
+        context.coordinator.watch(view.playerLayer)
         return view
     }
     func updateNSView(_ view: DesktopVideoNSView, context: Context) {
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         if view.playerLayer.player !== player { view.playerLayer.player = player }
         let gravity: AVLayerVideoGravity = fillsFrame ? .resizeAspectFill : .resizeAspect
         if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
         context.coordinator.pip = pip
+        context.coordinator.watch(view.playerLayer)
     }
     static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: Coordinator) {
+        coordinator.observation = nil
         if coordinator.pip?.active != true { view.playerLayer.player = nil }
     }
 }

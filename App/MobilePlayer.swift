@@ -120,7 +120,7 @@ struct MobilePlayerView: View {
 
     var body: some View {
         ZStack {
-            PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
+            PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip) { session.setDisplayReady($0) }.playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there and the
                 // ML enhancer steps aside while PiP runs.
                 .onChange(of: pip.active) { _, active in
@@ -209,7 +209,7 @@ struct MobilePlayerView: View {
         }
         // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
         .animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil)
-        .animation(waiting == nil ? nil : .easeInOut(duration: 0.4), value: waiting?.starting)
+        .animation(waiting?.starting == true ? .easeInOut(duration: 0.4) : nil, value: waiting?.starting)
         .onChange(of: session.showsPicture ? session.subtitles.pictureSize : .zero, initial: true) { _, size in
             guard !decidedCacheOrientation, layout == .screen, channel.url.scheme == DownloadLibrary.scheme,
                   PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact,
@@ -1690,16 +1690,41 @@ private struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     let gravity: AVLayerVideoGravity
     let pip: PictureInPicture
+    var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+    final class Coordinator {
+        var observation: NSKeyValueObservation?
+        var onReadyForDisplay: @MainActor (Bool) -> Void = { _ in }
+        weak var layer: AVPlayerLayer?
+        func watch(_ layer: AVPlayerLayer) {
+            guard self.layer !== layer else { return }
+            self.layer = layer
+            observation = layer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] _, change in
+                let ready = change.newValue ?? false
+                Task { @MainActor [weak self] in self?.onReadyForDisplay(ready) }
+            }
+        }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> PlayerLayerUIView {
-        if let kept = pip.layerView, kept.superview == nil, kept.playerLayer.player === player { return kept }
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
+        if let kept = pip.layerView, kept.superview == nil, kept.playerLayer.player === player {
+            context.coordinator.watch(kept.playerLayer)
+            return kept
+        }
         let view = PlayerLayerUIView()
         view.playerLayer.player = player
         pip.attach(view)
+        context.coordinator.watch(view.playerLayer)
         return view
     }
     func updateUIView(_ view: PlayerLayerUIView, context: Context) {
+        context.coordinator.onReadyForDisplay = onReadyForDisplay
         if view.playerLayer.player !== player { view.playerLayer.player = player }
         view.playerLayer.videoGravity = gravity
+        context.coordinator.watch(view.playerLayer)
+    }
+    static func dismantleUIView(_ view: PlayerLayerUIView, coordinator: Coordinator) {
+        coordinator.observation = nil
     }
 }
 
