@@ -258,12 +258,17 @@ struct PlaybackSkipLookupTests {
     }
 
     @Test func otherDBRejectsGrosslyMismatchedOrMalformedRuntime() {
-        for runtime in ["1600", "699", "0", "true", "\"1000\"", "null"] {
+        for runtime in ["1600", "699", "1061", "939", "0", "true", "\"1000\"", "null"] {
             let json = "{\"items\":[{\"version_runtime\":\(runtime),\"marker\":[{\"marker_type\":\"intro\",\"time_start\":0,\"time_end\":10}]}]}"
             #expect(skipParse(json, .theOtherDB).isEmpty)
         }
-        #expect(skipParse(#"{"items":[{"version_runtime":1300,"marker":[{"marker_type":"intro","time_start":0,"time_end":10}]}]}"#, .theOtherDB)
+        #expect(skipParse(#"{"items":[{"version_runtime":1030,"marker":[{"marker_type":"intro","time_start":0,"time_end":10}]}]}"#, .theOtherDB)
                 == [PlaybackSkip(start: 0, end: 10, kind: .intro)])
+    }
+
+    @Test func onlineMarkersAreOffUntilTheViewerTurnsThemOn() {
+        #expect(PlaybackSkipLookup.enabledKey == "player.onlineSkipMarkers")
+        #expect(UserDefaults.standard.object(forKey: PlaybackSkipLookup.enabledKey) == nil ? !PlaybackSkipLookup.enabled : true)
     }
 
     @Test func theIntroDBConvertsMillisecondsOnceAndPreservesMultipleSegments() {

@@ -568,6 +568,7 @@ struct FormSettingsView: View {
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(MacPlayerWindowSize.key) private var playerWindowSize = MacPlayerWindowSize.keep.rawValue
     @State private var skipsIntros = false
+    @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
     /// The language picked here, "" for the system's.
     @State private var language = MacLanguage.launched
     #endif
@@ -997,6 +998,11 @@ struct FormSettingsView: View {
                 .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
                 .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
                 .settingsAnchor(.skipIntroOutro)
+                // Off unless chosen: each lookup tells three outside services what plays (#2653).
+                Toggle(isOn: $looksUpSkipTimes) {
+                    FormLabel(symbol: "globe", tint: .mint, title: L10n.text("Look Up Intro and Outro Times Online"), subtitle: L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves."))
+                }
+                .settingsSwitch()
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                     .settingsAnchor(.subtitleStyle)
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
@@ -1832,6 +1838,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
     /// The profile's switch for intros and outros, kept with its times rather than in the app's own defaults.
     @State private var skipsIntros = false
+    @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
     /// The speed every video starts at (Settings › Playback), saved on change.
     @State private var playbackSpeed = PlaybackSpeed.standard
     var body: some View {
@@ -1845,6 +1852,14 @@ struct PlaybackSettingsView: View {
                 .accessibilityIdentifier("settings.skipIntros")
                 .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
                 .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
+            }
+            // Off unless chosen: each lookup tells three outside services what plays (#2653).
+            SettingsGroup(footer: L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves.")) {
+                Toggle(isOn: $looksUpSkipTimes) {
+                    FormLabel(symbol: "globe", tint: .mint, title: L10n.text("Look Up Intro and Outro Times Online"))
+                }
+                .settingsSwitch()
+                .accessibilityIdentifier("settings.onlineSkipTimes")
             }
             // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
             // fragments, and a long title pushed the switch's row to two lines.
@@ -2733,6 +2748,7 @@ struct TVSettingsView: View {
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     @State private var skipsIntros = false
+    @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
 
     var body: some View {
         TVSettingsLayout {
@@ -2804,6 +2820,10 @@ struct TVSettingsView: View {
                 TVSettingsToggle(title: L10n.text("Automatically skip intro and outro"), isOn: $skipsIntros)
                     .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
                     .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
+            }
+            // Off unless chosen: each lookup tells three outside services what plays (#2653).
+            TVSettingsSection(footer: L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves.")) {
+                TVSettingsToggle(title: L10n.text("Look Up Intro and Outro Times Online"), isOn: $looksUpSkipTimes)
             }
             TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
                 TVSettingsLink(title: L10n.text("Subtitle Style")) { SubtitleStyleView() }

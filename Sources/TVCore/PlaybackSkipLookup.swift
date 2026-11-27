@@ -5,6 +5,10 @@ import FoundationNetworking
 
 /// Looks up opening and ending markers independently: the first valid answer for each kind wins.
 public enum PlaybackSkipLookup {
+    /// The viewer's opt-in (Settings): off unless turned on, since each lookup tells three outside services what is
+    /// playing (#2653).
+    public static let enabledKey = "player.onlineSkipMarkers"
+    public static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
     public struct Media: Hashable, Sendable {
         public let tmdbID: Int?
         public let imdbID: String?
@@ -179,10 +183,10 @@ public enum PlaybackSkipLookup {
             var best: (distance: Double, segments: [PlaybackSkip])?
             for item in root["items"]?.array ?? [] {
                 guard let item = item.object, let runtime = number(item["version_runtime"]), runtime > 0 else { continue }
-                // Reject a different cut whose runtime is over five minutes away. This is a
-                // client matching limit, also used by TheIntroDB's duration matching contract.
+                // Reject a different cut whose runtime is over a minute away: the times of a version that long or
+                // short are the times of another cut.
                 let distance = abs(runtime - duration)
-                guard distance <= 300 else { continue }
+                guard distance <= 60 else { continue }
                 let found = (item["marker"]?.array ?? []).compactMap { value -> PlaybackSkip? in
                     guard let marker = value.object, case .string(let name) = marker["marker_type"],
                           let kind = markerKind(name), let start = number(marker["time_start"]),
