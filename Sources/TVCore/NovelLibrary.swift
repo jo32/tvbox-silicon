@@ -79,7 +79,10 @@ public enum NovelLibrary {
     /// False when `old` isn't on the shelf.
     @discardableResult
     public static func switchSource(_ shelf: inout [ShelfBook], from old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) -> Bool {
-        guard let index = shelf.firstIndex(where: { $0.id == old.match }) ?? looseIndex(shelf, for: old) else { return false }
+        // The old copy by its key, else by its title; not the new copy itself, which a title alone also finds once the
+        // switch has been made: then there is nothing left to switch.
+        guard let index = shelf.firstIndex(where: { $0.id == old.match })
+                ?? looseIndex(shelf, for: old).flatMap({ shelf[$0].id == book.match ? nil : $0 }) else { return false }
         var entry = shelf.remove(at: index)
         entry.follow(book, chapters: chapters)
         shelf.removeAll { $0.id == entry.id }
