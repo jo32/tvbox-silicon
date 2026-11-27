@@ -881,6 +881,13 @@ struct FormSettingsView: View {
                     .accessibilityIdentifier("settings.collapseTabBar")
                     .settingsAnchor(.collapseTabBar)
                 }
+                Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
+                    ForEach(AppSection.launchChoices) { Text($0.title).tag($0) }
+                } label: {
+                    FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
+                }
+                .accessibilityIdentifier("settings.launchPage")
+                .settingsAnchor(.launchPage)
             }
             #else
             Section {
@@ -896,6 +903,13 @@ struct FormSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
+                Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
+                    ForEach(AppSection.launchChoices) { Text($0.title).tag($0) }
+                } label: {
+                    FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
+                }
+                .accessibilityIdentifier("settings.launchPage")
+                .settingsAnchor(.launchPage)
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 languagePickerRows
@@ -1315,6 +1329,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case playback
     case playURL
     case editTabBar
+    case launchPage
     case tabBarLabels
     case collapseTabBar
     case language
@@ -1625,6 +1640,8 @@ private extension FormSettingsView {
             keywords: ["url", "stream", "link", "播放链接", "串流"])
         add(.editTabBar, title: L10n.text("Edit Tab Bar"), section: secGeneral, subtitle: L10n.text("Choose your tabs and their order."),
             keywords: ["tab", "tabs", "order", "标签栏", "底部", "菜单"])
+        add(.launchPage, title: L10n.text("Launch Page"), section: secGeneral,
+            keywords: ["launch", "start", "open on", "home", "tab", "启动", "打开", "首页", "默认页"])
         add(.tabBarLabels, title: L10n.text("Tab Bar Labels"), section: secGeneral,
             keywords: ["tab", "labels", "标签栏", "文字"])
         if #available(iOS 26, *) {
@@ -1634,6 +1651,8 @@ private extension FormSettingsView {
         #else
         add(.language, title: L10n.text("Language"), section: secGeneral,
             keywords: ["language", "locale", "chinese", "english", "japanese", "语言", "中文", "英文"])
+        add(.launchPage, title: L10n.text("Launch Page"), section: secGeneral,
+            keywords: ["launch", "start", "open on", "home", "tab", "启动", "打开", "首页", "默认页"])
         #endif
 
         #if os(macOS)
