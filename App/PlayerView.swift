@@ -1375,8 +1375,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         target.title = channel.name
         // The next episode updates the view in place: a new one would rebuild the player view, a flash between episodes.
         let root = DesktopPlaybackRoot(channel: channel, session: session, window: target, store: store)
-        if let host = target.contentView as? NSHostingView<DesktopPlaybackRoot> { host.rootView = root }
-        else { target.contentView = NSHostingView(rootView: root) }
+        if let host = target.contentView as? DesktopHostingView<DesktopPlaybackRoot> { host.rootView = root }
+        else { target.contentView = DesktopHostingView(rootView: root) }
         startCatalogPlayback(session, channel: channel, store: store)
         target.makeKeyAndOrderFront(nil)
     }
@@ -1412,6 +1412,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     private var clickReset: Task<Void, Never>?
     /// The click brought the window forward (from another app or window): it only does that, as in IINA.
     private var clickActivates = false
+    /// Whether the current press began on the bare picture, so a mouse-up that drifts off a control never toggles playback.
+    private var clickOnPicture = false
     /// When the window last became key; the click that made it key can arrive a moment later.
     private var keyAt = ContinuousClock.now
 
@@ -1431,8 +1433,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
             clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
+            let onPicture = contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            // Only the bare picture drags the window by its background: SwiftUI controls like SeekBar hit-test to
+            // the hosting view and glass platters to NSGlassEffectView, whose mouseDownCanMoveWindow is true (#2558).
+            isMovableByWindowBackground = onPicture
             let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                && isPictureClick(at: event.locationInWindow)
+                && onPicture && event.locationInWindow.y <= contentLayoutRect.maxY
+            clickOnPicture = bare
             clickReset?.cancel(); clickReset = nil
             if !bare || event.clickCount > 2 { clickToggled = false }
             if event.clickCount >= 2, bare, clickToggled {
@@ -1443,7 +1450,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
         }
-        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, clickOnPicture, let session,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            isPictureClick(at: event.locationInWindow), let pressedAt {
             let up = convertPoint(toScreen: event.locationInWindow)
@@ -1973,6 +1980,7 @@ private struct DesktopPlaybackView: View {
             Text(channel.name).font(.headline).lineLimit(1)
                 .shadow(color: .black.opacity(0.6), radius: 4)
                 .padding(.leading, 86)
+                .allowsHitTesting(false)
             Spacer(minLength: 12)
             HStack(spacing: 2) {
                 // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
@@ -2348,6 +2356,13 @@ private struct DesktopVideoView: NSViewRepresentable {
         if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
     }
     static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: ()) { view.playerLayer.player = nil }
+}
+
+/// Hosts the Mac player's SwiftUI controls: `mouseDownCanMoveWindow` is false so dragging SwiftUI controls like
+/// `SeekBar` doesn't move the window along with them (#2558). `DesktopVideoNSView` returns true, so dragging the bare
+/// picture still moves the window.
+private final class DesktopHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 /// A view whose layer is the player's. A drag on it moves the window, and a click plays or pauses (PlaybackWindow).
