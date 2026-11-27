@@ -13,6 +13,17 @@ private func video(_ name: String, year: String? = nil, id: String? = nil) -> Vi
     #expect(found.map(\.laterSeason) == [nil, 2, nil])
 }
 
+@Test func sourceTitleMatchWidensToTMDBsOtherNames() {
+    // TMDB lists the work as 龙珠超; the sources list it as 七龙珠超 (#2608).
+    let wanted = SourceTitleMatch.Wanted(names: ["龙珠超", "Dragon Ball Super"], year: 2015)
+    let videos = [video("七龙珠超", year: "2015")]
+    #expect(SourceTitleMatch.candidates(videos, site: site("s"), wanted: wanted).isEmpty)
+    let widened = wanted.widened(with: ["七龙珠超"])
+    #expect(widened != nil)
+    #expect(SourceTitleMatch.candidates(videos, site: site("s"), wanted: widened!).map(\.video.name) == ["七龙珠超"])
+    #expect(wanted.widened(with: ["龙珠超"]) == nil)
+}
+
 @Test func sourceTitleMatchTreatsAFirstSeasonAsTheWork() {
     let wanted = SourceTitleMatch.Wanted(names: ["庆余年"], year: 2019)
     let found = SourceTitleMatch.candidates([video("庆余年 第一季", year: "2019")], site: site("s"), wanted: wanted)

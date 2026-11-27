@@ -43,6 +43,9 @@ struct DiscoverDetailView: View {
         .onChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
         }
+        .onChange(of: details?.otherNames) { _, names in
+            if let names { sources?.addNames(names) }
+        }
         .onChange(of: store.subscription?.importedAt) { _, _ in startSources() }
         // A video playing over the page (the player covers it without the page going away) pauses the search for the
         // title's other sources until it closes: their plugins ran flat out under the video and warmed the phone (#1428).
@@ -307,6 +310,8 @@ struct DiscoverDetailView: View {
         let model = sources ?? DiscoverSources.of(work)
         if sources == nil { sources = model }
         model.start(store)
+        // The details may already be in (a page reopened): match on TMDB's other names too (#2608).
+        if let names = details?.otherNames { model.addNames(names) }
     }
     private func stopSources() {
         sources?.stop()
@@ -646,7 +651,7 @@ private struct DiscoverMacSeasonButton: View {
     /// Every source asked has answered.
     private(set) var finished = false
     @ObservationIgnored private let keyword: String
-    @ObservationIgnored private let wanted: SourceTitleMatch.Wanted
+    @ObservationIgnored private var wanted: SourceTitleMatch.Wanted
     @ObservationIgnored private var found: [SourceTitleMatch.Candidate] = []
     /// The Watch Now row's order, by source key: the best match comes from the source highest in it.
     @ObservationIgnored private var order: [String: Int] = [:]
@@ -714,6 +719,20 @@ private struct DiscoverMacSeasonButton: View {
     func choose(_ candidate: SourceTitleMatch.Candidate) {
         grace?.cancel(); grace = nil
         chosen = candidate
+    }
+
+    /// TMDB's other names for the title arrived with its details: widen the match and re-match the
+    /// answers already in, so a source listing it under another name is found (#2608). A match
+    /// already showing stays showing; new matches go under Change Source.
+    func addNames(_ names: [String]) {
+        guard let widened = wanted.widened(with: names) else { return }
+        wanted = widened
+        generation += 1
+        pending = 0
+        grace?.cancel(); grace = nil
+        found = []; matches = []
+        for result in search.results { absorb(result) }
+        settle()
     }
 
     private func absorb(_ result: SearchSourceResult) {
