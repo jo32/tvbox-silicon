@@ -448,14 +448,35 @@ struct NovelSearchView: View {
 
 struct NovelShelfView: View {
     @State private var store = NovelStore.shared
+    /// While on, a card ticks instead of opening, so a full shelf can be emptied at once (#1845).
+    @State private var editing = false
+    @State private var selected: Set<String> = []
+    @State private var confirming = false
     var body: some View {
         ScrollView {
             LazyVGrid(columns: NovelLayout.columns, alignment: .leading, spacing: Layout.gridRowSpacing) {
                 ForEach(store.shelf) { entry in
-                    NovelBookLink(book: entry.book, caption: NovelProgressText.short(entry))
-                        .contextMenu {
-                            Button(L10n.text("Remove from Bookshelf"), systemImage: "trash", role: .destructive) { store.remove(entry) }
+                    if editing {
+                        Button {
+                            if !selected.insert(entry.id).inserted { selected.remove(entry.id) }
+                        } label: {
+                            NovelCard(book: entry.book, caption: NovelProgressText.short(entry))
+                                .overlay(alignment: .topTrailing) {
+                                    Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3)
+                                        .foregroundStyle(selected.contains(entry.id) ? Brand.accent : .secondary)
+                                        .background(Circle().fill(.thinMaterial).padding(2))
+                                        .padding(6)
+                                }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("novel.shelf.select." + entry.id)
+                    } else {
+                        NovelBookLink(book: entry.book, caption: NovelProgressText.short(entry))
+                            .contextMenu {
+                                Button(L10n.text("Remove from Bookshelf"), systemImage: "trash", role: .destructive) { store.remove(entry) }
+                            }
+                    }
                 }
             }
             .padding(Layout.gutter)
@@ -463,6 +484,30 @@ struct NovelShelfView: View {
         }
         .background { Backdrop() }
         .screenTitle(L10n.text("Bookshelf"))
+        #if !os(tvOS)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if editing {
+                    HStack(spacing: 14) {
+                        Button(L10n.text("Done")) { editing = false; selected = [] }
+                        Button(L10n.text("Remove %lld books", selected.count), role: .destructive) { confirming = true }
+                            .disabled(selected.isEmpty)
+                            .accessibilityIdentifier("novel.shelf.removeSelection")
+                    }
+                } else {
+                    Button(L10n.text("Edit")) { editing = true }
+                        .accessibilityIdentifier("novel.shelf.edit")
+                }
+            }
+        }
+        .confirmationDialog(L10n.text("Remove %lld books from the Bookshelf?", selected.count), isPresented: $confirming, titleVisibility: .visible) {
+            Button(L10n.text("Remove from Bookshelf"), role: .destructive) {
+                store.removeAll(store.shelf.filter { selected.contains($0.id) })
+                selected = []
+                editing = false
+            }
+        }
+        #endif
     }
 }
 
