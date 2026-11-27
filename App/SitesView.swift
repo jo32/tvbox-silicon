@@ -3035,6 +3035,13 @@ struct VideoDetailView: View {
         let showsStills = items.count > 1 && (!tmdb.episodeTiles(items).isEmpty || (tmdbPending && items.count <= 60))
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
+        // The episode playing, else the one watched last, so it reads as the current one in the grid (#2572).
+        // As in watchedFlag: watchChannel only exists off tvOS, and only iOS reads it here.
+        #if os(iOS)
+        let currentID = (watchChannel?.historyContext ?? watchHistory?.context)?.episode(in: items)?.id
+        #else
+        let currentID = watchHistory?.context.episode(in: items)?.id
+        #endif
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
             ForEach(shownOrder(items)) { episode in
                 let saved = download(episode)
@@ -3042,18 +3049,18 @@ struct VideoDetailView: View {
                     if showsStills {
                         Button { startRequest { await play(episode) } } label: {
                             TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], detail: episodeDetails[episode.id],
-                                            loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
+                                            current: episode.id == currentID, loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
                         }
                         .tmdbCardButton()
                         .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
                         .accessibilityLabel(episode.name)
                     } else if longNames {
                         EpisodeRow(name: episode.name, label: episodeLabels[episode.id], file: episodeDetails[episode.id],
-                                   loading: loadingEpisode == episode.id, download: saved) {
+                                   current: episode.id == currentID, loading: loadingEpisode == episode.id, download: saved) {
                             startRequest { await play(episode) }
                         }
                     } else {
-                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true,
+                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id || episode.id == currentID, fill: true,
                              subtitle: episodeDetails[episode.id]) { startRequest { await play(episode) } }
                             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
                     }
@@ -4188,6 +4195,8 @@ struct EpisodeRow: View {
     var label: String? = nil
     /// Resolution and size from the file name (4K · 5.2G), shown in place of the size tag.
     var file: String? = nil
+    /// The episode playing (else the one watched last): read as the current one, like a loading one (#2572).
+    var current = false
     let loading: Bool
     var download: DownloadItem? = nil
     let action: () -> Void
@@ -4220,7 +4229,7 @@ struct EpisodeRow: View {
                     else { Image(systemName: "play.fill").font(.system(size: Self.metrics.icon)).foregroundStyle(hovering ? .primary : .tertiary) }
                 }
                 .frame(width: Self.metrics.icon + 6)
-                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading ? .semibold : .medium))
+                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading || current ? .semibold : .medium))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 8)
                 if let detail = parts.detail {
@@ -4231,7 +4240,7 @@ struct EpisodeRow: View {
             .padding(.horizontal, Self.metrics.inset).frame(minHeight: Self.metrics.height)
             .frame(maxWidth: .infinity, alignment: .leading)
             #if !os(tvOS)
-            .background(Color.primary.opacity(loading ? 0.12 : (hovering ? 0.08 : 0.04)),
+            .background(Color.primary.opacity(loading || current ? 0.12 : (hovering ? 0.08 : 0.04)),
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             #endif
             .contentShape(Rectangle())
