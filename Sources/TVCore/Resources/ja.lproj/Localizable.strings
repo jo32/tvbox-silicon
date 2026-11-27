@@ -2446,3 +2446,4 @@
 "%@ didn't play. Trying %@." = "%@ を再生できませんでした。%@ を試しています。";
 "Trying %@…" = "%@ を試しています…";
 "another line" = "別の回線";
+"PGS bitmap subtitles use this size and position." = "PGS 画像字幕にもこのサイズと位置が適用されます。";

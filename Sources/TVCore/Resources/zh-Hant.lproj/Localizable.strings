@@ -2446,3 +2446,4 @@
 "%@ didn't play. Trying %@." = "%@ 無法播放，正在嘗試 %@。";
 "Trying %@…" = "正在嘗試 %@…";
 "another line" = "其他線路";
+"PGS bitmap subtitles use this size and position." = "PGS 點陣字幕共用這裡的大小和位置。";

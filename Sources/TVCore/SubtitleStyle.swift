@@ -81,8 +81,20 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
     /// the picture's top, at 1 its bottom touches the bottom, and near the bottom a second line grows upwards.
     public var x = 0.5
     public var y = SubtitleStyle.bottom
+    // Distinguish deliberately choosing Bottom from the identical coordinates of the default text position.
+    private var positionWasChosen = false
+    public var followsSourcePosition: Bool { !positionWasChosen && x == 0.5 && y == Self.bottom }
+
+    public mutating func place(at point: CGPoint?) {
+        let position = point ?? CGPoint(x: 0.5, y: Self.bottom)
+        x = position.x
+        y = position.y
+        positionWasChosen = point != nil
+    }
+
     /// The letters' height as a percentage of the picture's.
     public var size = 5.0
+    public var relativeSize: Double { size / Self().size }
     /// A font family installed on the device; nil is the system's.
     public var font: String?
     public var bold = false
@@ -147,7 +159,7 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
             .filter { !$0.isEmpty }
     }
 
-    private enum CodingKeys: String, CodingKey { case x, y, size, font, bold, italic, color, edge, backdrop }
+    private enum CodingKeys: String, CodingKey { case x, y, size, font, bold, italic, color, edge, backdrop, positionWasChosen }
 
     /// Fields a newer or older app didn't save keep their standard values, and unknown choices fall back to them.
     public init(from decoder: any Decoder) throws {
@@ -155,6 +167,7 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
         let standard = SubtitleStyle()
         x = (try? container.decodeIfPresent(Double.self, forKey: .x)) ?? standard.x
         y = (try? container.decodeIfPresent(Double.self, forKey: .y)) ?? standard.y
+        positionWasChosen = (try? container.decode(Bool.self, forKey: .positionWasChosen)) ?? false
         size = (try? container.decodeIfPresent(Double.self, forKey: .size)) ?? standard.size
         font = try? container.decodeIfPresent(String.self, forKey: .font)
         bold = (try? container.decodeIfPresent(Bool.self, forKey: .bold)) ?? standard.bold
