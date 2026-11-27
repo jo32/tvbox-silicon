@@ -2359,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram が読み取れないページを返しました。";
 "This Telegram post is no longer in the channel's public preview." = "この Telegram 投稿はチャンネルの公開プレビューにありません。";
 "This Telegram post has no playable video." = "この Telegram 投稿には再生できる動画がありません。";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "この Telegram チャンネルの公開プレビューは空です。公開チャンネルだけを追加できます。公開チャンネルの中には、ウェブプレビューに投稿を表示しないものもあります。";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "公開 Telegram チャンネルだけを追加できます。招待リンクとプライベートチャンネルには公開プレビューがありません。";
 "Telegram post" = "Telegram 投稿";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "動画に含まれる字幕は吹き出しボタンにあります。";

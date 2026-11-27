@@ -972,13 +972,15 @@ import TVCore
         playFile(cloud, in: CloudFilesFolder(drive: drive, id: file.folderID, name: file.folderName, files: [cloud]))
     }
 
-    /// The Watch Now source row: pinned, then built-in, then the sources page's subscription order.
+    /// The Watch Now source row: pinned, then built-in, then the Telegram group, then the sources
+    /// page's subscription order. Telegram channels ride with their group rather than the built-ins,
+    /// so the row reads the way the sources page does.
     func recommendationSites(_ config: Subscription) -> [Site] {
         let stamp = currentSiteListStamp()
         if stamp == siteListStamp, let cached = recommendationCache { return cached }
         let leading = automaticSites(config)
         let pinned = leading.filter { pinnedSources.contains($0, origin: config.origin) }
-        let builtIn = leading.filter { $0.isBuiltIn && !pinnedSources.contains($0, origin: config.origin) }
+        let builtIn = leading.filter { $0.isBuiltIn && !$0.isTelegram && !pinnedSources.contains($0, origin: config.origin) }
         let groups = sourceGroups(includeHidden: false)
         let result = SourceGroups.homeRow(pinned: pinned, builtIn: builtIn, groups: groups)
         rememberSiteLists(stamp)

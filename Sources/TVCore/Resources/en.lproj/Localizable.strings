@@ -2359,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram returned a page Yingxia can't read.";
 "This Telegram post is no longer in the channel's public preview." = "This Telegram post is no longer in the channel's public preview.";
 "This Telegram post has no playable video." = "This Telegram post has no playable video.";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview.";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "Only public Telegram channels can be added. Invite links and private channels have no public preview.";
 "Telegram post" = "Telegram post";
 "Latest" = "Latest";
 "The video's own subtitles are under the speech bubble button." = "The video's own subtitles are under the speech bubble button.";

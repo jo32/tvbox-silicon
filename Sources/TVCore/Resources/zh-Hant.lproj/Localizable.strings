@@ -2359,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram 回傳了映匣無法讀取的頁面。";
 "This Telegram post is no longer in the channel's public preview." = "這則 Telegram 貼文已不在頻道的公開預覽中。";
 "This Telegram post has no playable video." = "這則 Telegram 貼文沒有可播放的影片。";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "這個 Telegram 頻道的公開預覽是空的。只有公開頻道能加入，而且有些公開頻道不會在網頁預覽中顯示貼文。";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "只能加入公開的 Telegram 頻道。招待連結和私密頻道沒有公開預覽。";
 "Telegram post" = "Telegram 貼文";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "影片自帶的字幕在對話氣泡按鈕裡。";
