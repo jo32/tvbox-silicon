@@ -202,6 +202,7 @@ struct CloudFolderView: View {
         let label = FileRowLabel(symbol: file.symbol, tint: file.tint, title: file.name, subtitle: subtitle(file), chevron: file.isFolder, artwork: file.artwork)
         if file.isFolder {
             FolderLink(drive: drive, folder: file.id, name: file.name) { label }
+                .contextMenu { pinButton(file) }
         } else if drive.plays(file) {
             let item = FavoriteItem.cloud(FavoriteCloudFile(driveKey: drive.key, folderID: folder, folderName: name, fileID: file.id, fileName: file.name, size: file.size))
             Button { play(file, in: files) } label: {
@@ -213,15 +214,28 @@ struct CloudFolderView: View {
                 }
             }
             .glassRow()
-            .contextMenu { FavoriteMenuButton(item: item, name: file.name) }
+            .contextMenu { pinButton(file); FavoriteMenuButton(item: item, name: file.name) }
             .accessibilityIdentifier("files.play." + file.name)
         } else {
             // Focusable on Apple TV all the same, or the remote couldn't scroll past these rows.
             #if os(tvOS)
             Button {} label: { label.opacity(0.55) }.glassRow()
+                .contextMenu { pinButton(file) }
             #else
             label.opacity(0.55)
+                .contextMenu { pinButton(file) }
             #endif
+        }
+    }
+
+    /// Keeps a folder or file at the top of the list, or takes the pin off (#1715).
+    private func pinButton(_ file: CloudFile) -> some View {
+        let pinned = CloudPins.shared.contains(drive: drive, file: file)
+        return Button {
+            CloudPins.shared.toggle(drive: drive, file: file)
+            if let files { self.files = CloudPins.shared.arrange(files, drive: drive) }
+        } label: {
+            Label(L10n.text(pinned ? "Unpin" : "Pin to Top"), systemImage: pinned ? "pin.slash" : "pin")
         }
     }
 
@@ -239,7 +253,7 @@ struct CloudFolderView: View {
 
     private func load(password: String? = nil) async {
         do {
-            files = try await CloudFiles.list(drive, folder: folder, password: password)
+            files = CloudPins.shared.arrange(try await CloudFiles.list(drive, folder: folder, password: password), drive: drive)
             failure = nil
         } catch CloudFilesError.passwordRequired {
             self.password = ""
