@@ -675,7 +675,8 @@ struct FormSettingsView: View {
                         } label: {
                             Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
                         }
-                        .disabled(store.importing)
+                        // A switched-off list isn't refreshed (the store skips it), so the item isn't offered.
+                        .disabled(store.importing || !entry.enabled)
                         // On or off without opening the subscription (#730).
                         Button {
                             Task { await store.setSubscription(entry, enabled: !entry.enabled) }
