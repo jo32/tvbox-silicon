@@ -1702,8 +1702,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     }
 }
 
-/// Auto-hiding chrome driven by real pointer movement and key presses (not hover
-/// phases, which AVPlayerView's own overlay and layout passes keep re-firing).
+/// Auto-hiding chrome driven by real pointer movement and key presses (excluding arrow keys, which seek, hold to
+/// fast-forward or change volume quietly without bringing up the controls overlay, #2557).
 @MainActor @Observable private final class ChromeIdle {
     var visible = true
     private var task: Task<Void, Never>?
@@ -1719,6 +1719,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
                 guard let self, event.window === self.window else { return }
                 // Ignore synthetic mouse events that carry no movement.
                 if event.type == .mouseMoved, abs(event.deltaX) + abs(event.deltaY) < 1 { return }
+                if event.type == .keyDown, !PlaybackKeyboard.wakesMacChrome(keyCode: event.keyCode) { return }
                 self.poke()
             }
             return event
@@ -1737,6 +1738,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func hold(_ on: Bool) {
         held = on
         poke()
+    }
+
+    /// Hides the controls right away (e.g. while holding the right arrow to fast-forward, #2557).
+    func hide() {
+        task?.cancel(); task = nil
+        guard !held, !UserDefaults.standard.bool(forKey: "qaPlayerControls") else { return }
+        if visible { withAnimation(.smooth(duration: 0.25)) { visible = false } }
     }
 
     func poke() {
@@ -1912,6 +1920,8 @@ private struct DesktopPlaybackView: View {
             }
         }
         .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
+        // Fast-forwarding with the right arrow: keep the controls out of the way, as on iPad (#2557).
+        .onChange(of: session.boost != nil) { _, boosting in if boosting { idle.hide() } }
         .onAppear {
             floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh()
             clock.attach(session.player)
