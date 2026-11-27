@@ -45,6 +45,17 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
         return changed
     }
 
+    /// Drops live items absent from `current` without stamping them as removals, so items removed while
+    /// iCloud sync was off do not wipe the cloud copy when sync is turned back on.
+    @discardableResult mutating func forgetMissing(_ current: [String: Value]) -> Bool {
+        var changed = false
+        for (id, record) in records where record.value != nil && current[id] == nil {
+            records.removeValue(forKey: id)
+            changed = true
+        }
+        return changed
+    }
+
     /// Older app versions stamped history at upload time. Read their values' own dates before comparing them;
     /// deletion dates have no value to recover and keep their original meaning.
     @discardableResult mutating func useModificationDates(_ modifiedAt: ((Value) -> Date)?) -> Bool {
@@ -92,6 +103,8 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     /// iCloud's account changed: what this device holds is the other account's, so the next flush takes the
     /// cloud's copy as this account's whole truth instead of merging the two.
     func adoptAccount()
+    /// Sync was turned back on: local items missing since it was turned off must not become cloud deletions.
+    func rejoin()
 }
 
 /// One kind of data (favorites, history, …): what it holds on this device, how to take what other
@@ -108,6 +121,8 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     /// Set by `adoptAccount()`: the ledger now describes another account's past, so the next flush starts from
     /// the new account's copy.
     var adoptingAccount = false
+    /// Set by `rejoin()`: the next flush restores cloud items absent locally instead of stamping them removed.
+    var rejoining = false
 
     init(key: String, file: URL, delay: Duration, modifiedAt: ((Value) -> Date)?, current: @escaping @MainActor () -> [String: Value],
          apply: @escaping @MainActor ([CloudSyncItem<Value>]) -> Void) {
@@ -121,23 +136,32 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
         if adoptingAccount {
             // Nothing goes up until the new account's own copy has been read: one this build cannot read is
             // left alone and tried again, never replaced with what the old account left here (#2347).
-            if adopt(cloud, cutoff: cutoff, now: now) { adoptingAccount = false }
+            if adopt(cloud, cutoff: cutoff, now: now) { adoptingAccount = false; rejoining = false }
             return
         }
+        var remote = CloudSyncLedger<Value>()
+        if let data = cloud.data(forKey: key) {
+            // A copy this build cannot read is left alone rather than treated as empty and overwritten.
+            guard let decoded = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return }
+            remote = decoded
+        }
+        let local = current()
+        let forgot = rejoining && ledger.forgetMissing(local)
+        rejoining = false
         let restamped = ledger.useModificationDates(modifiedAt)
-        let noted = ledger.note(current(), now: now, modifiedAt: modifiedAt)
-        var remote = cloud.data(forKey: key).flatMap { CloudSync.decode(CloudSyncLedger<Value>.self, from: $0) } ?? CloudSyncLedger()
+        let noted = ledger.note(local, now: now, modifiedAt: modifiedAt)
         remote.useModificationDates(modifiedAt)
         remote.prune(before: cutoff)
         let incoming = ledger.merge(remote)
         ledger.prune(before: cutoff)
-        if restamped || noted || incoming { save() }
+        if forgot || restamped || noted || incoming { save() }
         if incoming { apply(ledger.live) }
         guard ledger != remote else { return }
         push(cloud)
     }
 
     func adoptAccount() { adoptingAccount = true }
+    func rejoin() { rejoining = true }
 
     /// Another iCloud account: its items are the ones to show, and this device's items for the old account must
     /// not travel into it. False while its copy cannot be read, so the next flush tries again instead of pushing.
@@ -147,10 +171,11 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
             // A key the new account has never had starts from what the device holds, so switching to an
             // account that has never synced keeps the subscriptions, favorites and history instead of
             // emptying them.
+            let hadRecords = !ledger.records.isEmpty
             ledger = CloudSyncLedger()
-            guard ledger.note(current(), now: now, modifiedAt: modifiedAt) else { return true }
-            save()
-            push(cloud)
+            let noted = ledger.note(current(), now: now, modifiedAt: modifiedAt)
+            if hadRecords || noted { save() }
+            if noted { push(cloud) }
             return true
         }
         guard var remote = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return false }
@@ -290,10 +315,16 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
         for key in order where keys?.contains(key) ?? true { channels[key]?.flush(cloud, now: now) }
     }
 
-    /// Turned back on: whatever changed meanwhile on either side merges. Turned off: nothing more is sent.
+    /// Turned back on: additions and edits from either side merge, and items removed locally while sync
+    /// was off are restored from iCloud instead of deleting the cloud copy. Turned off: nothing more is sent.
     public func setEnabled(_ enabled: Bool) {
         defaults.set(enabled, forKey: Self.enabledKey)
-        if enabled { start() } else { cancelPending() }
+        if enabled {
+            for channel in channels.values { channel.rejoin() }
+            start()
+        } else {
+            cancelPending()
+        }
     }
 
     func receive(reason: Int?, keys: [String]?) {

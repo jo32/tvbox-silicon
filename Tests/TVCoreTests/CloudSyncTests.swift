@@ -15,12 +15,14 @@ import Testing
     var names: [String: String]
     var others: [String: String]
     let defaults: UserDefaults
+    let directory: URL
     let sync: CloudSync
-    init(_ cloud: MemoryCloud, names: [String: String] = [:]) {
+    init(_ cloud: MemoryCloud, names: [String: String] = [:], directory: URL? = nil, defaults: UserDefaults? = nil) {
         self.names = names
         others = [:]
-        defaults = UserDefaults(suiteName: "cloudsync." + UUID().uuidString)!
-        sync = CloudSync(cloud: cloud, directory: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), defaults: defaults)
+        self.defaults = defaults ?? UserDefaults(suiteName: "cloudsync." + UUID().uuidString)!
+        self.directory = directory ?? FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        sync = CloudSync(cloud: cloud, directory: self.directory, defaults: self.defaults)
         sync.register("names", current: { [unowned self] in self.names },
                       apply: { [unowned self] in self.names = Dictionary(uniqueKeysWithValues: $0.map { ($0.id, $0.value) }) })
         sync.register("others", current: { [unowned self] in self.others },
@@ -198,6 +200,104 @@ import Testing
     #expect(cloud.values.isEmpty)
     phone.sync.setEnabled(true)
     #expect(cloud.values["sync.names"] != nil)
+}
+
+/// Removing items while iCloud sync is off must not delete the cloud copy when sync is turned back on (#2446).
+@Test @MainActor func turningOffAndBackOnRestoresCloudItemsInsteadOfDeletingThem() {
+    let cloud = MemoryCloud(), start = Date().addingTimeInterval(-60)
+    let mac = Device(cloud, names: ["a": "Alpha", "b": "Beta"]), phone = Device(cloud)
+    mac.sync.flush(now: start)
+    phone.sync.flush(now: start.addingTimeInterval(1))
+    mac.sync.setEnabled(false)
+    // Local removal and addition while sync is off; another device edits a synced item meanwhile.
+    mac.names["a"] = nil
+    mac.names["c"] = "Charlie"
+    phone.names["b"] = "Beta 2"
+    phone.sync.flush(now: start.addingTimeInterval(10))
+    mac.sync.setEnabled(true)
+    phone.sync.flush(now: start.addingTimeInterval(20))
+    #expect(mac.names == ["a": "Alpha", "b": "Beta 2", "c": "Charlie"])
+    #expect(phone.names == mac.names)
+}
+
+/// Turning sync off, clearing local data, restarting the app, and turning sync back on still restores iCloud (#2446).
+@Test @MainActor func turningOffClearingRestartingAndTurningBackOnRestoresCloudBackup() {
+    let cloud = MemoryCloud()
+    let first = Device(cloud, names: ["a": "Alpha", "b": "Beta"])
+    first.sync.flush()
+    first.sync.setEnabled(false)
+    // App restarts with sync still off and an empty local store, then the viewer turns sync back on.
+    let reopened = Device(cloud, names: [:], directory: first.directory, defaults: first.defaults)
+    reopened.sync.start()
+    #expect(reopened.names.isEmpty)
+    reopened.sync.setEnabled(true)
+    #expect(reopened.names == ["a": "Alpha", "b": "Beta"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.values == ["a": "Alpha", "b": "Beta"])
+}
+
+/// If iCloud has not delivered its copy yet when sync turns back on with an empty local store, nothing is pushed
+/// and the later initial sync restores the cloud backup instead of deleting it (#2446).
+@Test @MainActor func turningBackOnBeforeInitialSyncDoesNotDeleteCloudBackup() {
+    let cloud = MemoryCloud()
+    let mac = Device(cloud, names: ["a": "Alpha"])
+    mac.sync.flush()
+    let backup = cloud.values
+    mac.sync.setEnabled(false)
+    mac.names = [:]
+    cloud.values = [:]
+    mac.sync.setEnabled(true)
+    #expect(cloud.values.isEmpty)
+    cloud.values = backup
+    mac.sync.receive(reason: NSUbiquitousKeyValueStoreInitialSyncChange, keys: nil)
+    #expect(mac.names == ["a": "Alpha"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.values == ["a": "Alpha"])
+}
+
+/// A deletion made on another device while this device had sync off still applies when sync turns back on (#2446).
+@Test @MainActor func remoteDeletionsWhileTurnedOffStillApplyWhenTurnedBackOn() {
+    let cloud = MemoryCloud(), start = Date().addingTimeInterval(-60)
+    let mac = Device(cloud, names: ["a": "Alpha", "b": "Beta"]), phone = Device(cloud)
+    mac.sync.flush(now: start)
+    phone.sync.flush(now: start.addingTimeInterval(1))
+    mac.sync.setEnabled(false)
+    phone.names["b"] = nil
+    phone.sync.flush(now: start.addingTimeInterval(10))
+    mac.sync.setEnabled(true)
+    #expect(mac.names == ["a": "Alpha"])
+    phone.sync.flush(now: start.addingTimeInterval(20))
+    #expect(phone.names == ["a": "Alpha"])
+}
+
+/// An unreadable cloud copy is left alone on a normal flush instead of being treated as empty and overwritten.
+@Test @MainActor func unreadableCloudCopyIsNotOverwrittenOnFlush() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.sync.flush()
+    let unreadable = Data("future format".utf8)
+    cloud.values["sync.names"] = unreadable
+    phone.names["a"] = "Changed"
+    phone.sync.flush()
+    #expect(cloud.values["sync.names"] == unreadable)
+}
+
+/// Clearing a ledger on an account change with an empty store persists to disk, so restarting never pushes old removals.
+@Test @MainActor func accountChangeToEmptyStoreSavesClearedLedgerAcrossRestarts() {
+    let cloud = MemoryCloud(), start = Date(timeIntervalSince1970: 5_200_000)
+    let first = Device(cloud, names: ["a": "Alpha"])
+    first.sync.flush(now: start)
+    first.names = [:]
+    cloud.values = [:]
+    first.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    // Another device later writes to iCloud, and this device restarts from its saved ledger directory.
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.sync.flush(now: start.addingTimeInterval(10))
+    let reopened = Device(cloud, names: [:], directory: first.directory, defaults: first.defaults)
+    reopened.sync.flush(now: start.addingTimeInterval(20))
+    #expect(reopened.names == ["a": "Alpha"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.values == ["a": "Alpha"])
 }
 
 /// Another profile than the main one is open (#1456): its library neither goes up nor takes the cloud's, and the main
