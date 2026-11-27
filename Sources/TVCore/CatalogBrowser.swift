@@ -151,7 +151,7 @@ import Observation
         } catch {
             guard generation == current, !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "\(request == .home ? "home" : "list") \(context)", error)
-            if !refreshing { self.error = error.localizedDescription }
+            if !refreshing { self.error = ErrorPresentation.reason(for: error) }
         }
     }
 

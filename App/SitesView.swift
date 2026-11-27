@@ -1316,10 +1316,11 @@ struct SiteView: View {
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
+                            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                             ErrorState(
                                 title: L10n.text("Unable to load this source"),
-                                message: L10n.text("Try again, or choose another source to keep watching."),
-                                details: error,
+                                message: shown.message,
+                                details: shown.details,
                                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                                 goBack: { dismiss() },
                                 busy: browser.busy
@@ -2561,12 +2562,16 @@ struct VideoDetailView: View {
         }
     }
     private func errorCard(_ error: String) -> some View {
-                    ErrorState(
-                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
-                        message: detail == nil
+                    let shown = ErrorPresentation.summarize(
+                        error,
+                        fallback: detail == nil
                             ? L10n.text("Try again, or go back and choose another video.")
-                            : L10n.text("Try another episode or playback source."),
-                        details: error,
+                            : L10n.text("Try another episode or playback source.")
+                    )
+                    return ErrorState(
+                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
+                        message: shown.message,
+                        details: shown.details,
                         retry: detail == nil ? { startRequest { await loadDetail() } } : nil,
                         goBack: { dismiss() },
                         busy: busy,
@@ -2606,7 +2611,7 @@ struct VideoDetailView: View {
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "detail \(client.reportContext)", error)
-            self.error = error.localizedDescription
+            self.error = ErrorPresentation.reason(for: error)
             #if os(tvOS)
             // The loading placeholder that held focus is gone: Retry in the hero takes it.
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }
@@ -3811,9 +3816,10 @@ extension VideoDetailView {
             #endif
             if detail == nil {
                 if let error, !busy {
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                     ErrorState(title: L10n.text("Unable to load video details"),
-                               message: L10n.text("Try again, or choose another source to keep watching."),
-                               details: error, retry: { startRequest { await loadDetail() } })
+                               message: shown.message,
+                               details: shown.details, retry: { startRequest { await loadDetail() } })
                 } else {
                     HStack(spacing: 8) {
                         ForEach(0..<4, id: \.self) { _ in SkeletonBlock(cornerRadius: 10).frame(width: 150, height: 54) }
@@ -4506,10 +4512,11 @@ extension SiteView {
     /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
     @ViewBuilder private var spaceGrid: some View {
         if let error = browser.error {
+            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
             ErrorState(
                 title: L10n.text("Unable to load this source"),
-                message: L10n.text("Try again, or choose another source to keep watching."),
-                details: error,
+                message: shown.message,
+                details: shown.details,
                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                 goBack: { dismiss() },
                 busy: browser.busy

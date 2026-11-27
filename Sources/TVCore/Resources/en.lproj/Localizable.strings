@@ -2416,3 +2416,12 @@
 "This program can no longer be replayed." = "This program can no longer be replayed.";
 
 "Search results reached the memory limit. Try a more specific search." = "Search results reached the memory limit. Try a more specific search.";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "No internet connection. Check your network and try again.";
+"The server took too long to respond. Try again, or choose another source." = "The server took too long to respond. Try again, or choose another source.";
+"The server couldn't be found. The source may be offline." = "The server couldn't be found. The source may be offline.";
+"Couldn't connect to the server. It may be down or unreachable." = "Couldn't connect to the server. It may be down or unreachable.";
+"The connection was interrupted. Try again." = "The connection was interrupted. Try again.";
+"Couldn't establish a secure connection to the server." = "Couldn't establish a secure connection to the server.";
+"The source returned data Yingxia couldn't read." = "The source returned data Yingxia couldn't read.";
