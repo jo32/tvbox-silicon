@@ -2053,11 +2053,14 @@ private struct DesktopPlaybackView: View {
                 accessory
             }
         } else if session.hasTimeline {
-            // Held, the bar keeps the controls up (`ChromeIdle.hold`).
-            SeekBar(clock: clock, moving: showsChrome && !session.paused, hold: { scrubbing = $0; idle.hold($0) }, sought: { idle.poke() },
-                    marks: session.chapters.map(\.start)) { accessory }
-                // Gone mid-drag (the next episode began): what made way for the frame comes back.
-                .onDisappear { scrubbing = false; idle.hold(false) }
+            // Held, the bar keeps the controls up (`ChromeIdle.hold`). In a view AppKit must not drag the window
+            // by: a drag on the bare bar moved the window instead of scrubbing (#2558).
+            NoWindowDrag(content:
+                SeekBar(clock: clock, moving: showsChrome && !session.paused, hold: { scrubbing = $0; idle.hold($0) }, sought: { idle.poke() },
+                        marks: session.chapters.map(\.start)) { accessory }
+                    // Gone mid-drag (the next episode began): what made way for the frame comes back.
+                    .onDisappear { scrubbing = false; idle.hold(false) }
+            )
         } else {
             HStack {
                 Spacer(minLength: 0)
@@ -2360,6 +2363,23 @@ private final class DesktopVideoNSView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func makeBackingLayer() -> CALayer { playerLayer }
     override var mouseDownCanMoveWindow: Bool { true }
+}
+
+/// A SwiftUI view a drag must not move the window by: the seek bar's DragGesture is a plain SwiftUI view, so with
+/// isMovableByWindowBackground a drag on it moved the window instead of scrubbing (#2558). The picture above keeps
+/// moving the window (DesktopVideoNSView); only the bar is held still here.
+private struct NoWindowDrag<Content: View>: NSViewRepresentable {
+    let content: Content
+    func makeNSView(context: Context) -> FixedHostingView<Content> { FixedHostingView(rootView: content) }
+    func updateNSView(_ view: FixedHostingView<Content>, context: Context) { view.rootView = content }
+    // The bar stretches across the window: take the width SwiftUI offers, and the content's own height.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: FixedHostingView<Content>, context: Context) -> CGSize {
+        CGSize(width: proposal.width ?? nsView.intrinsicContentSize.width, height: nsView.intrinsicContentSize.height)
+    }
+}
+
+private final class FixedHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 /// Picture in Picture from the top row's button, of the player layer on screen.
