@@ -29,6 +29,26 @@ struct CloudStreamsTests {
         #expect(CloudStreams.playableSampleEntries(slice) == entry("hvc1"))
     }
 
+    /// Dolby's packager writes `hev1` entries whose hvcC lists no parameter sets (they are in the stream). Tagged
+    /// `hvc1`, AVPlayer fails at once with CoreMedia error -4; left `hev1`, the player repackages the file (#769, #1644).
+    @Test func hevcWhoseSettingsAreOnlyInTheStreamStaysHev1() {
+        func be(_ value: Int) -> Data { Data([UInt8(value >> 24 & 0xff), UInt8(value >> 16 & 0xff), UInt8(value >> 8 & 0xff), UInt8(value & 0xff)]) }
+        func entry(_ tag: String, arrays: [UInt8]) -> Data {
+            let record = Data([1] + Array(repeating: 0, count: 20) + [0x0f] + arrays)
+            let hvcC = be(8 + record.count) + Data("hvcC".utf8) + record
+            return be(86 + hvcC.count) + Data(tag.utf8) + Data(repeating: 0, count: 6) + Data([0, 1]) + Data(repeating: 0, count: 70) + hvcC
+        }
+        let none: [UInt8] = [0]
+        let vpsOnly: [UInt8] = [1, 0xa0, 0, 1, 0, 2, 0x40, 0x01]
+        let complete: [UInt8] = [2, 0xa1, 0, 1, 0, 2, 0x42, 0x01, 0xa2, 0, 1, 0, 2, 0x44, 0x01]
+        for arrays in [none, vpsOnly] {
+            #expect(CloudStreams.playableSampleEntries(entry("hev1", arrays: arrays)) == entry("hev1", arrays: arrays))
+            #expect(CloudStreams.playableSampleEntries(entry("dvhe", arrays: arrays)) == entry("dvhe", arrays: arrays))
+        }
+        #expect(CloudStreams.playableSampleEntries(entry("hev1", arrays: complete)) == entry("hvc1", arrays: complete))
+        #expect(CloudStreams.playableSampleEntries(entry("dvhe", arrays: complete)) == entry("dvh1", arrays: complete))
+    }
+
     @Test func containerComesFromTheBytesNotTheName() throws {
         let mp4 = Data([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D])
         #expect(try CloudStreams.contentType(mp4, name: "4KXIN 192.mp3") == AVFileType.mp4.rawValue)

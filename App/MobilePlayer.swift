@@ -1914,6 +1914,9 @@ private struct BatteryGauge: View {
         let channel: Channel
         let session: PlaybackSession
         let pip: PictureInPicture
+        /// The player was turned landscape before it floated (#2483): closing the screen drops the turn
+        /// (`PlayerOrientation.release()` on disappear), so it is carried here and put back on return.
+        let landscape: Bool
     }
     private(set) var parked: Parked?
     private weak var store: Store?
@@ -1923,7 +1926,7 @@ private struct BatteryGauge: View {
     /// The player screen is closing while its window floats: the session plays on in it.
     func park(_ channel: Channel, session: PlaybackSession, pip: PictureInPicture, store: Store) {
         if let parked, parked.session !== session { end() }
-        parked = Parked(channel: channel, session: session, pip: pip)
+        parked = Parked(channel: channel, session: session, pip: pip, landscape: PlayerOrientation.mask == .landscape)
         self.store = store
         // The window plays on into the next episode as the player does (#1719, #2127), but nothing opens over the app:
         // the queue moves on inside the window, and the window's return to the app opens the player on the episode it
@@ -1936,7 +1939,7 @@ private struct BatteryGauge: View {
         session.onAdvance = { [weak self, weak store, weak session] next in
             guard let self, let parked = self.parked, parked.session === session else { return }
             store?.followFloating(to: next, from: parked.channel)
-            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip)
+            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip, landscape: parked.landscape)
         }
     }
 
@@ -1945,14 +1948,15 @@ private struct BatteryGauge: View {
     /// The video floating, for a player screen opening on `channel`.
     func parked(for channel: Channel) -> Parked? { parked?.channel == channel ? parked : nil }
 
-    /// A player screen opened with the floating session: it is the screen's again. False for any other session.
-    func take(_ session: PlaybackSession) -> Bool {
-        guard let parked, parked.session === session else { return false }
+    /// A player screen opened with the floating session: it is the screen's again, and the caller learns whether it
+    /// was turned landscape before it floated (#2483). Nil for any other session.
+    func take(_ session: PlaybackSession) -> Parked? {
+        guard let parked, parked.session === session else { return nil }
         self.parked = nil
         // Opened from the app rather than the window's button: the video comes back from the window.
         if restoring == nil { parked.pip.stop() }
         finishRestoring()
-        return true
+        return parked
     }
 
     /// The window's return button: the player opens again on the video. With the player still open there's nothing to do.

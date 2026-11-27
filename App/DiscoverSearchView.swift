@@ -90,7 +90,24 @@ struct DiscoverSearchView: View {
 
     private var topChrome: some View {
         VStack(spacing: 19) {
-            Text(L10n.text("Search")).font(.system(size: 17, weight: .semibold)).frame(height: 44).frame(maxWidth: .infinity)
+            ZStack {
+                Text(L10n.text("Search")).font(.system(size: 17, weight: .semibold)).frame(height: 44).frame(maxWidth: .infinity)
+                // An explicit back button in the top-right: the only way out used to be the Safari-styled
+                // glyph at bottom-left, which readers mistook for "open in Safari" (#1734).
+                #if os(iOS)
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .glassSurface(.regular, in: Circle())
+                    }
+                    .accessibilityLabel(L10n.text("Back"))
+                    .accessibilityIdentifier("discover.search.back")
+                }.padding(.horizontal, 16)
+                #endif
+            }
             ScrollView(.horizontal) {
                 GlassGroup(spacing: 8) { HStack(spacing: 8) {
                     ForEach(sections, id: \.self) { section in

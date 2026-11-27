@@ -613,9 +613,14 @@ struct MusicScrubber: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.22))
-                    Capsule().fill(.white.opacity(dragging == nil ? 0.78 : 1)).frame(width: max(0, proxy.size.width * fraction))
+                    // A rectangle clipped to the track's capsule, not a capsule of its own: a capsule
+                    // narrower than the bar's height draws as a lens, so the fill's left end came out
+                    // pointed and lost the bar's rounded corner at the start of playback (#2617).
+                    Rectangle().fill(.white.opacity(dragging == nil ? 0.78 : 1))
+                        .frame(width: max(0, proxy.size.width * fraction))
                 }
                 .frame(height: dragging == nil ? 7 : 12)
+                .clipShape(Capsule())
                 .frame(maxHeight: .infinity)
                 .contentShape(.rect)
                 .gesture(DragGesture(minimumDistance: 0)

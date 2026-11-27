@@ -187,9 +187,12 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
-            if FloatingPlayback.shared.take(session) {
+            if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
+                // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
+                // Only for a player of its own screen; a watch page turns for itself.
+                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
             } else {
                 FloatingPlayback.shared.end()
                 startCatalogPlayback(session, channel: channel, store: store)
@@ -1375,8 +1378,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         target.title = channel.name
         // The next episode updates the view in place: a new one would rebuild the player view, a flash between episodes.
         let root = DesktopPlaybackRoot(channel: channel, session: session, window: target, store: store)
-        if let host = target.contentView as? NSHostingView<DesktopPlaybackRoot> { host.rootView = root }
-        else { target.contentView = NSHostingView(rootView: root) }
+        if let host = target.contentView as? DesktopHostingView<DesktopPlaybackRoot> { host.rootView = root }
+        else { target.contentView = DesktopHostingView(rootView: root) }
         startCatalogPlayback(session, channel: channel, store: store)
         target.makeKeyAndOrderFront(nil)
     }
@@ -1412,6 +1415,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     private var clickReset: Task<Void, Never>?
     /// The click brought the window forward (from another app or window): it only does that, as in IINA.
     private var clickActivates = false
+    /// Whether the current press began on the bare picture, so a mouse-up that drifts off a control never toggles playback.
+    private var clickOnPicture = false
     /// When the window last became key; the click that made it key can arrive a moment later.
     private var keyAt = ContinuousClock.now
 
@@ -1431,8 +1436,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
             clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
+            let onPicture = contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            // Only the bare picture drags the window by its background: SwiftUI controls like SeekBar hit-test to
+            // the hosting view and glass platters to NSGlassEffectView, whose mouseDownCanMoveWindow is true (#2558).
+            isMovableByWindowBackground = onPicture
             let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                && isPictureClick(at: event.locationInWindow)
+                && onPicture && event.locationInWindow.y <= contentLayoutRect.maxY
+            clickOnPicture = bare
             clickReset?.cancel(); clickReset = nil
             if !bare || event.clickCount > 2 { clickToggled = false }
             if event.clickCount >= 2, bare, clickToggled {
@@ -1443,7 +1453,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
         }
-        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, clickOnPicture, let session,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            isPictureClick(at: event.locationInWindow), let pressedAt {
             let up = convertPoint(toScreen: event.locationInWindow)
@@ -1695,8 +1705,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     }
 }
 
-/// Auto-hiding chrome driven by real pointer movement and key presses (not hover
-/// phases, which AVPlayerView's own overlay and layout passes keep re-firing).
+/// Auto-hiding chrome driven by real pointer movement and key presses (excluding arrow keys, which seek, hold to
+/// fast-forward or change volume quietly without bringing up the controls overlay, #2557).
 @MainActor @Observable private final class ChromeIdle {
     var visible = true
     private var task: Task<Void, Never>?
@@ -1712,6 +1722,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
                 guard let self, event.window === self.window else { return }
                 // Ignore synthetic mouse events that carry no movement.
                 if event.type == .mouseMoved, abs(event.deltaX) + abs(event.deltaY) < 1 { return }
+                if event.type == .keyDown, !PlaybackKeyboard.wakesMacChrome(keyCode: event.keyCode) { return }
                 self.poke()
             }
             return event
@@ -1730,6 +1741,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func hold(_ on: Bool) {
         held = on
         poke()
+    }
+
+    /// Hides the controls right away (e.g. while holding the right arrow to fast-forward, #2557).
+    func hide() {
+        task?.cancel(); task = nil
+        guard !held, !UserDefaults.standard.bool(forKey: "qaPlayerControls") else { return }
+        if visible { withAnimation(.smooth(duration: 0.25)) { visible = false } }
     }
 
     func poke() {
@@ -1891,6 +1909,17 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
+        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
+        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
+        .onChange(of: pip.floating) { _, floating in
+            if floating {
+                guard session.error == nil else { return }
+                window.miniaturize(nil)
+            } else {
+                window.deminiaturize(nil)
+            }
+        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -1905,6 +1934,8 @@ private struct DesktopPlaybackView: View {
             }
         }
         .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
+        // Fast-forwarding with the right arrow: keep the controls out of the way, as on iPad (#2557).
+        .onChange(of: session.boost != nil) { _, boosting in if boosting { idle.hide() } }
         .onAppear {
             floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh()
             clock.attach(session.player)
@@ -1973,6 +2004,7 @@ private struct DesktopPlaybackView: View {
             Text(channel.name).font(.headline).lineLimit(1)
                 .shadow(color: .black.opacity(0.6), radius: 4)
                 .padding(.leading, 86)
+                .allowsHitTesting(false)
             Spacer(minLength: 12)
             HStack(spacing: 2) {
                 // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
@@ -2350,6 +2382,13 @@ private struct DesktopVideoView: NSViewRepresentable {
     static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: ()) { view.playerLayer.player = nil }
 }
 
+/// Hosts the Mac player's SwiftUI controls: `mouseDownCanMoveWindow` is false so dragging SwiftUI controls like
+/// `SeekBar` doesn't move the window along with them (#2558). `DesktopVideoNSView` returns true, so dragging the bare
+/// picture still moves the window.
+private final class DesktopHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
+}
+
 /// A view whose layer is the player's. A drag on it moves the window, and a click plays or pauses (PlaybackWindow).
 private final class DesktopVideoNSView: NSView {
     let playerLayer = AVPlayerLayer()
@@ -2367,6 +2406,9 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
+    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
+    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
     @ObservationIgnored private var controller: AVPictureInPictureController?
@@ -2404,9 +2446,13 @@ private final class DesktopVideoNSView: NSView {
             self?.subtitles?.native = true
         }
     }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.floating = true }
+    }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = false
+            self?.floating = false
             self?.subtitles?.native = false
         }
     }
@@ -2676,8 +2722,8 @@ struct PlaybackBadges: View {
 }
 
 /// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520, #758): TMDB's,
-/// when the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
-/// title is in the top row too.
+/// when the video's page found the title there. A video played without opening its page (from search, history or
+/// Continue Watching) asks TMDB here as its page would, and the answer is saved for the page too.
 struct PlayerTitleLogo: View {
     let channel: Channel
     /// A phone held upright: a smaller logo.
@@ -2713,7 +2759,13 @@ struct PlayerTitleLogo: View {
             keptLogo = nil
             guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
             let key = TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
-            if !(await tmdb.prepare(key: key)) { keptLogo = await TMDBMatchStore.shared.kept(for: key)?.details?.logo }
+            guard !(await tmdb.prepare(key: key)) else { return }
+            if let kept = await TMDBMatchStore.shared.kept(for: key) { keptLogo = kept.details?.logo; return }
+            let site = catalog.client.site
+            let request = TMDBMatch.Request(video: catalog.video, listVideo: catalog.video,
+                                            source: TMDBMatch.SourceRef(key: site.key, name: site.name))
+            guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+            await tmdb.run(key: key, request: request)
         }
     }
 

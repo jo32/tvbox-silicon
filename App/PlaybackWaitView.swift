@@ -67,7 +67,7 @@ struct PlaybackWaitView: View {
     var body: some View {
         GeometryReader { proxy in
             let picture = Self.picture(in: proxy.size)
-            let layout = Self.layout(size: proxy.size, picture: picture)
+            let layout = Self.layout(size: proxy.size, picture: picture, starting: starting)
             ZStack {
                 if starting {
                     // Behind an error only the colours stay, so the message has the stage to itself.
@@ -144,7 +144,7 @@ struct PlaybackWaitView: View {
         var centred = false
     }
 
-    @MainActor private static func layout(size: CGSize, picture: CGRect) -> WaitLayout {
+    @MainActor private static func layout(size: CGSize, picture: CGRect, starting: Bool) -> WaitLayout {
         #if os(iOS)
         // AVKit puts its play button over the middle of the picture: the card is centred on it, in both orientations.
         let axis = controlsAxis(width: size.width), centre = picture.midY
@@ -161,8 +161,10 @@ struct PlaybackWaitView: View {
         let card = CGRect(x: axis - picture.width * 0.3, y: centre - half, width: picture.width * 0.6, height: half * 2)
         return WaitLayout(card: card, axis: axis, wordsBottom: wordsBottom, inlineCaption: true)
         #elseif os(macOS)
-        // Nothing sits over the middle here (AVKit's bars are at the top and foot): the words take it.
-        return WaitLayout(card: picture, axis: size.width / 2, centred: true)
+        // While the video first loads the controls are hidden and the words take the middle. A stall mid-video keeps
+        // play/pause and ±10 there (68 pt high), so the words hang under them.
+        guard !starting else { return WaitLayout(card: picture, axis: size.width / 2, centred: true) }
+        return WaitLayout(card: picture, axis: size.width / 2, wordsTop: size.height / 2 + 34 + 22)
         #else
         // AVKit spins its own wheel in the middle: the words stay low, above the transport bar.
         return WaitLayout(card: picture, axis: size.width / 2, wordsBottom: bottomGap)
