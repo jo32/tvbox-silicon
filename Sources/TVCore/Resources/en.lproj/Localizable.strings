@@ -2118,6 +2118,7 @@
 "This address doesn't hold a subscription. Add it as a new one instead." = "This address doesn't hold a subscription. Add it as a new one instead.";
 "Couldn't load this address: %@" = "Couldn't load this address: %@";
 "Use New Address" = "Use New Address";
+"Subscription address updated." = "Subscription address updated.";
 "File" = "File";
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it.";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources.";
@@ -2415,3 +2416,25 @@
 "This program can no longer be replayed." = "This program can no longer be replayed.";
 
 "Search results reached the memory limit. Try a more specific search." = "Search results reached the memory limit. Try a more specific search.";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "No internet connection. Check your network and try again.";
+"The server took too long to respond. Try again, or choose another source." = "The server took too long to respond. Try again, or choose another source.";
+"The server couldn't be found. The source may be offline." = "The server couldn't be found. The source may be offline.";
+"Couldn't connect to the server. It may be down or unreachable." = "Couldn't connect to the server. It may be down or unreachable.";
+"The connection was interrupted. Try again." = "The connection was interrupted. Try again.";
+"Couldn't establish a secure connection to the server." = "Couldn't establish a secure connection to the server.";
+"The source returned data Yingxia couldn't read." = "The source returned data Yingxia couldn't read.";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "Couldn't make a secure connection to the video server. Try another line.";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "The video server returned HTTP %lld. Try again later, or switch to another line.";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "Couldn't connect to the source's local playback service. Try again, or switch to another line.";
+"The video server took too long to respond. Try again, or switch to another line." = "The video server took too long to respond. Try again, or switch to another line.";
+"The video server couldn't be found. The source may be offline; try another line." = "The video server couldn't be found. The source may be offline; try another line.";
+"Couldn't connect to the video server. Check your network, or try another line." = "Couldn't connect to the video server. Check your network, or try another line.";
+"This video format isn't supported on this device. Try another line." = "This video format isn't supported on this device. Try another line.";
+"Switch Line" = "Switch Line";
+"%@ didn't play. Trying %@." = "%@ didn't play. Trying %@.";
+"Trying %@…" = "Trying %@…";
+"another line" = "another line";

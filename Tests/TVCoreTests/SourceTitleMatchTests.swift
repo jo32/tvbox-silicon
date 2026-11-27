@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TVCore
 
@@ -11,6 +12,31 @@ private func video(_ name: String, year: String? = nil, id: String? = nil) -> Vi
     let found = SourceTitleMatch.candidates(videos, site: site("s"), wanted: wanted)
     #expect(found.map(\.video.name) == ["絕命毒師", "绝命毒师 第二季", "BREAKING BAD 【4K】"])
     #expect(found.map(\.laterSeason) == [nil, 2, nil])
+}
+
+@Test func sourceTitleMatchWidensToTMDBsOtherNames() {
+    // TMDB lists the work as 龙珠超; the sources list it as 七龙珠超 (#2608).
+    let wanted = SourceTitleMatch.Wanted(names: ["龙珠超", "Dragon Ball Super"], year: 2015)
+    let videos = [video("七龙珠超", year: "2015")]
+    #expect(SourceTitleMatch.candidates(videos, site: site("s"), wanted: wanted).isEmpty)
+    let widened = wanted.widened(with: ["七龙珠超"])
+    #expect(widened != nil)
+    #expect(SourceTitleMatch.candidates(videos, site: site("s"), wanted: widened!).map(\.video.name) == ["七龙珠超"])
+    #expect(wanted.widened(with: ["龙珠超"]) == nil)
+}
+
+/// The Worker's other names reach the app: a `let` with a default value was skipped by the decoder (#2608).
+@Test func tmdbDetailsDecodeTheirOtherNames() throws {
+    var json: [String: Any] = [
+        "mediaType": "tv", "id": 1, "name": "龙珠超", "originalName": "Dragon Ball Super", "tagline": "", "overview": "",
+        "genres": [String](), "voteCount": 0, "countries": [String](), "cast": [Any](), "crew": [Any](), "networks": [String](), "seasons": [Any](),
+        "link": "https://www.themoviedb.org/tv/1",
+    ]
+    let saved = try JSONDecoder().decode(TMDBMatch.Details.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(saved.otherNames == nil)
+    json["otherNames"] = ["七龙珠超"]
+    let details = try JSONDecoder().decode(TMDBMatch.Details.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(details.otherNames == ["七龙珠超"])
 }
 
 @Test func sourceTitleMatchTreatsAFirstSeasonAsTheWork() {

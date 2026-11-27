@@ -198,6 +198,13 @@ try {
   check(tg.json.account.feedback.sent === 1 && tg.json.account.feedback.issues[0].number === 103, "the TV install's feedback counts for the Telegram account", tg.json.account.feedback);
   const tgToken = tg.json.token;
 
+  // #2569: a Telegram rename reaches the member name on the next sign-in, and the old name is not kept.
+  const renamed = await call("POST", "/v1/auth/telegram", { install: OTHER, platform: "ios" });
+  await hook(`/start ${renamed.json.code}`, { id: 777, first_name: "Renamed", last_name: "Person", username: "tele_user", language_code: "en" });
+  const renamedIn = await call("POST", "/v1/auth/telegram/poll", { code: renamed.json.code });
+  check(renamedIn.status === 200 && renamedIn.json.account.id === tg.json.account.id && renamedIn.json.account.name === "Renamed Person",
+    "renaming in Telegram updates the member name on the next sign-in", renamedIn.json.account);
+
   check((await call("POST", "/v1/me/redeem", { code: code1 }, tgToken)).json?.error === "used_up", "a one-use code is used up for the next person");
   const life = await call("POST", "/v1/me/redeem", { code: "spring2026" }, tgToken);
   check(life.status === 200 && life.json.account.pro.lifetime === true, "a lifetime code gives lifetime Pro", life.json);

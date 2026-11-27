@@ -49,3 +49,14 @@ import Testing
         #expect(keyboard.handle(.right, phase: .down) == [.waitForHold])
     }
 }
+
+@Test func macArrowKeysDoNotWakePlayerChrome() {
+    // Left, right, down and up arrows stay quiet (#2557).
+    for keyCode: UInt16 in [123, 124, 125, 126] {
+        #expect(!PlaybackKeyboard.wakesMacChrome(keyCode: keyCode))
+    }
+    // Space, Escape and letter keys still wake the controls.
+    for keyCode: UInt16 in [49, 53, 3, 46] {
+        #expect(PlaybackKeyboard.wakesMacChrome(keyCode: keyCode))
+    }
+}

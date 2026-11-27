@@ -231,10 +231,11 @@ struct ChannelListView: View {
                     ChannelSkeletonGrid()
                 }
                 if let error {
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                     ErrorState(
                         title: L10n.text("Unable to Load Channels"),
-                        message: L10n.text("Try again, or choose another source to keep watching."),
-                        details: error,
+                        message: shown.message,
+                        details: shown.details,
                         retry: { Task { await load() } },
                         goBack: { dismiss() },
                         busy: loading
@@ -306,7 +307,7 @@ struct ChannelListView: View {
             // A loopback playlist says which kind it is (`LoopbackPlaylist.label`), never its address.
             let route = LoopbackPlaylist.label(source.url).map { " " + $0 } ?? ""
             Diagnostics.shared.failure("live", "playlist host=\(source.url.host() ?? "-")\(route)", error)
-            self.error = error.localizedDescription
+            self.error = ErrorPresentation.reason(for: error)
         }
     }
 }
@@ -396,9 +397,10 @@ private struct TVChannelGuide: View {
                 LoadingCard(maxWidth: LoadingCard.compact) { .server(source.url.host(), title: L10n.text("Loading channels…")) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
+                let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                 ErrorState(title: L10n.text("Unable to Load Channels"),
-                               message: L10n.text("Try again, or choose another source to keep watching."),
-                               details: error, retry: reload, goBack: { dismiss() }, busy: refreshing)
+                               message: shown.message,
+                               details: shown.details, retry: reload, goBack: { dismiss() }, busy: refreshing)
                 Spacer()
             } else if filtered.isEmpty {
                 EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Matching Channels"), fills: true)

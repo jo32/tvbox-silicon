@@ -237,8 +237,9 @@ struct MusicView: View {
         } else if search.results.isEmpty && search.collections.isEmpty && search.busy {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 80)
         } else if search.failed {
-            ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
-                           details: failureDetails(search), retry: { search.search(query, immediately: true) }, busy: search.busy)
+            let shown = ErrorPresentation.summarize(failureDetails(search), fallback: L10n.text("Check your network connection and try again."))
+            ErrorState(title: L10n.text("Unable to Search Music"), message: shown.message,
+                           details: shown.details, retry: { search.search(query, immediately: true) }, busy: search.busy)
                 .padding(.vertical, 24).tvFocusSection()
         } else if search.filteredOut {
             EmptyResults(symbol: "line.3.horizontal.decrease", title: L10n.text("No Matches"),
@@ -686,8 +687,10 @@ struct MusicArtistView: View {
                     if tracks.isEmpty && (search.busy || search.query.isEmpty) {
                         ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60)
                     } else if search.failed {
-                        ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
-                                   details: search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n"),
+                        let raw = search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n")
+                        let shown = ErrorPresentation.summarize(raw, fallback: L10n.text("Check your network connection and try again."))
+                        ErrorState(title: L10n.text("Unable to Search Music"), message: shown.message,
+                                   details: shown.details,
                                    retry: { search.search(name, kind: .artists, immediately: true) }, busy: search.busy)
                             .padding(.vertical, 24).tvFocusSection()
                     } else if search.empty {
@@ -777,8 +780,9 @@ struct MusicCollectionView: View {
                 #endif
                 if loading && tracks.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
                 if let error {
-                    ErrorState(title: L10n.text("Unable to Load Songs"), message: L10n.text("Check your network connection and try again."),
-                                   details: error, retry: { Task { await load() } }, busy: loading)
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Check your network connection and try again."))
+                    ErrorState(title: L10n.text("Unable to Load Songs"), message: shown.message,
+                                   details: shown.details, retry: { Task { await load() } }, busy: loading)
                         .padding(.vertical, 24).tvFocusSection()
                 }
                 #if os(macOS)

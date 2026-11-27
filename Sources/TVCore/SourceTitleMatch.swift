@@ -29,7 +29,7 @@ public enum SourceTitleMatch {
 
     /// The work's names (TMDB's and the original), normalized once for every result.
     public struct Wanted: Sendable {
-        let names: Set<String>
+        var names: Set<String>
         let year: Int?
         public init(names: [String], year: Int?) {
             var normalized = Set<String>()
@@ -41,6 +41,15 @@ public enum SourceTitleMatch {
             }
             self.names = normalized
             self.year = year
+        }
+
+        /// A copy also matching these names, or nil when they add nothing new.
+        public func widened(with names: [String]) -> Wanted? {
+            let extra = Wanted(names: names, year: year)
+            guard !extra.names.isSubset(of: self.names) else { return nil }
+            var copy = self
+            copy.names.formUnion(extra.names)
+            return copy
         }
     }
 

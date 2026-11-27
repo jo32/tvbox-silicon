@@ -1994,7 +1994,10 @@ struct AddSubscriptionSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Full height only (#2146): with [.medium, .large] the sheet opened half-screen, then the
+        // keyboard (raised at once by the autofocus below) forced it up to .large, so it visibly
+        // jumped. Autofocus stays: it is what makes the paste-address flow work.
+        .presentationDetents([.large])
         .onAppear { store.importError = nil; focused = true }
         .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
             guard case .success(let file) = result else { return }
@@ -2031,6 +2034,9 @@ struct SubscriptionDetailView: View {
     @State private var draft: String
     @State private var changing = false
     @State private var changeError: String?
+    /// Whether the address field holds focus, and the last successful change (#2309).
+    @FocusState private var addressFocused: Bool
+    @State private var changeNotice: String?
     init(entry: SubscriptionEntry) {
         self.entry = entry
         _address = State(initialValue: entry.address)
@@ -2062,30 +2068,47 @@ struct SubscriptionDetailView: View {
                 } else {
                     // A mirror, or where the subscription moved (#982): typed here, used once confirmed.
                     LabeledContent(L10n.text("Subscription URL")) {
-                        TextField(L10n.text("Subscription URL"), text: $draft)
+                        TextField(L10n.text("Subscription URL"), text: Binding(get: { draft }, set: {
+                            draft = $0
+                            // A fresh edit replaces the last success message.
+                            if $0.trimmingCharacters(in: .whitespacesAndNewlines) != current.address { changeNotice = nil }
+                        }))
                             .labelsHidden().multilineTextAlignment(.trailing).foregroundStyle(.secondary)
                             .autocorrectionDisabled()
                             #if os(iOS)
                             .textInputAutocapitalization(.never).keyboardType(.URL)
                             #endif
+                            .focused($addressFocused)
                             .onSubmit { changeAddress(current) }
+                            .onChange(of: addressFocused) { _, isFocused in
+                                // Leaving the field saves the edit (#2309): without this, an edit was
+                                // lost unless Return was pressed, with no sign anything happened.
+                                if !isFocused { commitAddressOnFocusLoss() }
+                            }
                             .disabled(changing)
                     }
-                    if !edited.isEmpty, edited != current.address {
-                        HStack {
-                            Button(L10n.text("Use New Address")) { changeAddress(current) }.disabled(changing || store.importing)
-                            Spacer()
-                            if changing { ProgressView() } else { Button(L10n.text("Cancel")) { draft = current.address; changeError = nil } }
+                    // Always visible (#2309): the confirm button used to appear only once the draft
+                    // differed, so there was no visible way to save the edit. It stays disabled
+                    // until there is a new address to use.
+                    HStack {
+                        Button(L10n.text("Use New Address")) { changeAddress(current) }
+                            .disabled(changing || store.importing || edited.isEmpty || edited == current.address)
+                        Spacer()
+                        if changing { ProgressView() }
+                        else {
+                            Button(L10n.text("Cancel")) { draft = current.address; changeError = nil; changeNotice = nil }
+                                .disabled(edited == current.address)
                         }
-                        // Two buttons in one row: on iOS a row's plain buttons all take its tap, so Use New Address
-                        // also ran Cancel, which put the old address back before the change read it (#2075).
-                        #if os(iOS)
-                        .buttonStyle(.borderless)
-                        #endif
                     }
+                    // Two buttons in one row: on iOS a row's plain buttons all take its tap, so Use New Address
+                    // also ran Cancel, which put the old address back before the change read it (#2075).
+                    #if os(iOS)
+                    .buttonStyle(.borderless)
+                    #endif
                 }
             } footer: {
                 if let changeError { Text(changeError).foregroundStyle(.red) }
+                else if let changeNotice { Text(changeNotice).foregroundStyle(.green) }
                 else if let failure { Text(L10n.text("Couldn't refresh: %@", failure)) }
                 else if let copy { Text(L10n.text("Sources: %lld · Live playlists: %lld", copy.sites.count, copy.lives.count)) }
             }
@@ -2102,6 +2125,12 @@ struct SubscriptionDetailView: View {
             }
         }.settingsRows() }
         .settingsForm(current.title)
+        .onDisappear {
+            // Leaving the page saves a pending edit too (#2309); skipped once the entry is gone
+            // (e.g. it was just removed), so a removal never triggers a stray address fetch.
+            guard store.subscriptions.contains(where: { $0.address == address }) else { return }
+            commitDraftIfChanged()
+        }
         .confirmationDialog(L10n.text("Remove"), isPresented: $confirmsRemoval) {
             Button(L10n.text("Remove"), role: .destructive) { store.removeSubscription(current); dismiss() }
         }
@@ -2114,15 +2143,38 @@ struct SubscriptionDetailView: View {
         }
         #endif
     }
+    /// Saves the draft if it is a new address, else puts the old address back. Nothing happens for
+    /// an empty or unchanged draft, so a stray commit can never clear the address.
+    private func commitDraftIfChanged() {
+        let current = store.subscriptions.first { $0.address == address } ?? entry
+        let edited = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !edited.isEmpty, edited != current.address else {
+            if draft != current.address { draft = current.address }
+            return
+        }
+        changeAddress(current)
+    }
+    /// Focus left the address field (#2309). Delayed so a tap on Cancel — which resigns focus
+    /// before its action runs — still wins: Cancel puts the old address back first, and this
+    /// then sees no change and does nothing. Same for the confirm button, which commits at once.
+    private func commitAddressOnFocusLoss() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            commitDraftIfChanged()
+        }
+    }
     private func changeAddress(_ current: SubscriptionEntry) {
         guard !changing else { return }
-        changing = true; changeError = nil
+        let edited = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !edited.isEmpty, edited != current.address else { draft = current.address; return }
+        changing = true; changeError = nil; changeNotice = nil
         // The entry keeps its place, so its new address is found there.
         let index = store.subscriptions.firstIndex { $0.address == address }, typed = draft
         Task {
             if let error = await store.changeSubscriptionAddress(current, to: typed) { changeError = error }
             else if let index, store.subscriptions.indices.contains(index) {
                 address = store.subscriptions[index].address; draft = address
+                changeNotice = L10n.text("Subscription address updated.")
             }
             changing = false
         }

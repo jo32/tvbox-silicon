@@ -49,4 +49,10 @@ public struct PlaybackKeyboard: Sendable {
         shiftedRight = false
         return arrow.release() == .held ? [.endBoost] : []
     }
+
+    /// Whether a macOS key-down in the player window should bring up the controls overlay. Arrow keys (←, →, ↓, ↑)
+    /// seek, hold to fast-forward or change volume quietly without showing the overlay (#2557).
+    public static func wakesMacChrome(keyCode: UInt16) -> Bool {
+        !(123...126).contains(keyCode)
+    }
 }

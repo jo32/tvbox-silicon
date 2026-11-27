@@ -42,6 +42,9 @@ struct PlaybackView: View {
     @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
+    #if os(iOS)
+    @State private var showsErrorDetails = false
+    #endif
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     #if os(tvOS)
@@ -187,9 +190,12 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
-            if FloatingPlayback.shared.take(session) {
+            if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
+                // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
+                // Only for a player of its own screen; a watch page turns for itself.
+                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
             } else {
                 FloatingPlayback.shared.end()
                 startCatalogPlayback(session, channel: channel, store: store)
@@ -506,22 +512,45 @@ struct PlaybackView: View {
     private func showOnStart(opening: Bool = true) {}
     #endif
 
+    private var switchLineAction: (() -> Void)? {
+        if session.lines.count > 1 {
+            let next = (session.line + 1) % session.lines.count
+            return { session.choose(line: next) }
+        }
+        guard let other = store.nextLineChoice(for: channel) else { return nil }
+        return {
+            session.beginLineSwitch(to: other.flag)
+            store.selectEpisode(other, from: channel) { session.lineSwitchFailed($0) }
+        }
+    }
+
     @ViewBuilder private var status: some View {
         if let error = session.error {
             #if os(tvOS)
-            TVPlaybackFailureView(channelName: channel.name, details: error, symbol: session.errorSymbol, backdrop: waitContent,
-                                  retry: { startCatalogPlayback(session, channel: channel, store: store) }, goBack: { dismiss() })
+            TVPlaybackFailureView(channelName: channel.name, message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol, backdrop: waitContent,
+                                  retry: { retryCatalogPlayback(session, channel: channel, store: store) },
+                                  switchLine: switchLineAction,
+                                  goBack: { dismiss() })
             #elseif os(iOS)
             if playerLayout == .inline {
-                // At the top of a watch page: the same words, small, and Try Again; the page has Back.
+                // At the top of a watch page: the same words, small, and Try Again / Switch Line; the page has Back.
                 VStack(spacing: 8) {
                     Label(L10n.text("Can't play this right now"), systemImage: session.errorSymbol).font(.headline)
-                    Text(error).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(2)
+                    Text(error).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
                         .multilineTextAlignment(.center)
-                    Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
-                        Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+                    HStack(spacing: 10) {
+                        Button { retryCatalogPlayback(session, channel: channel, store: store) } label: {
+                            Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+                        }
+                        .controlButton(prominent: true).tint(Brand.accent)
+                        if let switchLine = switchLineAction {
+                            Button(action: switchLine) {
+                                Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .controlButton()
+                        }
                     }
-                    .controlButton(prominent: true).tint(Brand.accent).appControlSize(.small).padding(.top, 2)
+                    .appControlSize(.small).padding(.top, 2)
                 }
                 .foregroundStyle(.white).padding(.horizontal, 24).padding(.top, 36)
                 .environment(\.colorScheme, .dark)
@@ -537,26 +566,51 @@ struct PlaybackView: View {
                         .frame(height: 70)
                         .accessibilityHidden(true)
                     Text(L10n.text("Can't play this right now")).font(.title2.weight(.semibold)).padding(.top, 24)
-                    Text(error).font(.callout).foregroundStyle(.white.opacity(0.7)).lineSpacing(2)
-                        .multilineTextAlignment(.center).frame(maxWidth: 330).padding(.top, 10)
+                    Text(error).font(.callout).foregroundStyle(.white.opacity(0.75)).lineSpacing(2)
+                        .multilineTextAlignment(.center).frame(maxWidth: 340).padding(.top, 10)
                     GlassGroup(spacing: 12) {
-                        HStack(spacing: 12) {
-                            Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
-                                Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
-                            }
-                            .controlButton(prominent: true).tint(Brand.accent)
-                            Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) { mobileFailureActions }
+                            VStack(spacing: 10) { mobileFailureActions }
                         }
                     }
-                    .appControlSize(.large).padding(.top, 30)
+                    .appControlSize(.large).padding(.top, 28)
+                    if let details = session.errorDetails, !details.isEmpty {
+                        VStack(spacing: 10) {
+                            Button { withAnimation(.smooth(duration: 0.25)) { showsErrorDetails.toggle() } } label: {
+                                HStack(spacing: 6) {
+                                    Text(L10n.text(showsErrorDetails ? "Hide details" : "Show details"))
+                                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).rotationEffect(.degrees(showsErrorDetails ? 180 : 0))
+                                }
+                                .font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.7))
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .glassSurface(.regular.interactive(), in: Capsule()).contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            if showsErrorDetails {
+                                ScrollView {
+                                    Text(details).font(.system(.caption, design: .monospaced)).foregroundStyle(.white.opacity(0.75))
+                                        .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled).padding(14)
+                                }
+                                .frame(maxWidth: 380, maxHeight: 120)
+                                .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                            }
+                        }
+                        .padding(.top, 16)
+                    }
                 }
                 .foregroundStyle(.white)
                 .padding(32)
                 .environment(\.colorScheme, .dark)
+                .onChange(of: session.error) { showsErrorDetails = false }
             }
             #else
-            ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
-                       retry: { startCatalogPlayback(session, channel: channel, store: store) }, goBack: { dismiss() }, backTitle: L10n.text("Close"))
+            ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
+                       retry: { retryCatalogPlayback(session, channel: channel, store: store) },
+                       alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) },
+                       goBack: { dismiss() }, backTitle: L10n.text("Close"))
                 .padding(30).frame(maxWidth: 480)
                 .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 30, style: .continuous)).padding(30)
             #endif
@@ -570,6 +624,22 @@ struct PlaybackView: View {
             #endif
         }
     }
+
+    #if os(iOS)
+    @ViewBuilder private var mobileFailureActions: some View {
+        Button { retryCatalogPlayback(session, channel: channel, store: store) } label: {
+            Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+        }
+        .controlButton(prominent: true).tint(Brand.accent)
+        if let switchLine = switchLineAction {
+            Button(action: switchLine) {
+                Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath")
+            }
+            .controlButton()
+        }
+        Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
+    }
+    #endif
 
     private var waitContent: PlaybackWaitContent? {
         #if os(tvOS)
@@ -661,11 +731,13 @@ private struct ChromeRow: SwiftUI.Layout {
 #if os(tvOS)
 private struct TVPlaybackFailureView: View {
     let channelName: String
+    let message: String
     let details: String
     var symbol = "play.slash.fill"
     /// The episode's colours behind the message, as on iPhone; the plain background when there is no artwork.
     var backdrop: PlaybackWaitContent? = nil
     let retry: () -> Void
+    var switchLine: (() -> Void)? = nil
     let goBack: () -> Void
     @State private var showsDetails = false
     @FocusState private var retryFocused: Bool
@@ -691,23 +763,28 @@ private struct TVPlaybackFailureView: View {
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(Color(white: 0.85)).lineLimit(2)
                     .padding(.bottom, 16)
-                Text(L10n.text("Try again, or go back and choose another video."))
-                    .font(.system(size: 27)).foregroundStyle(Color(white: 0.65))
+                Text(message)
+                    .font(.system(size: 27)).foregroundStyle(Color(white: 0.7))
                     .fixedSize(horizontal: false, vertical: true)
                 // Liquid Glass, as every other control on Apple TV: clear at rest, white on focus.
                 GlassGroup(spacing: 20) {
                     HStack(spacing: 20) {
                         Button(action: retry) { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }.focused($retryFocused)
+                        if let switchLine {
+                            Button(action: switchLine) { Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath") }
+                        }
                         Button(action: goBack) { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-                        Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                        if !details.isEmpty {
+                            Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                        }
                     }
                     .controlButton()
                 }
                 .padding(.top, 48)
-                if showsDetails {
+                if showsDetails, !details.isEmpty {
                     ScrollView {
                         Text(details)
-                            .font(.system(size: 23))
+                            .font(.system(size: 23, design: .monospaced))
                             .foregroundStyle(Color(white: 0.65))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
@@ -1375,8 +1452,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         target.title = channel.name
         // The next episode updates the view in place: a new one would rebuild the player view, a flash between episodes.
         let root = DesktopPlaybackRoot(channel: channel, session: session, window: target, store: store)
-        if let host = target.contentView as? NSHostingView<DesktopPlaybackRoot> { host.rootView = root }
-        else { target.contentView = NSHostingView(rootView: root) }
+        if let host = target.contentView as? DesktopHostingView<DesktopPlaybackRoot> { host.rootView = root }
+        else { target.contentView = DesktopHostingView(rootView: root) }
         startCatalogPlayback(session, channel: channel, store: store)
         target.makeKeyAndOrderFront(nil)
     }
@@ -1412,6 +1489,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     private var clickReset: Task<Void, Never>?
     /// The click brought the window forward (from another app or window): it only does that, as in IINA.
     private var clickActivates = false
+    /// Whether the current press began on the bare picture, so a mouse-up that drifts off a control never toggles playback.
+    private var clickOnPicture = false
     /// When the window last became key; the click that made it key can arrive a moment later.
     private var keyAt = ContinuousClock.now
 
@@ -1431,8 +1510,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
             clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
+            let onPicture = contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            // Only the bare picture drags the window by its background: SwiftUI controls like SeekBar hit-test to
+            // the hosting view and glass platters to NSGlassEffectView, whose mouseDownCanMoveWindow is true (#2558).
+            isMovableByWindowBackground = onPicture
             let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                && isPictureClick(at: event.locationInWindow)
+                && onPicture && event.locationInWindow.y <= contentLayoutRect.maxY
+            clickOnPicture = bare
             clickReset?.cancel(); clickReset = nil
             if !bare || event.clickCount > 2 { clickToggled = false }
             if event.clickCount >= 2, bare, clickToggled {
@@ -1443,7 +1527,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
         }
-        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, clickOnPicture, let session,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            isPictureClick(at: event.locationInWindow), let pressedAt {
             let up = convertPoint(toScreen: event.locationInWindow)
@@ -1695,8 +1779,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     }
 }
 
-/// Auto-hiding chrome driven by real pointer movement and key presses (not hover
-/// phases, which AVPlayerView's own overlay and layout passes keep re-firing).
+/// Auto-hiding chrome driven by real pointer movement and key presses (excluding arrow keys, which seek, hold to
+/// fast-forward or change volume quietly without bringing up the controls overlay, #2557).
 @MainActor @Observable private final class ChromeIdle {
     var visible = true
     private var task: Task<Void, Never>?
@@ -1712,6 +1796,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
                 guard let self, event.window === self.window else { return }
                 // Ignore synthetic mouse events that carry no movement.
                 if event.type == .mouseMoved, abs(event.deltaX) + abs(event.deltaY) < 1 { return }
+                if event.type == .keyDown, !PlaybackKeyboard.wakesMacChrome(keyCode: event.keyCode) { return }
                 self.poke()
             }
             return event
@@ -1730,6 +1815,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func hold(_ on: Bool) {
         held = on
         poke()
+    }
+
+    /// Hides the controls right away (e.g. while holding the right arrow to fast-forward, #2557).
+    func hide() {
+        task?.cancel(); task = nil
+        guard !held, !UserDefaults.standard.bool(forKey: "qaPlayerControls") else { return }
+        if visible { withAnimation(.smooth(duration: 0.25)) { visible = false } }
     }
 
     func poke() {
@@ -1829,6 +1921,17 @@ private struct DesktopPlaybackView: View {
     /// Play, skip and the seek bar: not while the video loads, failed, or plays elsewhere.
     private var showsTransport: Bool { !session.loading && session.error == nil && playingOn == nil && !pip.active }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
+    private var switchLineAction: (() -> Void)? {
+        if session.lines.count > 1 {
+            let next = (session.line + 1) % session.lines.count
+            return { session.choose(line: next) }
+        }
+        guard let other = store.nextLineChoice(for: channel) else { return nil }
+        return {
+            session.beginLineSwitch(to: other.flag)
+            store.selectEpisode(other, from: channel) { session.lineSwitchFailed($0) }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -1864,8 +1967,9 @@ private struct DesktopPlaybackView: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: showsChrome)
                 if let error = session.error {
-                    ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
-                               retry: { startCatalogPlayback(session, channel: channel, store: store) })
+                    ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
+                               retry: { retryCatalogPlayback(session, channel: channel, store: store) },
+                               alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) })
                         .padding(28).frame(maxWidth: 460)
                         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous)).padding()
                         .environment(\.colorScheme, .dark)
@@ -1891,6 +1995,17 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
+        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
+        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
+        .onChange(of: pip.floating) { _, floating in
+            if floating {
+                guard session.error == nil else { return }
+                window.miniaturize(nil)
+            } else {
+                window.deminiaturize(nil)
+            }
+        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -1905,6 +2020,8 @@ private struct DesktopPlaybackView: View {
             }
         }
         .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
+        // Fast-forwarding with the right arrow: keep the controls out of the way, as on iPad (#2557).
+        .onChange(of: session.boost != nil) { _, boosting in if boosting { idle.hide() } }
         .onAppear {
             floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh()
             clock.attach(session.player)
@@ -1973,6 +2090,7 @@ private struct DesktopPlaybackView: View {
             Text(channel.name).font(.headline).lineLimit(1)
                 .shadow(color: .black.opacity(0.6), radius: 4)
                 .padding(.leading, 86)
+                .allowsHitTesting(false)
             Spacer(minLength: 12)
             HStack(spacing: 2) {
                 // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
@@ -2299,7 +2417,7 @@ private struct DesktopOptionsMenu: View, Equatable {
                 .accessibilityIdentifier("player.saveFrame")
             Divider()
             Button(L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
-            Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }
+            Button(L10n.text("Retry")) { retryCatalogPlayback(session, channel: channel, store: store) }
             Divider()
             Text(L10n.text("Space: Play / Pause"))
             Text(L10n.text("← / →: Seek 10s · Shift: 60s"))
@@ -2350,6 +2468,13 @@ private struct DesktopVideoView: NSViewRepresentable {
     static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: ()) { view.playerLayer.player = nil }
 }
 
+/// Hosts the Mac player's SwiftUI controls: `mouseDownCanMoveWindow` is false so dragging SwiftUI controls like
+/// `SeekBar` doesn't move the window along with them (#2558). `DesktopVideoNSView` returns true, so dragging the bare
+/// picture still moves the window.
+private final class DesktopHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
+}
+
 /// A view whose layer is the player's. A drag on it moves the window, and a click plays or pauses (PlaybackWindow).
 private final class DesktopVideoNSView: NSView {
     let playerLayer = AVPlayerLayer()
@@ -2367,6 +2492,9 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
+    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
+    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
     @ObservationIgnored private var controller: AVPictureInPictureController?
@@ -2404,9 +2532,13 @@ private final class DesktopVideoNSView: NSView {
             self?.subtitles?.native = true
         }
     }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.floating = true }
+    }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = false
+            self?.floating = false
             self?.subtitles?.native = false
         }
     }
@@ -2518,6 +2650,16 @@ extension Store {
     }
 }
 
+/// Re-resolves a failed catalog episode from its source when Try Again is tapped (getting a fresh link or waking a
+/// plugin's loopback server, #1642), and falls back to restarting the current channel otherwise.
+@MainActor private func retryCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store) {
+    if !store.retryPlayback(for: channel, session: session, fallback: {
+        startCatalogPlayback(session, channel: channel, store: store)
+    }) {
+        startCatalogPlayback(session, channel: channel, store: store)
+    }
+}
+
 /// Shared setup leaves the native AVKit controls and Bilibili resolution intact.
 /// `resuming`: the session already plays the channel (back from Picture in Picture), and only its links to the store are
 /// made again.
@@ -2558,6 +2700,10 @@ extension Store {
         guard let store, let other = store.transcodedLine(for: channel) else { return nil }
         store.selectEpisode(other, from: channel) { session?.lineSwitchFailed($0) }
         return other.flag
+    }
+    session.onFallbackLine = { [weak store, weak session] in
+        guard let store, let session else { return nil }
+        return store.switchToFallbackLine(from: channel, session: session)
     }
     if let context = channel.historyContext, let next = store.nextEpisode(after: channel),
        let catalog = store.catalog(for: channel) {
@@ -2676,8 +2822,8 @@ struct PlaybackBadges: View {
 }
 
 /// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520, #758): TMDB's,
-/// when the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
-/// title is in the top row too.
+/// when the video's page found the title there. A video played without opening its page (from search, history or
+/// Continue Watching) asks TMDB here as its page would, and the answer is saved for the page too.
 struct PlayerTitleLogo: View {
     let channel: Channel
     /// A phone held upright: a smaller logo.
@@ -2713,7 +2859,13 @@ struct PlayerTitleLogo: View {
             keptLogo = nil
             guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
             let key = TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
-            if !(await tmdb.prepare(key: key)) { keptLogo = await TMDBMatchStore.shared.kept(for: key)?.details?.logo }
+            guard !(await tmdb.prepare(key: key)) else { return }
+            if let kept = await TMDBMatchStore.shared.kept(for: key) { keptLogo = kept.details?.logo; return }
+            let site = catalog.client.site
+            let request = TMDBMatch.Request(video: catalog.video, listVideo: catalog.video,
+                                            source: TMDBMatch.SourceRef(key: site.key, name: site.name))
+            guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+            await tmdb.run(key: key, request: request)
         }
     }
 

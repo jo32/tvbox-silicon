@@ -1690,6 +1690,69 @@ static int reposition(TVMCursor *cursor, int64_t start) {
     return status;
 }
 
+/// Whether an HEVC track's decoder configuration lacks the parameter sets a decoder needs: an hvcC record whose
+/// arrays hold no SPS or no PPS. Dolby's MP4 packager writes such a record (DV 5 and 8 files tagged `hev1`, "DOVI
+/// Coding"); the sets are in the stream itself. Copied as they are, the initialization segment's hvcC is empty too and
+/// AVPlayer fails at once with CoreMedia error -4 (#769, #1644). Extradata that isn't an hvcC record is not judged.
+static int hvcc_lacks_parameter_sets(const AVCodecParameters *par) {
+    const uint8_t *data = par->extradata;
+    int size = par->extradata_size;
+    if (par->codec_id != AV_CODEC_ID_HEVC || size < 23 || data[0] != 1) return 0;
+    int sps = 0, pps = 0, at = 23;
+    for (int array = 0; array < data[22]; array++) {
+        if (at + 3 > size) return 1;
+        int type = data[at] & 0x3f, count = AV_RB16(data + at + 1);
+        at += 3;
+        for (int i = 0; i < count; i++) {
+            if (at + 2 > size) return 1;
+            at += 2 + AV_RB16(data + at);
+            if (at > size) return 1;
+            if (type == 33) sps++;
+            else if (type == 34) pps++;
+        }
+    }
+    return !sps || !pps;
+}
+
+/// Completes such a record from the parameter sets in `packet` (the track's first, a keyframe): its NAL units have
+/// the record's length size. The record's own header (profile, level, chroma, bit depth, length size) is kept.
+/// False, and the record as it was, when the packet carries no SPS and PPS.
+static int complete_hvcc(AVCodecParameters *par, const AVPacket *packet) {
+    const int lengthSize = (par->extradata[21] & 3) + 1;
+    const uint8_t *units[3] = {NULL, NULL, NULL};   // VPS, SPS, PPS
+    int sizes[3] = {0, 0, 0};
+    for (int at = 0; at + lengthSize <= packet->size;) {
+        uint32_t length = 0;
+        for (int i = 0; i < lengthSize; i++) length = length << 8 | packet->data[at + i];
+        at += lengthSize;
+        if (length == 0 || length > (uint32_t)(packet->size - at)) break;
+        int type = (packet->data[at] >> 1) & 0x3f;
+        if (type >= 32 && type <= 34 && !units[type - 32] && length <= 0xffff) { units[type - 32] = packet->data + at; sizes[type - 32] = (int)length; }
+        at += (int)length;
+    }
+    if (!units[1] || !units[2]) return 0;
+    int size = 23;
+    for (int i = 0; i < 3; i++) if (units[i]) size += 5 + sizes[i];
+    uint8_t *record = av_mallocz(size + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!record) return 0;
+    memcpy(record, par->extradata, 22);
+    int at = 23, arrays = 0;
+    for (int i = 0; i < 3; i++) {
+        if (!units[i]) continue;
+        record[at] = 0x80 | (32 + i);   // array_completeness, NAL unit type
+        AV_WB16(record + at + 1, 1);
+        AV_WB16(record + at + 3, sizes[i]);
+        memcpy(record + at + 5, units[i], sizes[i]);
+        at += 5 + sizes[i];
+        arrays++;
+    }
+    record[22] = arrays;
+    av_freep(&par->extradata);
+    par->extradata = record;
+    par->extradata_size = size;
+    return 1;
+}
+
 /// Reads from the start to the track's first packet. The reader is left there, so the next segment seeks.
 static int load_sample(TVMCursor *cursor, Track *track) {
     if (track->sample) return 0;
@@ -1723,6 +1786,11 @@ int tvm_cursor_init(TVMCursor *cursor, int index, void *context, TVMWriteFunctio
     else if (track->spec.mode == TVMModeH264 || track->spec.mode == TVMModeHEVC) status = open_video_encoder(track, &encoder);
     if (status < 0) return fail(error, errorSize, status, "encoder");
     if (track->delayed && !encoder && (status = load_sample(cursor, track)) < 0) return fail(error, errorSize, status, "first packet");
+    // The record the track's every writer copies, completed once from its first keyframe.
+    if (!encoder && hvcc_lacks_parameter_sets(track->in->codecpar)) {
+        if ((status = load_sample(cursor, track)) < 0) return fail(error, errorSize, status, "first packet");
+        if (complete_hvcc(track->in->codecpar, track->sample)) av_log(NULL, AV_LOG_INFO, "hvcC completed from the stream\n");
+    }
     cursor->context = context;
     cursor->write = write;
     AVFormatContext *saved = track->mux;

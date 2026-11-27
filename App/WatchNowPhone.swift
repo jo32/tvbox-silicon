@@ -19,6 +19,12 @@ struct WatchNowPhonePage: View {
         return Array(store.visibleHistory.filter { !$0.completed }.prefix(5))
     }
 
+    /// iOS 26's tab bar is a floating glass capsule with its own material; before that the bar fell back to the
+    /// transparent scroll-edge appearance over the page's posters (#2254).
+    private var tabBarBackground: Visibility {
+        if #available(iOS 26, *) { .automatic } else { .visible }
+    }
+
     var body: some View {
         let entries = upNext
         GeometryReader { proxy in
@@ -62,6 +68,7 @@ struct WatchNowPhonePage: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(entries.isEmpty ? .automatic : .hidden, for: .navigationBar)
+        .toolbarBackground(tabBarBackground, for: .tabBar)
         .toolbarColorScheme(entries.isEmpty || pastHero || hero.paint == nil ? nil : hero.paint?.isDark == false ? .light : .dark, for: .navigationBar)
         #endif
         .ignoresSafeArea(edges: entries.isEmpty ? [] : .top)
