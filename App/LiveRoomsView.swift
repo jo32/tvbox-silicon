@@ -138,8 +138,9 @@ struct LivePlatformView: View {
     }
 
     private func failure(_ error: String) -> some View {
-        ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
-                   details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
+        let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
+        return ErrorState(title: L10n.text("Unable to Load Channels"), message: shown.message,
+                   details: shown.details, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
             .padding(.vertical, 24).tvFocusSection()
     }
 
@@ -152,7 +153,7 @@ struct LivePlatformView: View {
         #endif
         if needsSignIn, qrPlan == nil, let id = platform.plugin { qrPlan = await LivePlugins.shared.qrLogin(id) }
         if needsSignIn, !deviceCode, let id = platform.plugin { deviceCode = await LivePlugins.shared.signsInByDeviceCode(id) }
-        self.error = error.localizedDescription
+        self.error = ErrorPresentation.reason(for: error)
     }
 
     private func reload() {
@@ -316,8 +317,9 @@ private struct LiveRoomSearch: View {
     var body: some View {
         Group {
             if let error {
-                ErrorState(title: L10n.text("Search Failed"), message: L10n.text("Check your network connection and try again."),
-                           details: error, symbol: "exclamationmark.magnifyingglass")
+                let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Check your network connection and try again."))
+                ErrorState(title: L10n.text("Search Failed"), message: shown.message,
+                           details: shown.details, symbol: "exclamationmark.magnifyingglass")
                     .padding(.vertical, 24)
             } else if rooms.isEmpty {
                 if searching { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
@@ -336,7 +338,7 @@ private struct LiveRoomSearch: View {
             catch {
                 guard !Task.isCancelled else { return }
                 Diagnostics.shared.failure("live", "\(platform.id) search", error)
-                self.error = error.localizedDescription; rooms = []
+                self.error = ErrorPresentation.reason(for: error); rooms = []
             }
             if !Task.isCancelled { searching = false }
         }

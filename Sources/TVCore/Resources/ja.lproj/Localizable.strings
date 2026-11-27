@@ -2416,3 +2416,25 @@
 "This program can no longer be replayed." = "この番組は見逃し再生の期間が終わりました。";
 
 "Search results reached the memory limit. Try a more specific search." = "検索結果がメモリ上限に達しました。検索条件を絞り込んでください。";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "インターネットに接続されていません。ネットワークを確認して再試行してください。";
+"The server took too long to respond. Try again, or choose another source." = "サーバーの応答がタイムアウトしました。再試行するか、別のソースを選んでください。";
+"The server couldn't be found. The source may be offline." = "サーバーが見つかりませんでした。ソースがオフラインの可能性があります。";
+"Couldn't connect to the server. It may be down or unreachable." = "サーバーに接続できませんでした。停止中または到達できない可能性があります。";
+"The connection was interrupted. Try again." = "接続が中断されました。再試行してください。";
+"Couldn't establish a secure connection to the server." = "サーバーと安全な接続を確立できませんでした。";
+"The source returned data Yingxia couldn't read." = "ソースから読み取れない形式のデータが返されました。";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "動画サーバーと安全な接続を確立できませんでした。別の回線をお試しください。";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "動画サーバーが HTTP %lld を返しました。しばらくしてから再試行するか、別の回線に切り替えてください。";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "ソースのローカル再生サービスに接続できませんでした。再試行するか、別の回線に切り替えてください。";
+"The video server took too long to respond. Try again, or switch to another line." = "動画サーバーの応答がタイムアウトしました。再試行するか、別の回線に切り替えてください。";
+"The video server couldn't be found. The source may be offline; try another line." = "動画サーバーが見つかりませんでした。ソースがオフラインの可能性があります。別の回線をお試しください。";
+"Couldn't connect to the video server. Check your network, or try another line." = "動画サーバーに接続できませんでした。ネットワークを確認するか、別の回線をお試しください。";
+"This video format isn't supported on this device. Try another line." = "この動画形式はこのデバイスで再生できません。別の回線をお試しください。";
+"Switch Line" = "回線を切り替え";
+"%@ didn't play. Trying %@." = "%@ を再生できませんでした。%@ を試しています。";
+"Trying %@…" = "%@ を試しています…";
+"another line" = "別の回線";

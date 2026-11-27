@@ -57,7 +57,14 @@ import TVCore
     var notice: String?
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
-        didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
+        didSet {
+            if let channel = playing {
+                if let context = channel.historyContext { lineFallback.track(context) } else { lineFallback.reset() }
+                if let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) }
+            } else {
+                lineFallback.reset()
+            }
+        }
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     @ObservationIgnored private var playsAsVideo = false
@@ -119,6 +126,8 @@ import TVCore
     var filesFolder: CloudFilesFolder?
     var resolvingEpisode: Episode?
     var episodeError: String?
+    /// Bounded automatic line switching for the playing catalog episode (#2560).
+    @ObservationIgnored var lineFallback = PlaybackLineFallback()
     var autoPlayNext: Bool {
         didSet { if persistsChanges { defaults.set(autoPlayNext, forKey: "autoPlayNextEpisode") } }
     }
@@ -1166,6 +1175,73 @@ import TVCore
         return candidates.first { $0.flag == sameDrive } ?? candidates.first
     }
 
+    /// The same episode on the video's other lines, for automatic fallback and the failure screen's Switch Line (#2560).
+    func alternateLines(for channel: Channel) -> [Episode] {
+        guard let context = channel.historyContext, let catalog = catalog(for: channel) else { return [] }
+        return catalog.playlist.alternates(for: context)
+    }
+
+    /// The next line the viewer can switch to from the failure screen: an untried line first, else the first other line.
+    func nextLineChoice(for channel: Channel) -> Episode? {
+        guard let context = channel.historyContext else { return nil }
+        return lineFallback.nextManual(for: context, candidates: alternateLines(for: channel))
+    }
+
+    /// Automatically tries the next safe untried line for the same episode when the current line fails (at most
+    /// `PlaybackLineFallback.limit` switches per episode). If resolving that line fails, tries the next safe candidate
+    /// within the same budget before reporting the failure back to `session`.
+    func switchToFallbackLine(from channel: Channel, session: PlaybackSession) -> String? {
+        guard playing == channel, let context = channel.historyContext else { return nil }
+        let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        let candidates = alternateLines(for: channel)
+        guard let next = lineFallback.nextAutomatic(for: context, candidates: candidates,
+                                                    allowed: { CloudDrive.canAutoPlay($0.flag, accounts: accounts) }) else { return nil }
+        let label = next.flag.isEmpty ? L10n.text("another line") : next.flag
+        selectEpisode(next, from: channel) { [weak self, weak session] message in
+            guard let self, let session else { return }
+            if let another = self.switchToFallbackLine(from: channel, session: session) {
+                session.beginLineSwitch(to: another, failedFlag: next.flag)
+            } else {
+                session.lineSwitchFailed(message)
+            }
+        }
+        return label
+    }
+
+    /// Re-resolves the playing catalog episode from its source when the viewer taps Try Again, so expired links
+    /// and dead plugin loopback ports get a fresh address instead of retrying the stale URL (#1642).
+    /// Returns false when `channel` isn't a re-resolvable catalog episode, so the caller restarts it directly.
+    @discardableResult
+    func retryPlayback(for channel: Channel, session: PlaybackSession, fallback: @escaping @MainActor () -> Void) -> Bool {
+        lineFallback.reset()
+        guard playing == channel, let context = channel.historyContext, let catalog = catalog(for: channel),
+              !LiveCatalog.isRoom(channel.url),
+              let episode = catalog.video.episodes.first(where: { $0.id == context.episodeID && $0.flag == context.episodeFlag })
+                ?? catalog.video.episodes.first(where: { $0.id == context.episodeID }) else { return false }
+        session.saveHistory()
+        let resume = session.position > 1 ? session.position
+            : (playbackHistory.entries.first(where: { $0.id == context.id })?.resumePosition(for: episode) ?? channel.resumePosition)
+        session.beginRetry()
+        cancelEpisodeSelection()
+        let request = episodeRequest
+        resolvingEpisode = episode; episodeError = nil
+        episodeTask = Task { [weak self, weak session] in
+            guard let self else { return }
+            defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
+            do {
+                let resolved = try await catalog.client.playback(episode)
+                guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
+                let fresh = self.catalogChannel(resolved, video: catalog.video, episode: episode, client: catalog.client, resumePosition: resume)
+                if fresh == channel { fallback() } else { self.playing = fresh }
+            } catch {
+                guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
+                Diagnostics.shared.failure("catalog", "retry episode \(catalog.client.reportContext) flag=\(episode.flag)", error)
+                if session != nil { fallback() }
+            }
+        }
+        return true
+    }
+
     func selectEpisode(_ episode: Episode, from channel: Channel, failed: ((String) -> Void)? = nil) {
         guard playing == channel, let catalog = catalog(for: channel),
               catalog.video.episodes.contains(episode) else { return }
@@ -1188,8 +1264,9 @@ import TVCore
             } catch {
                 guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
                 Diagnostics.shared.failure("catalog", "episode \(catalog.client.reportContext) flag=\(episode.flag)", error)
-                self.episodeError = error.localizedDescription
-                failed?(error.localizedDescription)
+                let reason = ErrorPresentation.reason(for: error)
+                self.episodeError = reason
+                failed?(reason)
             }
         }
     }

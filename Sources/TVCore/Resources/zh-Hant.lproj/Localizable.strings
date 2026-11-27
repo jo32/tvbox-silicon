@@ -2416,3 +2416,25 @@
 "This program can no longer be replayed." = "這個節目已過了回看期限。";
 
 "Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "沒有網路連線，請檢查網路後重試。";
+"The server took too long to respond. Try again, or choose another source." = "伺服器回應逾時，請重試或換一個來源。";
+"The server couldn't be found. The source may be offline." = "找不到伺服器，該來源可能已離線。";
+"Couldn't connect to the server. It may be down or unreachable." = "無法連線到伺服器，該服務可能暫時無法使用。";
+"The connection was interrupted. Try again." = "網路連線中斷，請重試。";
+"Couldn't establish a secure connection to the server." = "無法與伺服器建立安全連線。";
+"The source returned data Yingxia couldn't read." = "來源回傳的資料格式無法解析。";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "無法與影片伺服器建立安全連線，請換一條線路。";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "影片伺服器回傳 HTTP %lld，請稍後再試或切換其他線路。";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "無法連線片源的本機播放服務，請重試或切換其他線路。";
+"The video server took too long to respond. Try again, or switch to another line." = "影片伺服器回應逾時，請重試或切換其他線路。";
+"The video server couldn't be found. The source may be offline; try another line." = "找不到影片伺服器，該片源可能已失效，請換一條線路。";
+"Couldn't connect to the video server. Check your network, or try another line." = "無法連線影片伺服器，請檢查網路或換一條線路。";
+"This video format isn't supported on this device. Try another line." = "此裝置不支援該影片格式，請換一條線路。";
+"Switch Line" = "切換線路";
+"%@ didn't play. Trying %@." = "%@ 無法播放，正在嘗試 %@。";
+"Trying %@…" = "正在嘗試 %@…";
+"another line" = "其他線路";

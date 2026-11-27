@@ -1316,10 +1316,11 @@ struct SiteView: View {
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
+                            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                             ErrorState(
                                 title: L10n.text("Unable to load this source"),
-                                message: L10n.text("Try again, or choose another source to keep watching."),
-                                details: error,
+                                message: shown.message,
+                                details: shown.details,
                                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                                 goBack: { dismiss() },
                                 busy: browser.busy
@@ -2561,12 +2562,16 @@ struct VideoDetailView: View {
         }
     }
     private func errorCard(_ error: String) -> some View {
-                    ErrorState(
-                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
-                        message: detail == nil
+                    let shown = ErrorPresentation.summarize(
+                        error,
+                        fallback: detail == nil
                             ? L10n.text("Try again, or go back and choose another video.")
-                            : L10n.text("Try another episode or playback source."),
-                        details: error,
+                            : L10n.text("Try another episode or playback source.")
+                    )
+                    return ErrorState(
+                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
+                        message: shown.message,
+                        details: shown.details,
                         retry: detail == nil ? { startRequest { await loadDetail() } } : nil,
                         goBack: { dismiss() },
                         busy: busy,
@@ -2606,7 +2611,7 @@ struct VideoDetailView: View {
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "detail \(client.reportContext)", error)
-            self.error = error.localizedDescription
+            self.error = ErrorPresentation.reason(for: error)
             #if os(tvOS)
             // The loading placeholder that held focus is gone: Retry in the hero takes it.
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }
@@ -3811,9 +3816,10 @@ extension VideoDetailView {
             #endif
             if detail == nil {
                 if let error, !busy {
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                     ErrorState(title: L10n.text("Unable to load video details"),
-                               message: L10n.text("Try again, or choose another source to keep watching."),
-                               details: error, retry: { startRequest { await loadDetail() } })
+                               message: shown.message,
+                               details: shown.details, retry: { startRequest { await loadDetail() } })
                 } else {
                     HStack(spacing: 8) {
                         ForEach(0..<4, id: \.self) { _ in SkeletonBlock(cornerRadius: 10).frame(width: 150, height: 54) }
@@ -4163,7 +4169,7 @@ private struct BundleSignIn: Identifiable {
 }
 
 /// Cloud drives a line plays from, to start a video on a line that can play now.
-private enum CloudDrive {
+enum CloudDrive {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
     /// lines without it, so those lines are never held back for it.
     case quark, uc, xunlei
@@ -4181,16 +4187,19 @@ private enum CloudDrive {
         let text = flag.lowercased()
         return ["嘟嘟", "百度", "度盘", "baidu", "阿狸", "阿里", "aliyun"].contains { text.contains($0) }
     }
+    /// Whether a line can play automatically without popping up a drive sign-in screen.
+    static func canAutoPlay(_ flag: String, accounts: CloudDriveAccounts? = nil) -> Bool {
+        if withoutSignIn(flag) { return false }
+        guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
+        let loaded = accounts ?? (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        let cookie = drive == .quark ? loaded.quarkCookie : loaded.ucCookie
+        return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     /// The first line that can play now: not from a drive without a sign-in, nor one without the app's sign-in.
     /// Those lines still play when chosen: their plugin asks for the account with its own code.
     static func preferredFlag(_ flags: [String]) -> String? {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
-        return flags.first { flag in
-            if withoutSignIn(flag) { return false }
-            guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
-            let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
-            return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        return flags.first { canAutoPlay($0, accounts: accounts) }
     }
 }
 
@@ -4506,10 +4515,11 @@ extension SiteView {
     /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
     @ViewBuilder private var spaceGrid: some View {
         if let error = browser.error {
+            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
             ErrorState(
                 title: L10n.text("Unable to load this source"),
-                message: L10n.text("Try again, or choose another source to keep watching."),
-                details: error,
+                message: shown.message,
+                details: shown.details,
                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                 goBack: { dismiss() },
                 busy: browser.busy
