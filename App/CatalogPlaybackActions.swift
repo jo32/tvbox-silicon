@@ -17,27 +17,14 @@ struct CatalogPlaybackActions: View {
         if channel.historyContext != nil,
            offersSkip || store.catalog(for: channel) != nil || !session.chapters.isEmpty || store.episodeError != nil {
             Menu {
-                if store.catalog(for: channel) != nil {
-                    Toggle(L10n.text("Auto-play next episode"), isOn: Binding(
-                        get: { store.autoPlayNext }, set: { store.autoPlayNext = $0 }))
-                }
                 // The players with a settings menu have Skip Intro / Outro there (#1488); a lone switch here, on with no
                 // times set, skipped nothing and looked broken (#1405).
-                if offersSkip {
-                    SkipTimesMenuButton(session: session) { showsSkip = true }
-                    Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(get: { session.looksUpSkipsOnline }, set: { session.looksUpSkipsOnline = $0 }))
+                CatalogPlaybackItems(channel: channel, session: session) {
+                    if offersSkip {
+                        SkipTimesMenuButton(session: session) { showsSkip = true }
+                        Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(get: { session.looksUpSkipsOnline }, set: { session.looksUpSkipsOnline = $0 }))
+                    }
                 }
-                if !session.chapters.isEmpty {
-                    Menu {
-                        ForEach(Array(session.chapters.enumerated()), id: \.offset) { _, chapter in
-                            Button { session.jump(to: chapter.start) } label: {
-                                Text(EpisodeSkipSettings.formatTime(chapter.start) + "  " + chapter.title)
-                            }
-                        }
-                    } label: { Label(L10n.text("Chapters"), systemImage: "list.bullet") }
-                    .accessibilityIdentifier("player.chapters")
-                }
-                if let error = store.episodeError { Text(error) }
             } label: {
                 #if os(macOS)
                 Image(systemName: "ellipsis").font(.system(size: 14, weight: .medium))
@@ -61,6 +48,42 @@ struct CatalogPlaybackActions: View {
             // Store handed in, as for every sheet over the player (`PlayerSheetPresentation`).
             .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
         }
+    }
+}
+
+/// The catalog's items: Auto-play next episode, the chapters and the episode's error. Their own menu on the Mac;
+/// the top of the iPhone and iPad player's settings menu, which saves a button beside it.
+struct CatalogPlaybackItems<Middle: View>: View {
+    let channel: Channel
+    let session: PlaybackSession
+    @ViewBuilder var middle: () -> Middle
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        if channel.historyContext != nil {
+            if store.catalog(for: channel) != nil {
+                Toggle(L10n.text("Auto-play next episode"), isOn: Binding(
+                    get: { store.autoPlayNext }, set: { store.autoPlayNext = $0 }))
+            }
+            middle()
+            if !session.chapters.isEmpty {
+                Menu {
+                    ForEach(Array(session.chapters.enumerated()), id: \.offset) { _, chapter in
+                        Button { session.jump(to: chapter.start) } label: {
+                            Text(EpisodeSkipSettings.formatTime(chapter.start) + "  " + chapter.title)
+                        }
+                    }
+                } label: { Label(L10n.text("Chapters"), systemImage: "list.bullet") }
+                .accessibilityIdentifier("player.chapters")
+            }
+            if let error = store.episodeError { Text(error) }
+        }
+    }
+}
+
+extension CatalogPlaybackItems where Middle == EmptyView {
+    init(channel: Channel, session: PlaybackSession) {
+        self.init(channel: channel, session: session) { EmptyView() }
     }
 }
 

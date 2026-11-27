@@ -334,7 +334,10 @@ struct PlayOnButton: View {
 /// taps its button.
 extension Font {
     /// AirPlay's mark in the player's bar. Its filled screen at .headline, like the symbols beside it, looked bigger and heavier.
-    static let airPlayGlyph = Font.system(size: 15, weight: .semibold)
+    /// Every icon in the iPhone and iPad player's buttons: one size and weight, so a wide symbol (AirPlay, Picture in
+    /// Picture) and a tall one (Rotate) read as the same size.
+    static let playerGlyph = Font.system(size: 17, weight: .medium)
+    static let airPlayGlyph = playerGlyph
 }
 
 @MainActor final class AirPlayPicker {
