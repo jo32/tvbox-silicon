@@ -2163,14 +2163,6 @@ struct SubscriptionDetailView: View {
                 else if let failure { Text(L10n.text("Couldn't refresh: %@", failure)) }
                 else if let copy { Text(L10n.text("Sources: %lld · Live playlists: %lld", copy.sites.count, copy.lives.count)) }
             }
-            if store.subscriptions.count > 1 {
-                Section(L10n.text("Order")) {
-                    if index > 1 { Button(L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
-                    if index > 0 { Button(L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
-                    if index < store.subscriptions.count - 1 { Button(L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
-                    if index < store.subscriptions.count - 2 { Button(L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
-                }
-            }
             Section {
                 // Reload this list alone, keeping the others' copies (#2198).
                 Button {
@@ -3175,14 +3167,6 @@ struct TVSubscriptionPage: View {
                 // Reload this list alone, keeping the others' copies (#2198).
                 TVSettingsAction(title: L10n.text("Refresh"), busy: store.importing) { Task { await store.refreshSubscription(current) } }
                     .disabled(store.importing || !current.enabled)
-            }
-            if store.subscriptions.count > 1 {
-                TVSettingsSection(title: L10n.text("Order")) {
-                    if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
-                    if index > 0 { TVSettingsAction(title: L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
-                    if index < store.subscriptions.count - 1 { TVSettingsAction(title: L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
-                    if index < store.subscriptions.count - 2 { TVSettingsAction(title: L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
-                }
             }
             TVSettingsSection(title: L10n.text("Remove")) {
                 TVSettingsAction(title: L10n.text("Remove"), destructive: true) { confirmsRemoval = true }

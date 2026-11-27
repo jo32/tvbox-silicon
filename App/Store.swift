@@ -765,19 +765,6 @@ import TVCore
         saveSubscriptionList()
         rebuildSubscription()
     }
-    /// Moves a subscription to the top or the bottom of the list.
-    func moveSubscription(_ entry: SubscriptionEntry, toTop: Bool) {
-        guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
-        moveSubscriptions(fromOffsets: IndexSet(integer: index), toOffset: toTop ? 0 : subscriptions.count)
-    }
-    /// Moves a subscription one place up (-1) or down (1); earlier subscriptions win duplicate sources.
-    func moveSubscription(_ entry: SubscriptionEntry, by offset: Int) {
-        guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }),
-              subscriptions.indices.contains(index + offset) else { return }
-        subscriptions.swapAt(index, index + offset)
-        saveSubscriptionList()
-        rebuildSubscription()
-    }
     func moveSourceGroup(_ address: String, onto target: String, includeHidden: Bool) {
         let shown = sourceGroups(includeHidden: includeHidden).compactMap { group -> String? in
             guard case .subscription(let value) = group.kind else { return nil }
