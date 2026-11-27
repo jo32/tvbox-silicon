@@ -368,7 +368,15 @@ struct ReleaseNotesView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(feature.title.text()).font(.system(size: Size.cardTitle, weight: .semibold)).lineLimit(1)
                         Text(feature.detail.text()).font(.system(size: Size.cardDetail)).foregroundStyle(.white.opacity(0.6))
+                            #if os(tvOS)
+                            // A TV shelf keeps its cards one height, so the caption still caps at three lines.
                             .lineLimit(3, reservesSpace: true)
+                            #else
+                            // iPad shows the shelf too (regular size class), but the cap cut every description
+                            // off mid-sentence at exactly three lines (#2502). Show the whole text, as the
+                            // phone's feature list already does.
+                            .fixedSize(horizontal: false, vertical: true)
+                            #endif
                     }
                     .accessibilityElement(children: .combine)
                 }
