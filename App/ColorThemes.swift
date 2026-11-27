@@ -419,7 +419,14 @@ struct ThemeRGB: Equatable, Sendable {
 
 /// The app-wide tint in the theme's highlight, and Custom's appearance. A modifier of its own, so a theme change redraws it.
 struct ThemeTint: ViewModifier {
-    func body(content: Content) -> some View { content.tint(Brand.accent).preferredColorScheme(ColorThemes.shared.customScheme) }
+    /// The app's own light/dark choice (#2592); "system" follows the OS, as before. Custom's own scheme comes first,
+    /// since its colors are only readable in it. Here, not on the app's scene, so the Mac's mini player window,
+    /// which takes this modifier too, follows it as well.
+    @AppStorage("app.appearance") private var appearance = "system"
+    func body(content: Content) -> some View {
+        content.tint(Brand.accent)
+            .preferredColorScheme(ColorThemes.shared.customScheme ?? (appearance == "light" ? .light : appearance == "dark" ? .dark : nil))
+    }
 }
 
 extension ColorThemes {
