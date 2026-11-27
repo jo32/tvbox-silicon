@@ -592,10 +592,7 @@
 "Undo" = "復原";
 "Skipping the outro in %@ s" = "%@ 秒後為你跳過片尾";
 "Automatically skip intro and outro" = "自動跳過片頭片尾";
-"Intro ends at" = "片頭結束位置";
-"Outro starts at" = "片尾開始位置";
 "Use current position (%@)" = "使用目前播放位置（%@）";
-"Leave a time empty to keep that segment. Format: minutes:seconds." = "留空表示不跳過該段，時間格式為 分:秒。";
 "Reset intro and outro" = "清除片頭片尾設定";
 "Skip intro / outro" = "跳過片頭片尾";
 "Save" = "儲存";
@@ -2458,3 +2455,13 @@
 "Intro" = "片頭";
 "Outro" = "片尾";
 "Found online in %@. You can change it." = "線上查自 %@，可以修改。";
+
+// Intro and outro ranges, filled from online times (#2653).
+"Starts at" = "開始";
+"Ends at" = "結束";
+"End" = "結尾";
+"Found in %@." = "已在 %@ 找到。";
+"The intro must start before it ends." = "片頭的開始時間必須在結束時間之前。";
+"The outro must start before it ends." = "片尾的開始時間必須在結束時間之前。";
+"Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip." = "在 TheIntroDB、IntroDB 和 TheOtherDB 中查找這一集的片頭片尾，這些服務會因此得知你在播放什麼。找到的時間會填入下方的空白欄；儲存之前，它們只顯示「跳過」按鈕。";
+"With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片頭不填開始即從頭開始，片尾不填結束即到結尾。留空一段的時間表示不跳過該段，時間格式為 分:秒。";

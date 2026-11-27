@@ -5,9 +5,31 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
     public var introEnd: Double
     /// Store the distance from the end so episodes with different lengths remain usable.
     public var outroLength: Double
+    /// Where the intro begins: 0 for the start; later after a cold open, which then plays (#2653).
+    public var introStart: Double
+    /// How long the video runs on after the outro ends, as a distance from the end: 0 when the outro runs to the end;
+    /// more for a scene after the credits, which then plays (#2653).
+    public var outroTail: Double
 
-    public init(enabled: Bool = false, introEnd: Double = 0, outroLength: Double = 0) {
+    public init(enabled: Bool = false, introEnd: Double = 0, outroLength: Double = 0, introStart: Double = 0, outroTail: Double = 0) {
         self.enabled = enabled; self.introEnd = introEnd; self.outroLength = outroLength
+        self.introStart = introStart; self.outroTail = outroTail
+    }
+
+    // Times saved before the intro had a start and the outro an end have neither key.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try values.decode(Bool.self, forKey: .enabled)
+        introEnd = try values.decode(Double.self, forKey: .introEnd)
+        outroLength = try values.decode(Double.self, forKey: .outroLength)
+        introStart = try values.decodeIfPresent(Double.self, forKey: .introStart) ?? 0
+        outroTail = try values.decodeIfPresent(Double.self, forKey: .outroTail) ?? 0
+    }
+
+    /// Where the outro starts and ends in a video `duration` long.
+    public func outro(in duration: Double) -> ClosedRange<Double>? {
+        guard outroLength > 0, duration > outroLength else { return nil }
+        return (duration - outroLength)...(duration - min(outroTail, outroLength))
     }
 
     /// Any times the video has room for, as long as the intro ends before the outro starts. Limits on their length
@@ -15,7 +37,10 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
     /// an anime's 90-second opening in a 12-minute episode (#1003).
     public func validationError(duration: Double) -> String? {
         guard duration.isFinite, duration > 0 else { return L10n.text("Wait for the video duration. Live streams cannot use skipping.") }
-        guard introEnd.isFinite, outroLength.isFinite, introEnd >= 0, outroLength >= 0 else { return L10n.text("Enter a valid time such as 01:30.") }
+        guard introEnd.isFinite, outroLength.isFinite, introStart.isFinite, outroTail.isFinite, introEnd >= 0, outroLength >= 0,
+              introStart >= 0, outroTail >= 0 else { return L10n.text("Enter a valid time such as 01:30.") }
+        guard introStart == 0 || introStart < introEnd else { return L10n.text("The intro must start before it ends.") }
+        guard outroTail == 0 || outroTail < outroLength else { return L10n.text("The outro must start before it ends.") }
         guard introEnd + outroLength < duration else { return L10n.text("The intro must end before the outro starts.") }
         return nil
     }
@@ -29,8 +54,12 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
         guard enabled else { return L10n.text("Off") }
         guard hasTimes else { return L10n.text("Not set") }
         var parts: [String] = []
-        if introEnd > 0 { parts.append(L10n.text("Intro %@", Self.formatTime(introEnd))) }
-        if outroLength > 0 { parts.append(L10n.text("Outro %@", "−" + Self.formatTime(outroLength))) }
+        if introEnd > 0 {
+            parts.append(L10n.text("Intro %@", (introStart > 0 ? Self.formatTime(introStart) + "–" : "") + Self.formatTime(introEnd)))
+        }
+        if outroLength > 0 {
+            parts.append(L10n.text("Outro %@", "−" + Self.formatTime(outroLength) + (outroTail > 0 ? "–−" + Self.formatTime(outroTail) : "")))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -40,7 +69,13 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
         guard position.isFinite, duration.isFinite, position >= 0, position <= duration else { return nil }
         var value = self
         value.enabled = true
-        if intro { value.introEnd = position.rounded(.down) } else { value.outroLength = (duration - position).rounded(.up) }
+        if intro {
+            value.introEnd = position.rounded(.down)
+            if value.introStart >= value.introEnd { value.introStart = 0 }
+        } else {
+            value.outroLength = (duration - position).rounded(.up)
+            if value.outroTail >= value.outroLength { value.outroTail = 0 }
+        }
         return value.validationError(duration: duration) == nil ? value : nil
     }
 
@@ -146,6 +181,8 @@ public struct EpisodeSkipPass: Sendable {
     public func outroCountdown(time: Double, duration: Double, settings: EpisodeSkipSettings) -> Double? {
         guard !outroHandled, settings.enabled, settings.outroLength > 0, time.isFinite,
               settings.validationError(duration: duration) == nil else { return nil }
+        // Not once the outro is over: a scene after it plays on.
+        if settings.outroTail > 0, time >= duration - settings.outroTail { return nil }
         let left = duration - settings.outroLength - time
         return left > 0 && left <= Self.outroWarning ? left : nil
     }
@@ -156,12 +193,20 @@ public struct EpisodeSkipPass: Sendable {
     public mutating func target(time: Double, duration: Double, playing: Bool, settings: EpisodeSkipSettings) -> Double? {
         guard playing, time.isFinite, time >= 0, time <= duration, settings.enabled,
               settings.validationError(duration: duration) == nil else { return nil }
+        // An intro from the start is skipped from wherever play begins before its end; one after a cold open once play
+        // reaches it. Either way once, and not after play has passed it.
         if !introHandled {
-            introHandled = true
-            if settings.introEnd > 0, time < settings.introEnd { return settings.introEnd }
+            if settings.introEnd <= 0 || time >= settings.introEnd {
+                introHandled = true
+            } else if time >= settings.introStart {
+                introHandled = true
+                return settings.introEnd
+            }
         }
-        if !outroHandled, settings.outroLength > 0, time >= duration - settings.outroLength {
+        if !outroHandled, let outro = settings.outro(in: duration), time >= outro.lowerBound {
             outroHandled = true
+            // An outro with a scene after it skips to that scene; one that runs to the end, to the end.
+            if settings.outroTail > 0 { return time < outro.upperBound ? outro.upperBound : nil }
             return max(time, duration - 0.05)
         }
         return nil

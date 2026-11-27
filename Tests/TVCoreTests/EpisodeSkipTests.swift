@@ -125,3 +125,51 @@ import Testing
     #expect(both.summary == L10n.text("Intro %@", "01:30") + " · " + L10n.text("Outro %@", "−02:00"))
     #expect(EpisodeSkipSettings(enabled: true, outroLength: 45).summary == L10n.text("Outro %@", "−00:45"))
 }
+
+/// Times saved before the intro had a start and the outro an end still load, as an intro from the start and an outro
+/// to the end (#2653).
+@Test func episodeSkipSettingsDecodeWithoutRanges() throws {
+    let old = try JSONDecoder().decode(EpisodeSkipSettings.self, from: Data(#"{"enabled":true,"introEnd":90,"outroLength":120}"#.utf8))
+    #expect(old == EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120))
+    #expect(old.introStart == 0 && old.outroTail == 0)
+    let saved = EpisodeSkipSettings(enabled: true, introEnd: 224, outroLength: 1_200, introStart: 135, outroTail: 30)
+    #expect(try JSONDecoder().decode(EpisodeSkipSettings.self, from: JSONEncoder().encode(saved)) == saved)
+}
+
+/// An intro after a cold open waits for play to reach it, then skips once; the cold open plays.
+@Test func episodeSkipIntroAfterAColdOpen() {
+    let settings = EpisodeSkipSettings(enabled: true, introEnd: 224, introStart: 135)
+    var pass = EpisodeSkipPass()
+    #expect(pass.target(time: 0, duration: 1_420, playing: true, settings: settings) == nil)
+    #expect(pass.target(time: 100, duration: 1_420, playing: true, settings: settings) == nil)
+    #expect(pass.target(time: 135.5, duration: 1_420, playing: true, settings: settings) == 224)
+    #expect(pass.target(time: 150, duration: 1_420, playing: true, settings: settings) == nil)
+    // Play that begins past it never jumps back into it.
+    var late = EpisodeSkipPass()
+    #expect(late.target(time: 300, duration: 1_420, playing: true, settings: settings) == nil)
+    #expect(late.target(time: 140, duration: 1_420, playing: true, settings: settings) == nil)
+}
+
+/// An outro with a scene after it skips to the scene, which plays, and no countdown runs during it.
+@Test func episodeSkipOutroBeforeAScene() {
+    // 23:40 long: the outro 21:40–23:10, then 30 s of scene.
+    let settings = EpisodeSkipSettings(enabled: true, outroLength: 120, outroTail: 30)
+    #expect(settings.outro(in: 1_420) == 1_300...1_390)
+    var pass = EpisodeSkipPass()
+    #expect(pass.outroCountdown(time: 1_297, duration: 1_420, settings: settings) == 3)
+    #expect(pass.target(time: 1_300, duration: 1_420, playing: true, settings: settings) == 1_390)
+    #expect(pass.target(time: 1_395, duration: 1_420, playing: true, settings: settings) == nil)
+    #expect(EpisodeSkipPass().outroCountdown(time: 1_400, duration: 1_420, settings: settings) == nil)
+    // Reached only inside the scene: nothing to skip back over.
+    var late = EpisodeSkipPass()
+    #expect(late.target(time: 1_400, duration: 1_420, playing: true, settings: settings) == nil)
+}
+
+@Test func episodeSkipRangesMustRunForwards() {
+    #expect(EpisodeSkipSettings(introEnd: 100, introStart: 120).validationError(duration: 1_420) != nil)
+    #expect(EpisodeSkipSettings(outroLength: 100, outroTail: 120).validationError(duration: 1_420) != nil)
+    #expect(EpisodeSkipSettings(introEnd: 224, outroLength: 120, introStart: 135, outroTail: 30).validationError(duration: 1_420) == nil)
+    // Marking an intro's end before its start drops the start.
+    let marked = EpisodeSkipSettings(introEnd: 224, introStart: 135).marking(intro: true, at: 100, duration: 1_420)
+    #expect(marked?.introEnd == 100 && marked?.introStart == 0)
+}

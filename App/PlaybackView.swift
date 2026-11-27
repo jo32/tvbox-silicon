@@ -2167,6 +2167,7 @@ import IOKit.pwr_mgt
                 "screenHz": Self.screenRate,
                 "danmakuState": catalogDanmaku.automaticState, "cached": catalogDanmaku.fromCache,
                 "introEnd": skipSettings.introEnd, "outroLength": skipSettings.outroLength,
+                "introStart": skipSettings.introStart, "outroTail": skipSettings.outroTail,
                 "requestedResumePosition": requestedResumePosition ?? 0, "restoredPosition": restoredPosition ?? 0]
             try? JSONSerialization.data(withJSONObject: report).write(to: URL.cachesDirectory.appending(path: "qa-playback.json"), options: .atomic)
         }
@@ -2653,7 +2654,7 @@ extension PlaybackSession {
               pendingResume == nil, !restoringPosition else { return }
         let length = item.duration.seconds, time = item.currentTime().seconds
         guard length.isFinite, length > 0, time.isFinite else { return }
-        let end = skipSettings.enabled && skipSettings.outroLength > 0 ? length - skipSettings.outroLength : length
+        let end = skipSettings.enabled && skipSettings.outroLength > 0 && skipSettings.outroTail == 0 ? length - skipSettings.outroLength : length
         guard end - time <= Self.upcomingLead else { return }
         upcomingAttempted = true
         let activeGeneration = generation
@@ -2701,7 +2702,7 @@ extension PlaybackSession {
                                 _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
                             }
                         }
-                        if let intro, intro.enabled, intro.introEnd > 0,
+                        if let intro, intro.enabled, intro.introEnd > 0, intro.introStart == 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
                             queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
                             self.upcomingSkippedIntro = true

@@ -592,10 +592,7 @@
 "Undo" = "取り消す";
 "Skipping the outro in %@ s" = "%@ 秒後にエンディングをスキップします";
 "Automatically skip intro and outro" = "オープニングとエンディングを自動スキップ";
-"Intro ends at" = "オープニング終了位置";
-"Outro starts at" = "エンディング開始位置";
 "Use current position (%@)" = "現在の再生位置を使用（%@）";
-"Leave a time empty to keep that segment. Format: minutes:seconds." = "空欄にするとその区間を再生します。形式：分:秒。";
 "Reset intro and outro" = "スキップ設定をリセット";
 "Skip intro / outro" = "オープニング・エンディングをスキップ";
 "Save" = "保存";
@@ -2458,3 +2455,13 @@
 "Intro" = "オープニング";
 "Outro" = "エンディング";
 "Found online in %@. You can change it." = "%@ で見つけた時間です。変更できます。";
+
+// Intro and outro ranges, filled from online times (#2653).
+"Starts at" = "開始";
+"Ends at" = "終了";
+"End" = "最後";
+"Found in %@." = "%@ で見つかりました。";
+"The intro must start before it ends." = "オープニングの開始は終了より前にしてください。";
+"The outro must start before it ends." = "エンディングの開始は終了より前にしてください。";
+"Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip." = "TheIntroDB、IntroDB、TheOtherDB でこのエピソードのオープニングとエンディングを調べます。これらのサービスには再生中の作品が伝わります。見つかった時間は下の空欄に入り、保存するまでは「スキップ」ボタンを表示するだけです。";
+"With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";

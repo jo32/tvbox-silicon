@@ -593,10 +593,7 @@
 "Undo" = "Undo";
 "Skipping the outro in %@ s" = "Skipping the outro in %@ s";
 "Automatically skip intro and outro" = "Automatically skip intro and outro";
-"Intro ends at" = "Intro ends at";
-"Outro starts at" = "Outro starts at";
 "Use current position (%@)" = "Use current position (%@)";
-"Leave a time empty to keep that segment. Format: minutes:seconds." = "Leave a time empty to keep that segment. Format: minutes:seconds.";
 "Reset intro and outro" = "Reset intro and outro";
 "Skip intro / outro" = "Skip intro / outro";
 "Save" = "Save";
@@ -2458,3 +2455,13 @@
 "Intro" = "Intro";
 "Outro" = "Outro";
 "Found online in %@. You can change it." = "Found online in %@. You can change it.";
+
+// Intro and outro ranges, filled from online times (#2653).
+"Starts at" = "Starts at";
+"Ends at" = "Ends at";
+"End" = "End";
+"Found in %@." = "Found in %@.";
+"The intro must start before it ends." = "The intro must start before it ends.";
+"The outro must start before it ends." = "The outro must start before it ends.";
+"Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip." = "Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip.";
+"With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";

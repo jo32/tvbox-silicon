@@ -20,19 +20,29 @@ struct EpisodeSkipSettingsView: View {
     var book = false
     @Environment(\.dismiss) private var dismiss
     @State private var enabled = false
+    /// Each segment's start and end as typed: an empty intro start is the video's start, an empty outro end its end.
+    @State private var introStart = ""
     @State private var intro = ""
     @State private var outro = ""
+    @State private var outroEnd = ""
     private var video: PlaybackSession? { book ? nil : session as? PlaybackSession }
-    /// The service an empty field was filled from, and what it was filled with: said under the field until changed.
-    @State private var introFrom: (source: String, value: String)?
-    @State private var outroFrom: (source: String, value: String)?
+    /// The service a segment was filled from online (#2653), and what it was filled with: said under the segment
+    /// until either time is changed.
+    @State private var introFrom: Found?
+    @State private var outroFrom: Found?
+    private struct Found: Equatable { var source: String, start: String, end: String }
 
     private var draft: EpisodeSkipSettings? {
+        let length = session.skipDuration
         guard let introEnd = intro.isEmpty ? 0 : EpisodeSkipSettings.parseTime(intro),
-              let outroStart = outro.isEmpty ? session.skipDuration : EpisodeSkipSettings.parseTime(outro),
-              outroStart <= session.skipDuration else { return nil }
+              let introBegin = introStart.isEmpty ? 0 : EpisodeSkipSettings.parseTime(introStart),
+              let outroBegin = outro.isEmpty ? length : EpisodeSkipSettings.parseTime(outro),
+              let outroFinish = outroEnd.isEmpty ? length : EpisodeSkipSettings.parseTime(outroEnd),
+              outroBegin <= length, outroFinish <= length else { return nil }
         return EpisodeSkipSettings(enabled: enabled, introEnd: introEnd,
-                                   outroLength: outro.isEmpty ? 0 : session.skipDuration - outroStart)
+                                   outroLength: outro.isEmpty ? 0 : length - outroBegin,
+                                   introStart: introEnd > 0 ? introBegin : 0,
+                                   outroTail: outro.isEmpty ? 0 : length - outroFinish)
     }
     private var issue: String? {
         guard let draft else { return L10n.text("Enter a valid time such as 01:30.") }
@@ -57,34 +67,37 @@ struct EpisodeSkipSettingsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
+                // Online times go into the fields below, not a list of their own: one set of times (#2653).
                 if let video {
                     Section {
-                        // At once, not on Save: the lookup's answer shows here while the sheet is open.
+                        // At once, not on Save: what it finds fills the fields while the sheet is open.
                         Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(
                             get: { video.looksUpSkipsOnline }, set: { video.looksUpSkipsOnline = $0 }))
                             .settingsSwitch()
                             .accessibilityIdentifier("player.skip.online")
-                        OnlineSkipResult(status: video.onlineSkipStatus)
+                        OnlineSkipStatusRow(status: video.onlineSkipStatus)
                     } footer: {
-                        Text(L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves."))
+                        Text(L10n.text("Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip."))
                     }
                 }
-                Section(L10n.text("Intro ends at")) {
-                    timeField(L10n.text("Intro ends at"), text: $intro, identifier: "player.skip.intro")
+                Section(L10n.text("Intro")) {
+                    timeField(L10n.text("Starts at"), text: $introStart, prompt: "00:00", identifier: "player.skip.introStart")
+                    timeField(L10n.text("Ends at"), text: $intro, prompt: "01:30", identifier: "player.skip.intro")
                     Button(L10n.text("Use current position (%@)", EpisodeSkipSettings.formatTime(session.skipPosition))) {
                         intro = EpisodeSkipSettings.formatTime(session.skipPosition); enabled = true
                     }.disabled(session.skipDuration <= 0)
                     .accessibilityIdentifier("player.skip.markIntro")
-                    if let introFrom, introFrom.value == intro { foundNote(introFrom.source) }
+                    if let introFrom, introFrom == Found(source: introFrom.source, start: introStart, end: intro) { foundNote(introFrom.source) }
                 }
-                Section(L10n.text("Outro starts at")) {
-                    timeField(L10n.text("Outro starts at"), text: $outro, identifier: "player.skip.outro")
+                Section(L10n.text("Outro")) {
+                    timeField(L10n.text("Starts at"), text: $outro, prompt: "21:30", identifier: "player.skip.outro")
+                    timeField(L10n.text("Ends at"), text: $outroEnd, prompt: L10n.text("End"), identifier: "player.skip.outroEnd")
                     Button(L10n.text("Use current position (%@)", EpisodeSkipSettings.formatTime(session.skipPosition))) {
                         outro = EpisodeSkipSettings.formatTime(session.skipPosition); enabled = true
                     }.disabled(session.skipDuration <= 0)
                     .accessibilityIdentifier("player.skip.markOutro")
-                    if let outroFrom, outroFrom.value == outro { foundNote(outroFrom.source) }
-                    Text(L10n.text("Leave a time empty to keep that segment. Format: minutes:seconds."))
+                    if let outroFrom, outroFrom == Found(source: outroFrom.source, start: outro, end: outroEnd) { foundNote(outroFrom.source) }
+                    Text(L10n.text("With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds."))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if let issue {
@@ -92,7 +105,7 @@ struct EpisodeSkipSettingsView: View {
                 }
                 Section {
                     Button(L10n.text("Reset intro and outro"), role: .destructive) {
-                        enabled = false; intro = ""; outro = ""
+                        enabled = false; introStart = ""; intro = ""; outro = ""; outroEnd = ""
                     }
                 }
             }
@@ -110,33 +123,40 @@ struct EpisodeSkipSettingsView: View {
         }
         .onAppear {
             session.beginEditingSkip()
-            let value = session.skipSettings
+            let value = session.skipSettings, length = session.skipDuration
             enabled = value.enabled
-            video?.lookUpSkipsOnlineNow()
+            introStart = value.introEnd > 0 && value.introStart > 0 ? EpisodeSkipSettings.formatTime(value.introStart) : ""
             intro = value.introEnd > 0 ? EpisodeSkipSettings.formatTime(value.introEnd) : ""
-            outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(max(0, session.skipDuration - value.outroLength)) : ""
+            outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(max(0, length - value.outroLength)) : ""
+            outroEnd = value.outroLength > 0 && value.outroTail > 0 ? EpisodeSkipSettings.formatTime(max(0, length - value.outroTail)) : ""
+            video?.lookUpSkipsOnlineNow()
             fillFound()
         }
         .onChange(of: video?.onlineSkipStatus) { fillFound() }
         .onDisappear { session.endEditingSkip() }
         #if os(macOS)
-        .frame(width: 500, height: 570)
+        .frame(width: 500, height: 640)
         #else
         .presentationDetents([.large])
         #endif
     }
 
-    /// Online times fill a field the viewer left empty (#2653): an intro that starts the episode, an outro that ends
-    /// it, the only kinds the viewer's own times hold. They stay editable, and are the viewer's own once saved.
+    /// Online times fill a segment the viewer left empty (#2653). They stay editable, and are the viewer's own, for
+    /// every episode, once saved; times the viewer set are never replaced.
     private func fillFound() {
         guard case .found(let found)? = video?.onlineSkipStatus else { return }
-        if intro.isEmpty, let source = found.introSource,
-           let skip = found.skips.first(where: { $0.kind == .intro && $0.start < 1 }) {
-            intro = EpisodeSkipSettings.formatTime(skip.end); introFrom = (source, intro)
+        let length = session.skipDuration
+        if intro.isEmpty, introStart.isEmpty, let source = found.introSource,
+           let skip = found.skips.first(where: { $0.kind == .intro }) {
+            introStart = skip.start >= 1 ? EpisodeSkipSettings.formatTime(skip.start) : ""
+            intro = EpisodeSkipSettings.formatTime(skip.end)
+            introFrom = Found(source: source, start: introStart, end: intro)
         }
-        if outro.isEmpty, let source = found.outroSource, session.skipDuration > 0,
-           let skip = found.skips.first(where: { $0.kind == .outro && $0.end > session.skipDuration - 1 }) {
-            outro = EpisodeSkipSettings.formatTime(skip.start); outroFrom = (source, outro)
+        if outro.isEmpty, outroEnd.isEmpty, length > 0, let source = found.outroSource,
+           let skip = found.skips.first(where: { $0.kind == .outro }) {
+            outro = EpisodeSkipSettings.formatTime(skip.start)
+            outroEnd = skip.end < length - 1 ? EpisodeSkipSettings.formatTime(skip.end) : ""
+            outroFrom = Found(source: source, start: outro, end: outroEnd)
         }
     }
 
@@ -146,23 +166,26 @@ struct EpisodeSkipSettingsView: View {
 
     /// A time typed in switches automatic skipping on, as Use Current Position does. Saved with the switch at the top
     /// still off, the times skipped nothing, and nothing said why (#865).
-    private func timeField(_ title: String, text: Binding<String>, identifier: String) -> some View {
-        TextField(title, text: Binding(get: { text.wrappedValue }, set: { value in
-            text.wrappedValue = value
-            if !value.isEmpty { enabled = true }
-        }), prompt: Text("01:30"))
-            .monospacedDigit()
-            .accessibilityIdentifier(identifier)
-            #if os(iOS)
-            .keyboardType(.numbersAndPunctuation)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            #endif
+    private func timeField(_ title: String, text: Binding<String>, prompt: String, identifier: String) -> some View {
+        LabeledContent(title) {
+            TextField(title, text: Binding(get: { text.wrappedValue }, set: { value in
+                text.wrappedValue = value
+                if !value.isEmpty { enabled = true }
+            }), prompt: Text(prompt))
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .accessibilityIdentifier(identifier)
+                #if os(iOS)
+                .keyboardType(.numbersAndPunctuation)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                #endif
+        }
     }
 }
 
-/// What the online lookup found for the playing episode (#2653), under its switch in the sheet.
-private struct OnlineSkipResult: View {
+/// Where the online lookup for the playing episode stands (#2653), under its switch; what it found is in the fields.
+private struct OnlineSkipStatusRow: View {
     let status: PlaybackSession.OnlineSkipStatus
 
     var body: some View {
@@ -176,12 +199,9 @@ private struct OnlineSkipResult: View {
         case .found(let found) where found.skips.isEmpty:
             Text(L10n.text("No intro or outro times found for this episode.")).font(.footnote).foregroundStyle(.secondary)
         case .found(let found):
-            ForEach(found.skips, id: \.self) { skip in
-                LabeledContent(skip.kind == .intro ? L10n.text("Intro") : L10n.text("Outro"),
-                               value: EpisodeSkipSettings.formatTime(skip.start) + " – " + EpisodeSkipSettings.formatTime(skip.end)
-                                + ((skip.kind == .intro ? found.introSource : found.outroSource).map { " · " + $0 } ?? ""))
-                    .monospacedDigit()
-            }
+            let sources = [found.introSource, found.outroSource].compactMap { $0 }
+            Text(L10n.text("Found in %@.", sources.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: ", ")))
+                .font(.footnote).foregroundStyle(.secondary)
         }
     }
 }
