@@ -3177,6 +3177,8 @@ private struct TVPlayURLPage: View {
     static let shared = ContributorList()
     /// At most this many rows; the list is ranked, so the rest have the fewest commits.
     static let shown = 20
+    /// Rows shown before the reader asks for the rest; the remainder folds behind a Show All row.
+    static let collapsed = 3
     private(set) var people: [Contributor]
     private var checking = false
     private let defaults: UserDefaults
@@ -3227,11 +3229,12 @@ private struct ContributorAvatar: View {
 #if os(tvOS)
 /// Everyone with commits in the last 30 days, most first. Apple TV can't open their GitHub pages, so the rows only show them.
 struct ContributorsSection: View {
+    @State private var expanded = false
     private var list: ContributorList { .shared }
     var body: some View {
         if !list.people.isEmpty {
             TVSettingsSection(title: L10n.text("Contributors"), footer: L10n.text("Ranked by commits in the last 30 days.")) {
-                ForEach(list.people.prefix(ContributorList.shown)) { person in
+                ForEach(list.people.prefix(expanded ? ContributorList.shown : ContributorList.collapsed)) { person in
                     HStack(spacing: 18) {
                         ContributorAvatar(person: person, size: 52)
                         Text(person.login).font(.system(size: 29, weight: .medium)).lineLimit(1)
@@ -3243,6 +3246,9 @@ struct ContributorsSection: View {
                     .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
                     .accessibilityElement(children: .combine)
                 }
+                if list.people.count > ContributorList.collapsed {
+                    TVSettingsAction(title: L10n.text(expanded ? "Show Less" : "Show All")) { withAnimation { expanded.toggle() } }
+                }
             }
         }
     }
@@ -3251,11 +3257,12 @@ struct ContributorsSection: View {
 /// Everyone with commits in the last 30 days, most first; a row opens the person's GitHub page.
 struct ContributorsSection: View {
     @Environment(\.openURL) private var openURL
+    @State private var expanded = false
     private var list: ContributorList { .shared }
     var body: some View {
         if !list.people.isEmpty {
             Section {
-                ForEach(list.people.prefix(ContributorList.shown)) { person in
+                ForEach(list.people.prefix(expanded ? ContributorList.shown : ContributorList.collapsed)) { person in
                     Button { if let profile = person.profile { openURL(profile) } } label: {
                         HStack(spacing: 8) {
                             Label { Text(person.login).lineLimit(1) } icon: { ContributorAvatar(person: person, size: FormMetrics.icon) }
@@ -3265,6 +3272,13 @@ struct ContributorsSection: View {
                         }
                     }
                     .tint(.primary)
+                    .formRowButton()
+                }
+                if list.people.count > ContributorList.collapsed {
+                    Button { withAnimation { expanded.toggle() } } label: {
+                        Label(L10n.text(expanded ? "Show Less" : "Show All"), systemImage: expanded ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(.primary)
+                    }
                     .formRowButton()
                 }
             } header: {
