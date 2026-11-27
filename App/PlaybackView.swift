@@ -686,7 +686,12 @@ import IOKit.pwr_mgt
                                            bilibiliPart: channel.bilibiliPart)
                     do {
                         let prepared = try await self.prepare(reopened)
-                        guard self.generation == active, !Task.isCancelled, !prepared.matroska else { return Self.stopAdapter(prepared) }
+                        guard self.generation == active, !Task.isCancelled else { return Self.stopAdapter(prepared) }
+                        if prepared.matroska {
+                            Self.stopAdapter(prepared)
+                            self.handleUnplayableMatroska()
+                            return
+                        }
                         if position > 0 { self.pendingResume = position }
                         self.playing = reopened; self.automatic = prepared.url
                         self.configure(reopened, url: prepared.url, generation: active)
@@ -988,6 +993,18 @@ import IOKit.pwr_mgt
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
         switchNotice = nil; error = message; loading = false
+    }
+
+    /// Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: switch to the drive's
+    /// transcoded line, or stop loading and show an error instead of leaving the spinner running.
+    private func handleUnplayableMatroska() {
+        if let line = onUnplayableFile?() {
+            Diagnostics.shared.record(.warning, "player", "mkv original; switching to line=\(line)")
+            switchNotice = L10n.text("The original file is MKV, which Apple devices can't play, so the %@ line is playing instead.", line)
+            return
+        }
+        Diagnostics.shared.record(.warning, "player", "mkv original; no transcoded line")
+        error = L10n.text("This video is an MKV file, which Apple devices can't play."); loading = false
     }
 
     func setSpeed(_ speed: Float) {
@@ -1391,15 +1408,7 @@ import IOKit.pwr_mgt
             #endif
             // Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: say so now, or
             // switch to the drive's transcoded line, instead of letting AVPlayer fail with a vague error.
-            if prepared.matroska {
-                if let line = self.onUnplayableFile?() {
-                    Diagnostics.shared.record(.warning, "player", "mkv original; switching to line=\(line)")
-                    self.switchNotice = L10n.text("The original file is MKV, which Apple devices can't play, so the %@ line is playing instead.", line)
-                    return
-                }
-                Diagnostics.shared.record(.warning, "player", "mkv original; no transcoded line")
-                self.error = L10n.text("This video is an MKV file, which Apple devices can't play."); self.loading = false; return
-            }
+            if prepared.matroska { self.handleUnplayableMatroska(); return }
             let address = prepared.url
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
