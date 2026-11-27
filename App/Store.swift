@@ -58,7 +58,6 @@ import TVCore
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
         didSet {
-            episodeError = nil
             if let channel = playing {
                 if let context = channel.historyContext { lineFallback.track(context) } else { lineFallback.reset() }
                 if let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) }
@@ -1253,7 +1252,6 @@ import TVCore
         PlaybackSession.current?.saveHistory()
         let resume = channel.historyContext.flatMap { context in playbackHistory.entries.first { $0.id == context.id } }
             .flatMap { $0.context.episodeID == channel.historyContext?.episodeID ? $0.resumePosition(for: episode, among: catalog.video.episodes) : nil }
-            ?? (alternateLines(for: channel).contains(episode) ? channel.resumePosition.flatMap { $0 > 1 ? $0 : nil } : nil)
         episodeTask = Task { [weak self] in
             guard let self else { return }
             defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
