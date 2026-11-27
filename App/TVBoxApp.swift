@@ -8,6 +8,11 @@ import TVCore
     #else
     @State private var store = Store()
     #endif
+    #if !os(tvOS)
+    /// The app's own light/dark choice, for people whose system setting differs from what they want
+    /// to watch posters under ("system" follows the OS, as before) (#2592).
+    @AppStorage("app.appearance") private var appearance = "system"
+    #endif
     @State private var updates = Updates()
     @State private var announcements = Announcements()
     #if os(iOS)
@@ -44,6 +49,8 @@ import TVCore
                 #if !os(tvOS)
                 // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
                 .modifier(ThemeTint())
+                // nil keeps following the system, as it did before the choice existed (#2592).
+                .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
                 #if os(macOS)
