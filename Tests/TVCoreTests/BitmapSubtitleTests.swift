@@ -24,6 +24,53 @@ import Testing
         #expect(SubtitleTranslation.sources(drawn.tracks, detected: [:], target: .init(identifier: "en")).isEmpty)
     }
 
+    @Test func pgsPlacementUsesAuthoredCoordinatesAndKeepsTheWholeCueVisible() {
+        let source = CGSize(width: 1920, height: 1080)
+        // The one rectangle includes the gap between the Chinese and English lines.
+        let frame = StyledSubtitleFrame(image: nil, rect: CGRect(x: 480, y: 120, width: 800, height: 160),
+                                        size: source, fitsCanvas: true)
+        let video = CGRect(x: -100, y: 58, width: 1200, height: 400)
+        let viewport = CGRect(x: 0, y: 0, width: 1000, height: 600)
+        let area = video.intersection(viewport)
+        let original = PGSSubtitleStyle().imageRect(for: frame, in: CGRect(origin: .zero, size: source),
+                                                    visible: CGRect(origin: .zero, size: source))
+        #expect(original == frame.rect)
+        let normal = PGSSubtitleStyle().imageRect(for: frame, in: video, visible: viewport)
+        let smaller = PGSSubtitleStyle(scale: 0.5).imageRect(for: frame, in: video, visible: viewport)
+        #expect(abs(smaller.midX - normal.midX) < 0.001 && abs(smaller.midY - normal.midY) < 0.001)
+        #expect(abs(smaller.width * 2 - normal.width) < 0.001 && abs(smaller.height * 2 - normal.height) < 0.001)
+        for x in [0.0, 1.0] {
+            for y in [0.0, 1.0] {
+                let rect = PGSSubtitleStyle(scale: 2, position: CGPoint(x: x, y: y)).imageRect(for: frame, in: video, visible: viewport)
+                #expect(area.contains(rect))
+                #expect(abs(rect.width / rect.height - 5) < 0.001)
+                #expect(abs((x == 0 ? rect.minX - area.minX : rect.maxX - area.maxX)) < 0.001)
+                #expect(abs((y == 0 ? rect.minY - area.minY : rect.maxY - area.maxY)) < 0.001)
+            }
+        }
+        let full = StyledSubtitleFrame(image: nil, rect: CGRect(origin: .zero, size: source), size: source, fitsCanvas: true)
+        let bounded = PGSSubtitleStyle(scale: 2).imageRect(for: full, in: video, visible: viewport)
+        #expect(area.contains(bounded) && bounded.height == area.height)
+        #expect(abs(bounded.width / bounded.height - source.width / source.height) < 0.001)
+        #expect(PGSSubtitleStyle().imageRect(for: frame, in: video, visible: .zero) == .zero)
+    }
+
+    @Test func pgsPreferencesAreIndependentOfTextAndRestoreSourceDefaults() throws {
+        let name = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var text = SubtitleStyle()
+        text.size = 7
+        text.save(defaults)
+        #expect(PGSSubtitleStyle.load(defaults) == PGSSubtitleStyle())
+        let custom = PGSSubtitleStyle(scale: 1.5, position: CGPoint(x: 0.2, y: 0.7))
+        custom.save(defaults)
+        #expect(PGSSubtitleStyle.load(defaults) == custom)
+        PGSSubtitleStyle().save(defaults)
+        #expect(PGSSubtitleStyle.load(defaults).position == nil && PGSSubtitleStyle.load(defaults).scale == 1)
+        #expect(SubtitleStyle.load(defaults) == text)
+    }
+
     @Test func cuesLastUntilTheNextOne() {
         let track = BitmapSubtitleTrack(name: "PGS", videoSize: CGSize(width: 1920, height: 1080))
         let image = BitmapSubtitleTrack.image([UInt8](repeating: 255, count: 4 * 4 * 4), width: 4, height: 4)!

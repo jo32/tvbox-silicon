@@ -2415,3 +2415,8 @@
 "This program can no longer be replayed." = "この番組は見逃し再生の期間が終わりました。";
 
 "Search results reached the memory limit. Try a more specific search." = "検索結果がメモリ上限に達しました。検索条件を絞り込んでください。";
+
+"PGS Bitmap Subtitles" = "PGS 画像字幕";
+"Use Source Position" = "映像の指定位置に戻す";
+"Source Position" = "映像の指定位置";
+"Drag the bilingual subtitle in the preview to move both lines." = "プレビューの二言語字幕をドラッグすると、2 行を一緒に移動できます。";

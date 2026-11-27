@@ -11,6 +11,7 @@ import TVCore
     /// The picture's size, to place the lines on the picture rather than on the whole view.
     private(set) var pictureSize: CGSize = .zero
     private(set) var style = SubtitleStyle.load()
+    private(set) var pgsStyle = PGSSubtitleStyle.load()
     /// How late the lines show (#599). 0 keeps AVPlayer's own timing.
     private(set) var delay = SubtitleDelay.load()
     /// What AVPlayer handed over, waiting for its turn while `delay` is on.
@@ -51,6 +52,7 @@ import TVCore
         super.init()
         schedule.delay = delay
         NotificationCenter.default.addObserver(self, selector: #selector(styleChanged), name: SubtitleStyle.changed, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pgsStyleChanged), name: PGSSubtitleStyle.changed, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(delayChanged), name: SubtitleDelay.changed, object: nil)
     }
 
@@ -234,6 +236,7 @@ import TVCore
         return tracks.first { $0.position == position && (title == nil || $0.name == title) }
     }
 
+    @objc private func pgsStyleChanged() { pgsStyle = PGSSubtitleStyle.load() }
     @objc private func styleChanged() { style = SubtitleStyle.load() }
 
     @objc private func delayChanged() {
@@ -277,8 +280,8 @@ struct SubtitleOverlay: View {
         GeometryReader { proxy in
             if !cues.native, cues.styled.isActive {
                 let picture = cues.videoRect(in: proxy.size, fills: fills, stretches: stretches)
-                let canvas = cues.styled.frame?.canvasRect(in: picture, visible: CGRect(origin: .zero, size: proxy.size)) ?? picture
-                StyledSubtitleCanvas(styled: cues.styled, picture: canvas, video: cues.pictureSize)
+                StyledSubtitleCanvas(styled: cues.styled, picture: picture, visible: CGRect(origin: .zero, size: proxy.size),
+                                     pgsStyle: cues.pgsStyle, video: cues.pictureSize)
             }
             if !cues.native, !cues.lines.isEmpty {
                 let picture = cues.pictureRect(in: proxy.size, fills: fills || stretches)

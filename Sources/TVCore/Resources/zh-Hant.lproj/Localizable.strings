@@ -2415,3 +2415,8 @@
 "This program can no longer be replayed." = "這個節目已過了回看期限。";
 
 "Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";
+
+"PGS Bitmap Subtitles" = "PGS 點陣字幕";
+"Use Source Position" = "回復片源位置";
+"Source Position" = "片源位置";
+"Drag the bilingual subtitle in the preview to move both lines." = "在預覽中拖曳雙語字幕，可以一起移動兩行。";

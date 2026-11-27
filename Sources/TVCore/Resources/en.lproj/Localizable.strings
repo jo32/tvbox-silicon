@@ -2415,3 +2415,8 @@
 "This program can no longer be replayed." = "This program can no longer be replayed.";
 
 "Search results reached the memory limit. Try a more specific search." = "Search results reached the memory limit. Try a more specific search.";
+
+"PGS Bitmap Subtitles" = "PGS Bitmap Subtitles";
+"Use Source Position" = "Use Source Position";
+"Source Position" = "Source Position";
+"Drag the bilingual subtitle in the preview to move both lines." = "Drag the bilingual subtitle in the preview to move both lines.";

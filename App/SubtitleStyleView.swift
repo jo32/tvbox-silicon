@@ -302,6 +302,11 @@ private struct FormSubtitleStylePage: View {
                     Text(L10n.text("Positive values show subtitles later. Applies to the video playing now."))
                 }
                 Section {
+                    SettingsLinkRow(symbol: "captions.bubble", tint: .indigo, title: L10n.text("PGS Bitmap Subtitles")) {
+                        PGSSubtitleStyleView()
+                    }
+                }
+                Section {
                     Button(L10n.text("Reset to Standard")) { style = SubtitleStyle() }
                         .formRowButton()
                         .disabled(style == SubtitleStyle())
@@ -417,6 +422,9 @@ private struct TVSubtitleStylePage: View {
                         }
                     }
                     TVSettingsSection {
+                        TVSettingsLink(title: L10n.text("PGS Bitmap Subtitles")) { PGSSubtitleStyleView() }
+                    }
+                    TVSettingsSection {
                         TVSettingsAction(title: L10n.text("Reset to Standard")) { style = SubtitleStyle() }
                             .disabled(style == SubtitleStyle())
                     }
@@ -431,7 +439,13 @@ private struct TVSubtitleStylePage: View {
         .padding(.horizontal, Layout.gutter)
         .screenBackdrop()
         .screenTitle("")
-        .fullScreenCover(isPresented: $positioning) { TVSubtitlePositioner(style: $style) }
+        .fullScreenCover(isPresented: $positioning) {
+            TVSubtitlePositioner {
+                SubtitlePreview(style: $style, guides: true, cornerRadius: 0)
+            } move: { dx, dy in
+                style = style.moved(dx: dx, dy: dy, from: style, snaps: false)
+            }
+        }
     }
 
     private static func next<Choice: CaseIterable & Equatable>(_ choice: Choice) -> Choice where Choice.AllCases == [Choice] {
@@ -442,15 +456,16 @@ private struct TVSubtitleStylePage: View {
 
 /// The subtitle over the whole screen, at the size it plays: each press of an arrow (or swipe) moves it a step,
 /// Select or Menu puts it down. The picture is the only thing that can be focused, so the arrows can't leave it.
-private struct TVSubtitlePositioner: View {
-    @Binding var style: SubtitleStyle
+struct TVSubtitlePositioner<Preview: View>: View {
+    @ViewBuilder var preview: Preview
+    let move: (Double, Double) -> Void
     @Environment(\.dismiss) private var dismiss
     private let step = 0.02
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black
-            SubtitlePreview(style: $style, guides: true, cornerRadius: 0)
+            preview
             Label(L10n.text("Swipe or press the arrows to move the subtitle. Press Select when it's in place."),
                   systemImage: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: 26, weight: .medium))
@@ -462,10 +477,10 @@ private struct TVSubtitlePositioner: View {
                 .buttonStyle(BareButtonStyle())
                 .onMoveCommand { direction in
                     switch direction {
-                    case .up: style = style.moved(dx: 0, dy: -step, from: style, snaps: false)
-                    case .down: style = style.moved(dx: 0, dy: step, from: style, snaps: false)
-                    case .left: style = style.moved(dx: -step, dy: 0, from: style, snaps: false)
-                    case .right: style = style.moved(dx: step, dy: 0, from: style, snaps: false)
+                    case .up: move(0, -step)
+                    case .down: move(0, step)
+                    case .left: move(-step, 0)
+                    case .right: move(step, 0)
                     @unknown default: break
                     }
                 }

@@ -423,7 +423,9 @@ them. Now the player draws them over the video like ASS.
 - **Drawing.** `BitmapSubtitleRenderer` composites the pictures on screen at a moment onto the stream's canvas
   (PGS presentation size, VobSub frame size, else the video's) and returns a new image only when the set of
   cues changes. A PGS canvas fits inside the visible picture with square pixels, including when a cropped film
-  is wider than the original subtitle canvas. VobSub keeps the DVD picture's display proportions.
+  is wider than the original subtitle canvas. Settings › Playback › Subtitle Style › PGS Bitmap Subtitles previews
+  a bilingual cue. By default each cue keeps its authored size and position. Scaling or moving a cue acts on
+  all of its lines together and keeps the bitmap inside the visible picture. VobSub keeps the DVD picture's display proportions.
 - **Limits.**
   - Standalone `.sup`/`.idx`+`.sub` files are not read; only tracks inside a file the repackager opens.
   - DVB subtitles (`dvb_subtitle`) are not included.
