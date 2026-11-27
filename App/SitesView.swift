@@ -3516,7 +3516,7 @@ extension VideoDetailView {
                             if let seasonControl = embed?.seasonControl {
                                 seasonControl
                             } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                                SeasonsButton(video: video, client: client, capsule: true)
+                                SeasonsButton(video: video, client: client, capsule: true, appColorScheme: embed?.appColorScheme)
                             }
                             if items.count > (compact ? 5 : 2) {
                                 Button { episodePage = nil; showsAllEpisodes = true } label: {
@@ -3898,7 +3898,7 @@ extension VideoDetailView {
                 if let seasonControl = embed.seasonControl {
                     seasonControl
                 } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                    SeasonsButton(video: video, client: client)
+                    SeasonsButton(video: video, client: client, appColorScheme: embed.appColorScheme)
                 }
             }
             .focusSection()
@@ -4918,6 +4918,9 @@ struct SeasonsButton: View {
     let client: CatalogClient
     /// In the episode header, match the glass capsule used by All.
     var capsule = false
+    /// The app's light or dark look when the page forces its own (Discover detail): the sheet's rows otherwise
+    /// inherit the page's white text while the sheet background follows the app, going white on white (#2536).
+    var appColorScheme: ColorScheme? = nil
     @Environment(Store.self) private var store
     @Environment(\.openRoute) private var openRoute
     @State private var showsSeasons = false
@@ -4955,7 +4958,7 @@ struct SeasonsButton: View {
         #endif
         .sheet(isPresented: $showsSeasons) {
             // Pushed on the page's own stack; with none to push on, inside the sheet.
-            SeasonsSheet(video: video, client: client, open: openRoute.map { openRoute in
+            SeasonsSheet(video: video, client: client, appColorScheme: appColorScheme, open: openRoute.map { openRoute in
                 { found in
                     showsSeasons = false
                     openRoute(Route { AnyView(CatalogDestination(video: found.video, client: client)) })
@@ -4977,6 +4980,9 @@ struct SeasonsButton: View {
 private struct SeasonsSheet: View {
     let video: Video
     let client: CatalogClient
+    /// The app's look: a Discover page paints itself in its artwork's colours, so the sheet's inherited text would
+    /// otherwise be white against the app-coloured background (#2536). Mirrors All Episodes' `AppColorScheme`.
+    let appColorScheme: ColorScheme?
     let open: ((SeasonTitles.Found) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var found: [SeasonTitles.Found]?
@@ -5007,6 +5013,11 @@ private struct SeasonsSheet: View {
             #endif
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
         }
+        #if !os(tvOS)
+        // The Discover page forces its artwork's colour scheme onto everything it presents; the sheet's rows must
+        // use the app's own look instead (All Episodes does the same), or the text is white on white in daylight (#2536).
+        .modifier(AppColorScheme(scheme: appColorScheme))
+        #endif
         #if os(iOS)
         .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])
