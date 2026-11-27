@@ -1402,6 +1402,9 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     static let shared = PlayerWindowController()
     private var window: PlaybackWindow?
     private let session = PlaybackSession()
+    /// Owned here so hiding the window for Picture in Picture never stops it (#2533, #2318, #1847).
+    private let pip = DesktopPictureInPicture()
+    private var pipWindow = MacPiPWindowState()
     private var onClose: (() -> Void)?
     private weak var store: Store?
     /// The channel the window was given last, so the store setting the same one again doesn't start it over.
@@ -1427,6 +1430,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     private func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
         self.onClose = onClose
+        let previous = presented
         presented = channel
         let target: PlaybackWindow
         if let window { target = window }
@@ -1448,14 +1452,63 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             // A new window: its first picture takes the Default Window Size; later ones keep what the viewer has.
             target.sizesFirstPicture = true
             window = target
+            wirePiP()
         }
         target.title = channel.name
         // The next episode updates the view in place: a new one would rebuild the player view, a flash between episodes.
-        let root = DesktopPlaybackRoot(channel: channel, session: session, window: target, store: store)
+        let root = DesktopPlaybackRoot(channel: channel, session: session, pip: pip, window: target, store: store)
         if let host = target.contentView as? DesktopHostingView<DesktopPlaybackRoot> { host.rootView = root }
         else { target.contentView = DesktopHostingView(rootView: root) }
         startCatalogPlayback(session, channel: channel, store: store)
-        target.makeKeyAndOrderFront(nil)
+        let continuing = isContinuing(channel, after: previous, store: store)
+        switch pipWindow.willPresent(continuing: continuing) {
+        case .restoreWindow:
+            target.makeKeyAndOrderFront(nil)
+        case .stopPiPAndShowWindow:
+            pip.stop()
+            target.makeKeyAndOrderFront(nil)
+        case .none, .hideWindow, .exitFullScreenThenHide, .closeWindow:
+            break
+        }
+    }
+
+    /// True when `channel` continues the current playback (the next episode of the same series, or the next file in
+    /// the same Cloud Files folder) so Picture in Picture plays on without popping the large window back up (#1847).
+    private func isContinuing(_ channel: Channel, after previous: Channel?, store: Store) -> Bool {
+        guard let previous else { return false }
+        if let scope = channel.skipScope, scope == previous.skipScope { return true }
+        if let files = store.filesFolder?.files,
+           files.contains(where: { $0.id == channel.id }),
+           files.contains(where: { $0.id == previous.id }) { return true }
+        return false
+    }
+
+    private func wirePiP() {
+        pip.subtitles = session.subtitles
+        pip.enhancer = session.enhancer
+        pip.onDidStart = { [weak self] in
+            guard let self, let window = self.window, self.session.error == nil else { return }
+            switch self.pipWindow.didStart(windowIsFullScreen: window.styleMask.contains(.fullScreen)) {
+            case .hideWindow:
+                window.orderOut(nil)
+            case .exitFullScreenThenHide:
+                window.toggleFullScreen(nil)
+            case .none, .restoreWindow, .closeWindow, .stopPiPAndShowWindow:
+                break
+            }
+        }
+        pip.onRestore = { [weak self] in
+            guard let self else { return }
+            if self.pipWindow.willRestore() == .restoreWindow {
+                self.window?.makeKeyAndOrderFront(nil)
+            }
+        }
+        pip.onDidStop = { [weak self] in
+            guard let self else { return }
+            if self.pipWindow.didStop() == .closeWindow {
+                self.close()
+            }
+        }
     }
 
     private func close() { window?.close() }
@@ -1466,8 +1519,14 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     func windowWillStartLiveResize(_ notification: Notification) { window?.startsDrag() }
 
+    func windowDidExitFullScreen(_ notification: Notification) {
+        if pipWindow.didExitFullScreen() == .hideWindow { window?.orderOut(nil) }
+    }
+
     func windowWillClose(_ notification: Notification) {
         presented = nil
+        pipWindow.windowClosed()
+        pip.reset()
         session.stop()
         window?.contentView = nil
         window = nil
@@ -1869,22 +1928,23 @@ private struct DesktopBoostLabel: View {
 private struct DesktopPlaybackRoot: View {
     let channel: Channel
     let session: PlaybackSession
+    let pip: DesktopPictureInPicture
     let window: PlaybackWindow
     let store: Store
-    var body: some View { DesktopPlaybackView(channel: channel, session: session, window: window).environment(store) }
+    var body: some View { DesktopPlaybackView(channel: channel, session: session, pip: pip, window: window).environment(store) }
 }
 
 private struct DesktopPlaybackView: View {
     @Environment(Store.self) private var store
     let channel: Channel
     @Bindable var session: PlaybackSession
+    let pip: DesktopPictureInPicture
     let window: PlaybackWindow
     @State private var fillsFrame = false
     @State private var floats = false
     @State private var idle = ChromeIdle()
     /// The seek bar's position and the frame over its handle, as on iPhone.
     @State private var clock = PlayerClock()
-    @State private var pip = DesktopPictureInPicture()
     /// The seek bar held: the middle buttons and the logo's row make way for the frame over the handle, as on iPhone.
     @State private var scrubbing = false
     @State private var speed: Float = 1
@@ -1995,17 +2055,6 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
-        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
-        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
-        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
-        .onChange(of: pip.floating) { _, floating in
-            if floating {
-                guard session.error == nil else { return }
-                window.miniaturize(nil)
-            } else {
-                window.deminiaturize(nil)
-            }
-        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -2027,6 +2076,7 @@ private struct DesktopPlaybackView: View {
             clock.attach(session.player)
             speed = session.player.defaultRate
             pip.subtitles = session.subtitles
+            pip.enhancer = session.enhancer
         }
         // Played here again (Space, say): the other device no longer has it to itself.
         .onChange(of: session.paused) { _, paused in
@@ -2044,7 +2094,9 @@ private struct DesktopPlaybackView: View {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
         .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environment(store) }
-        .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach(); clock.detach(); pip.stop() }
+        // Do not stop PiP here: hiding the window for Picture in Picture (`orderOut`) must leave the floating window
+        // playing (#2533, #2318). `PlayerWindowController.windowWillClose` stops PiP when the window actually closes.
+        .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach(); clock.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
         .dropDestination(for: URL.self) { urls, _ in
@@ -2454,9 +2506,12 @@ private struct DesktopVideoView: NSViewRepresentable {
     let player: AVPlayer
     let fillsFrame: Bool
     let pip: DesktopPictureInPicture
+    final class Coordinator { weak var pip: DesktopPictureInPicture? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> DesktopVideoNSView {
         let view = DesktopVideoNSView()
         view.playerLayer.player = player
+        context.coordinator.pip = pip
         pip.attach(view.playerLayer)
         return view
     }
@@ -2464,8 +2519,11 @@ private struct DesktopVideoView: NSViewRepresentable {
         if view.playerLayer.player !== player { view.playerLayer.player = player }
         let gravity: AVLayerVideoGravity = fillsFrame ? .resizeAspectFill : .resizeAspect
         if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
+        context.coordinator.pip = pip
     }
-    static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: ()) { view.playerLayer.player = nil }
+    static func dismantleNSView(_ view: DesktopVideoNSView, coordinator: Coordinator) {
+        if coordinator.pip?.active != true { view.playerLayer.player = nil }
+    }
 }
 
 /// Hosts the Mac player's SwiftUI controls: `mouseDownCanMoveWindow` is false so dragging SwiftUI controls like
@@ -2492,11 +2550,13 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
-    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
-    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
-    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
+    /// Suspended while PiP runs so the enhancement surface doesn't draw or process frames off screen.
+    @ObservationIgnored var enhancer: VideoEnhancer?
+    @ObservationIgnored var onDidStart: (() -> Void)?
+    @ObservationIgnored var onRestore: (() -> Void)?
+    @ObservationIgnored var onDidStop: (() -> Void)?
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var observation: NSKeyValueObservation?
 
@@ -2526,29 +2586,57 @@ private final class DesktopVideoNSView: NSView {
         if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
     }
 
+    func reset() {
+        stop()
+        observation = nil
+        controller?.delegate = nil
+        controller = nil
+        possible = false
+        active = false
+        subtitles?.native = false
+        enhancer?.suspended = false
+        onDidStart = nil
+        onRestore = nil
+        onDidStop = nil
+    }
+
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = true
             self?.subtitles?.native = true
+            self?.enhancer?.suspended = true
         }
     }
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.floating = true }
+        Task { @MainActor [weak self] in
+            self?.onDidStart?()
+        }
     }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
-            self?.active = false
-            self?.floating = false
-            self?.subtitles?.native = false
+            guard let self else { return }
+            active = false
+            subtitles?.native = false
+            enhancer?.suspended = false
+            onDidStop?()
         }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController,
                                                restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
-        completionHandler(true)
+        nonisolated(unsafe) let done = completionHandler
+        Task { @MainActor [weak self] in
+            self?.onRestore?()
+            done(true)
+        }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         let detail = Diagnostics.describe(error)
-        Task { @MainActor in Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)") }
+        Task { @MainActor [weak self] in
+            self?.active = false
+            self?.subtitles?.native = false
+            self?.enhancer?.suspended = false
+            Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)")
+        }
     }
 }
 
