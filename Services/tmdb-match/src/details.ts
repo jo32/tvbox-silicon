@@ -42,6 +42,8 @@ export interface Details {
   id: number;
   name: string;
   originalName: string;
+  /** Every other name TMDB lists for the work: other titles and translated names. */
+  otherNames: string[];
   tagline: string;
   overview: string;
   year: number | null;
@@ -154,7 +156,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   const lang = language.split("-")[0];
   const item = await tmdb.get(`/${type}/${id}`, {
     language,
-    append_to_response: type === "tv" ? "aggregate_credits,images,translations,recommendations,similar,videos,external_ids" : "credits,images,translations,recommendations,similar,videos",
+    append_to_response: type === "tv" ? "aggregate_credits,alternative_titles,images,translations,recommendations,similar,videos,external_ids" : "credits,alternative_titles,images,translations,recommendations,similar,videos",
     include_image_language: `${lang},en,null`,
     include_video_language: `${lang},en,null`,
   });
@@ -210,6 +212,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     id,
     name: clip(tv ? item.name : item.title, 200) || translated(item.translations, language, tv ? "name" : "title"),
     originalName: clip(tv ? item.original_name : item.original_title, 200),
+    otherNames: otherNames(item, tv),
     tagline: clip(item.tagline, 300) || translated(item.translations, language, "tagline"),
     overview: clip(item.overview, 2000) || translated(item.translations, language, "overview"),
     year: yearOf(date),
@@ -238,21 +241,27 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   };
 }
 
+// Every name TMDB lists for the work besides its own: other titles and translated names.
+// Sources often list a work under one of these (七龙珠超 for 龙珠超), so the app matches on them too.
+export function otherNames(item: any, tv: boolean): string[] {
+  const names = new Set<string>();
+  for (const entry of list(tv ? item.alternative_titles?.results : item.alternative_titles?.titles)) names.add(clip(entry.title, 80));
+  for (const entry of list(item.translations?.translations)) names.add(clip(entry.data?.[tv ? "name" : "title"], 80));
+  names.delete("");
+  return [...names].slice(0, 30);
+}
+
 // A candidate as the agent sees it: every name it goes by, and what tells apart works of the same name.
 export async function facts(tmdb: TMDB, type: MediaType, id: number) {
   const item = await tmdb.get(`/${type}/${id}`, { language: "zh-CN", append_to_response: "alternative_titles,translations" });
   if (!item) return { error: "No such title." };
   const tv = type === "tv";
-  const names = new Set<string>();
-  for (const entry of list(tv ? item.alternative_titles?.results : item.alternative_titles?.titles)) names.add(clip(entry.title, 80));
-  for (const entry of list(item.translations?.translations)) names.add(clip(entry.data?.[tv ? "name" : "title"], 80));
-  names.delete("");
   return {
     mediaType: type,
     id,
     name: tv ? item.name : item.title,
     originalName: tv ? item.original_name : item.original_title,
-    otherNames: [...names].slice(0, 30),
+    otherNames: otherNames(item, tv),
     year: yearOf(tv ? item.first_air_date : item.release_date),
     countries: tv ? item.origin_country : list(item.production_countries).map((country) => country.iso_3166_1),
     originalLanguage: item.original_language,
