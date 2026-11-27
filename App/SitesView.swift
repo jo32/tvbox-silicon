@@ -1045,6 +1045,8 @@ struct HideSourcesCard: View {
 struct HiddenSourcesEditor: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Groups folded away, by group id (#2282): a long subscription list no longer has to be scrolled through.
+    @State private var collapsed = Set<String>()
 
     private func isHidden(_ site: Site) -> Bool {
         store.subscription.map { store.hiddenSources.contains(site, origin: $0.origin) } ?? false
@@ -1136,20 +1138,34 @@ struct HiddenSourcesEditor: View {
                 }
                 ForEach(groups) { group in
                     let hidden = group.sites.filter(isHidden)
+                    let folded = collapsed.contains(group.id)
                     Section {
-                        ForEach(group.sites) { site in
-                            let shown = !isHidden(site)
-                            Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
-                                .buttonStyle(.plain)
-                                .accessibilityAddTraits(shown ? [.isSelected] : [])
-                                .accessibilityIdentifier("sources.hidden.row." + site.key)
-                                #if os(iOS)
-                                .listRowBackground(Surface())
-                                #endif
+                        if !folded {
+                            ForEach(group.sites) { site in
+                                let shown = !isHidden(site)
+                                Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityAddTraits(shown ? [.isSelected] : [])
+                                    .accessibilityIdentifier("sources.hidden.row." + site.key)
+                                    #if os(iOS)
+                                    .listRowBackground(Surface())
+                                    #endif
+                            }
                         }
                     } header: {
                         HStack(spacing: 12) {
-                            Text(L10n.text(group.title)).lineLimit(1)
+                            Button {
+                                withAnimation(.smooth) {
+                                    if folded { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: folded ? "chevron.right" : "chevron.down")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    Text(L10n.text(group.title)).lineLimit(1)
+                                }
+                            }
+                            .accessibilityLabel(L10n.text(group.title))
                             Spacer(minLength: 8)
                             Button(L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
                             Button(L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
