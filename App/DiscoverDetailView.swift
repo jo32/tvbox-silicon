@@ -248,10 +248,11 @@ struct DiscoverDetailView: View {
 
     /// The most recent unfinished watch for this title, if any. Continue Playing takes the place of Search Sources,
     /// which the page already does on its own, and carries on where the viewer stopped. iPhone only.
+    /// From visible history only (#2202): a hidden source's entry for this title must not offer to carry on.
     #if os(iOS)
     private var resumeEntry: PlaybackHistoryEntry? {
         let name = item.name
-        return store.playbackHistory.entries
+        return store.visibleHistory
             .filter { !$0.completed }
             // The same name only: a name inside another ("家" in "一家人", a first season in its sequel's "… 第二季") would
             // carry on with a different title. Without one, Search Sources finds it.
