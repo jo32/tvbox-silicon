@@ -1891,6 +1891,17 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
+        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
+        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
+        .onChange(of: pip.floating) { _, floating in
+            if floating {
+                guard session.error == nil else { return }
+                window.miniaturize(nil)
+            } else {
+                window.deminiaturize(nil)
+            }
+        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -2367,6 +2378,9 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
+    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
+    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
     @ObservationIgnored private var controller: AVPictureInPictureController?
@@ -2404,9 +2418,13 @@ private final class DesktopVideoNSView: NSView {
             self?.subtitles?.native = true
         }
     }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.floating = true }
+    }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = false
+            self?.floating = false
             self?.subtitles?.native = false
         }
     }
