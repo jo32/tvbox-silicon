@@ -2425,3 +2425,16 @@
 "The connection was interrupted. Try again." = "The connection was interrupted. Try again.";
 "Couldn't establish a secure connection to the server." = "Couldn't establish a secure connection to the server.";
 "The source returned data Yingxia couldn't read." = "The source returned data Yingxia couldn't read.";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "Couldn't make a secure connection to the video server. Try another line.";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "The video server returned HTTP %lld. Try again later, or switch to another line.";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "Couldn't connect to the source's local playback service. Try again, or switch to another line.";
+"The video server took too long to respond. Try again, or switch to another line." = "The video server took too long to respond. Try again, or switch to another line.";
+"The video server couldn't be found. The source may be offline; try another line." = "The video server couldn't be found. The source may be offline; try another line.";
+"Couldn't connect to the video server. Check your network, or try another line." = "Couldn't connect to the video server. Check your network, or try another line.";
+"This video format isn't supported on this device. Try another line." = "This video format isn't supported on this device. Try another line.";
+"Switch Line" = "Switch Line";
+"%@ didn't play. Trying %@." = "%@ didn't play. Trying %@.";
+"Trying %@…" = "Trying %@…";
+"another line" = "another line";

@@ -217,6 +217,8 @@ import IOKit.pwr_mgt
     }
 
     var error: String? { didSet { if error != nil { countPlay(.failed) } } }
+    /// Technical details behind the latest failure (host, HTTP status, domain/code chain) for Show details (#2560).
+    private(set) var errorDetails: String?
     /// This play on its way to the first frame, counted for the play success rate (`PlayAttempt`).
     private var attempt: PlayAttempt?
     /// A retry rung is trying to save this play (a short constant such as "line"): if the picture then starts, the
@@ -244,6 +246,9 @@ import IOKit.pwr_mgt
     /// Plays another line of the same episode when this file can't play here (an MKV original);
     /// returns that line's name, or nil when there is none.
     var onUnplayableFile: (() -> String?)?
+    /// Automatically switches to another safe line of the same catalog episode when playback fails (#2560);
+    /// returns that line's name, or nil when none remain.
+    var onFallbackLine: (() -> String?)?
     /// The episode after this one, resolved for the queue; nil when there is none.
     var upcomingEpisode: (@MainActor () async -> Channel?)?
     /// Whether playback runs on into the next episode (auto-play can be switched off meanwhile).
@@ -551,16 +556,24 @@ import IOKit.pwr_mgt
         let detail = failure.map(Self.describe) ?? "-"
         // The proxy's own last failure when the once-a-second sample missed it (a lookup that failed at once).
         let upstream = transfer.failure ?? proxy?.stats.snapshot.failure ?? proxyReason
-        Diagnostics.shared.record(.error, "player", "failed host=\(transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host() ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
+        let host = transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host()
+        Diagnostics.shared.record(.error, "player", "failed host=\(host ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
         if retryLive(after: failure) { return }
         if tryNextLine(after: failure) { return }
         // A refused link is usually an expired one: say so in plain words rather than the system's.
         let expired = refused || [401, 403, 404, 410].contains(transfer.httpStatus ?? 0)
+        let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+        let status = transfer.httpStatus ?? item.errorLog()?.events.last?.errorStatusCode
+        let summary = PlaybackFailure.describe(failure, httpStatus: status, host: host, upstream: upstream,
+                                               isLoopback: loopback, refused: expired)
+        let isDolbyVisionRefusal = Remux.isDolbyVision(url) && Self.refusedContent(failure)
+        if !isDolbyVisionRefusal, summary.allowsAutomaticLineSwitch, tryCatalogFallback(after: failure, channel: channel) { return }
         loading = false
-        errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
+        errorSymbol = isDolbyVisionRefusal ? "play.slash.fill" : summary.symbol
+        errorDetails = summary.details
         error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
             : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
-            : failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+            : summary.message
     }
 
     /// The rung that got the stream playing, in the log: which one, and what the proxy repaired.
@@ -773,9 +786,12 @@ import IOKit.pwr_mgt
             }
             guard let remuxed else {
                 if self.tryNextLine(after: failure) { return }
+                if self.tryCatalogFallback(after: failure, channel: channel) { return }
+                let summary = PlaybackFailure.describe(failure, host: self.transfer.host ?? channel.url.host())
                 self.loading = false
-                self.errorSymbol = "play.slash.fill"
-                self.error = failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+                self.errorSymbol = summary.symbol
+                self.errorDetails = summary.details
+                self.error = summary.message
                 return
             }
             self.configure(channel, url: remuxed, generation: active)
@@ -817,7 +833,9 @@ import IOKit.pwr_mgt
             case .webPage:
                 Diagnostics.shared.record(.warning, "player.webpage", "a web page, not a video host=\(url.host() ?? "-") source=\(channel.historyContext?.sourceKey ?? "-")")
                 if self.tryNextLine(after: failure) { return }
+                if self.tryCatalogFallback(after: failure, channel: channel) { return }
                 self.loading = false; self.errorSymbol = "safari"
+                self.errorDetails = PlaybackFailure.describe(failure, host: url.host()).details
                 self.error = L10n.text("This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.")
                 return
             case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
@@ -891,10 +909,32 @@ import IOKit.pwr_mgt
         return (url: fresh.url, headers: fresh.headers.merging(CloudStreams.playlistHeaders(for: fresh.url) ?? [:]) { $1 })
     }
 
+    /// Shows the waiting state while switching to another line of the same episode (#2560).
+    func beginLineSwitch(to line: String, failedFlag: String? = nil) {
+        let target = line.isEmpty ? L10n.text("another line") : line
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true
+        if let failed = failedFlag, !failed.isEmpty {
+            switchNotice = L10n.text("%@ didn't play. Trying %@.", failed, target)
+        } else {
+            switchNotice = L10n.text("Trying %@…", target)
+        }
+    }
+
+    /// Tries the next safe line of the same catalog episode (bounded by `PlaybackLineFallback`), returning true if
+    /// a switch started (#2560).
+    private func tryCatalogFallback(after failure: Error?, channel: Channel) -> Bool {
+        guard let next = onFallbackLine?() else { return false }
+        retrying(via: "catalog-line")
+        detachItem(); observation = nil
+        beginLineSwitch(to: next, failedFlag: channel.historyContext?.episodeFlag)
+        Diagnostics.shared.record(.warning, "player", "catalog line failed \(failure.map(Self.describe) ?? "-"); switching to \(next)")
+        return true
+    }
+
     /// The other line could not be resolved either: show why instead of loading forever.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
-        switchNotice = nil; error = message; loading = false
+        switchNotice = nil; errorDetails = nil; error = message; loading = false
     }
 
     func setSpeed(_ speed: Float) {
@@ -1240,7 +1280,7 @@ import IOKit.pwr_mgt
 
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
-        stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
+        stop(); error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         let live = channel.replay == nil && (LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live"))
         begin(channel, live: live)
         isLive = live
@@ -1285,7 +1325,11 @@ import IOKit.pwr_mgt
             catch {
                 guard self.generation == activeGeneration, !Task.isCancelled else { return }
                 if self.tryNextLine(after: error) { return }
-                self.error = error.localizedDescription; self.loading = false; return
+                let loopback = ["127.0.0.1", "localhost"].contains(channel.url.host() ?? "")
+                let summary = PlaybackFailure.describe(error, host: channel.url.host(), isLoopback: loopback)
+                if summary.allowsAutomaticLineSwitch, self.tryCatalogFallback(after: error, channel: channel) { return }
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
             }
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
             #if os(macOS)
@@ -1599,7 +1643,7 @@ import IOKit.pwr_mgt
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     let giveUp = { @MainActor [weak self] (reason: String?) -> Void in
-                        guard let self else { return }
+                        guard let self, self.generation == activeGeneration else { return }
                         self.giveUp(failure, item: item, channel: channel, url: url, refused: refused, network: network, proxyReason: reason)
                     }
                     // The rest of the chain; a link the container rescue finds nothing for comes back here. One tail: `giveUp`.
@@ -1617,15 +1661,25 @@ import IOKit.pwr_mgt
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self, weak item] notification in
             let failure = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
-            let message = failure?.localizedDescription
+            let refused = Self.refusedLink(failure, log: item?.errorLog())
+            let logStatus = item?.errorLog()?.events.last?.errorStatusCode
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
                 if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                 if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
-                Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
+                let host = self.transfer.host ?? channel.url.host()
+                Diagnostics.shared.record(.error, "player", "interrupted host=\(host ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 if self.tryNextLine(after: failure) { return }
-                self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
+                let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+                let summary = PlaybackFailure.describe(failure, httpStatus: self.transfer.httpStatus ?? logStatus,
+                                                       host: host, upstream: self.transfer.failure,
+                                                       isLoopback: loopback, refused: refused)
+                if summary.allowsAutomaticLineSwitch, self.tryCatalogFallback(after: failure, channel: channel) { return }
+                self.errorSymbol = summary.symbol
+                self.errorDetails = summary.details
+                self.error = failure == nil ? L10n.text("Playback was interrupted.") : summary.message
+                self.loading = false
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -1846,7 +1900,7 @@ import IOKit.pwr_mgt
         skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
-        onPlaybackEnded = nil; onUnplayableFile = nil
+        onPlaybackEnded = nil; onUnplayableFile = nil; onFallbackLine = nil
         if player.currentItem != nil {
             let seconds = player.currentTime().seconds
             Diagnostics.shared.record(.info, "player", "stop at=\(seconds.isFinite ? Int(seconds) : -1)s")
@@ -2358,7 +2412,7 @@ extension PlaybackSession {
         let activeGeneration = generation
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
-        error = nil; switchNotice = nil; quality = nil
+        error = nil; errorDetails = nil; switchNotice = nil; quality = nil
         // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
         attempt = PlayAttempt(live: false, address: channel.url)

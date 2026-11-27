@@ -42,6 +42,9 @@ struct PlaybackView: View {
     @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
+    #if os(iOS)
+    @State private var showsErrorDetails = false
+    #endif
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     #if os(tvOS)
@@ -509,22 +512,45 @@ struct PlaybackView: View {
     private func showOnStart(opening: Bool = true) {}
     #endif
 
+    private var switchLineAction: (() -> Void)? {
+        if session.lines.count > 1 {
+            let next = (session.line + 1) % session.lines.count
+            return { session.choose(line: next) }
+        }
+        guard let other = store.nextLineChoice(for: channel) else { return nil }
+        return {
+            session.beginLineSwitch(to: other.flag)
+            store.selectEpisode(other, from: channel) { session.lineSwitchFailed($0) }
+        }
+    }
+
     @ViewBuilder private var status: some View {
         if let error = session.error {
             #if os(tvOS)
-            TVPlaybackFailureView(channelName: channel.name, details: error, symbol: session.errorSymbol, backdrop: waitContent,
-                                  retry: { startCatalogPlayback(session, channel: channel, store: store) }, goBack: { dismiss() })
+            TVPlaybackFailureView(channelName: channel.name, message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol, backdrop: waitContent,
+                                  retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                                  switchLine: switchLineAction,
+                                  goBack: { dismiss() })
             #elseif os(iOS)
             if playerLayout == .inline {
-                // At the top of a watch page: the same words, small, and Try Again; the page has Back.
+                // At the top of a watch page: the same words, small, and Try Again / Switch Line; the page has Back.
                 VStack(spacing: 8) {
                     Label(L10n.text("Can't play this right now"), systemImage: session.errorSymbol).font(.headline)
-                    Text(error).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(2)
+                    Text(error).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
                         .multilineTextAlignment(.center)
-                    Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
-                        Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+                    HStack(spacing: 10) {
+                        Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
+                            Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+                        }
+                        .controlButton(prominent: true).tint(Brand.accent)
+                        if let switchLine = switchLineAction {
+                            Button(action: switchLine) {
+                                Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .controlButton()
+                        }
                     }
-                    .controlButton(prominent: true).tint(Brand.accent).appControlSize(.small).padding(.top, 2)
+                    .appControlSize(.small).padding(.top, 2)
                 }
                 .foregroundStyle(.white).padding(.horizontal, 24).padding(.top, 36)
                 .environment(\.colorScheme, .dark)
@@ -540,26 +566,51 @@ struct PlaybackView: View {
                         .frame(height: 70)
                         .accessibilityHidden(true)
                     Text(L10n.text("Can't play this right now")).font(.title2.weight(.semibold)).padding(.top, 24)
-                    Text(error).font(.callout).foregroundStyle(.white.opacity(0.7)).lineSpacing(2)
-                        .multilineTextAlignment(.center).frame(maxWidth: 330).padding(.top, 10)
+                    Text(error).font(.callout).foregroundStyle(.white.opacity(0.75)).lineSpacing(2)
+                        .multilineTextAlignment(.center).frame(maxWidth: 340).padding(.top, 10)
                     GlassGroup(spacing: 12) {
-                        HStack(spacing: 12) {
-                            Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
-                                Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
-                            }
-                            .controlButton(prominent: true).tint(Brand.accent)
-                            Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) { mobileFailureActions }
+                            VStack(spacing: 10) { mobileFailureActions }
                         }
                     }
-                    .appControlSize(.large).padding(.top, 30)
+                    .appControlSize(.large).padding(.top, 28)
+                    if let details = session.errorDetails, !details.isEmpty {
+                        VStack(spacing: 10) {
+                            Button { withAnimation(.smooth(duration: 0.25)) { showsErrorDetails.toggle() } } label: {
+                                HStack(spacing: 6) {
+                                    Text(L10n.text(showsErrorDetails ? "Hide details" : "Show details"))
+                                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).rotationEffect(.degrees(showsErrorDetails ? 180 : 0))
+                                }
+                                .font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.7))
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .glassSurface(.regular.interactive(), in: Capsule()).contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            if showsErrorDetails {
+                                ScrollView {
+                                    Text(details).font(.system(.caption, design: .monospaced)).foregroundStyle(.white.opacity(0.75))
+                                        .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled).padding(14)
+                                }
+                                .frame(maxWidth: 380, maxHeight: 120)
+                                .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                            }
+                        }
+                        .padding(.top, 16)
+                    }
                 }
                 .foregroundStyle(.white)
                 .padding(32)
                 .environment(\.colorScheme, .dark)
+                .onChange(of: session.error) { showsErrorDetails = false }
             }
             #else
-            ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
-                       retry: { startCatalogPlayback(session, channel: channel, store: store) }, goBack: { dismiss() }, backTitle: L10n.text("Close"))
+            ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
+                       retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                       alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) },
+                       goBack: { dismiss() }, backTitle: L10n.text("Close"))
                 .padding(30).frame(maxWidth: 480)
                 .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 30, style: .continuous)).padding(30)
             #endif
@@ -573,6 +624,22 @@ struct PlaybackView: View {
             #endif
         }
     }
+
+    #if os(iOS)
+    @ViewBuilder private var mobileFailureActions: some View {
+        Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
+            Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
+        }
+        .controlButton(prominent: true).tint(Brand.accent)
+        if let switchLine = switchLineAction {
+            Button(action: switchLine) {
+                Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath")
+            }
+            .controlButton()
+        }
+        Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
+    }
+    #endif
 
     private var waitContent: PlaybackWaitContent? {
         #if os(tvOS)
@@ -664,11 +731,13 @@ private struct ChromeRow: SwiftUI.Layout {
 #if os(tvOS)
 private struct TVPlaybackFailureView: View {
     let channelName: String
+    let message: String
     let details: String
     var symbol = "play.slash.fill"
     /// The episode's colours behind the message, as on iPhone; the plain background when there is no artwork.
     var backdrop: PlaybackWaitContent? = nil
     let retry: () -> Void
+    var switchLine: (() -> Void)? = nil
     let goBack: () -> Void
     @State private var showsDetails = false
     @FocusState private var retryFocused: Bool
@@ -694,23 +763,28 @@ private struct TVPlaybackFailureView: View {
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(Color(white: 0.85)).lineLimit(2)
                     .padding(.bottom, 16)
-                Text(L10n.text("Try again, or go back and choose another video."))
-                    .font(.system(size: 27)).foregroundStyle(Color(white: 0.65))
+                Text(message)
+                    .font(.system(size: 27)).foregroundStyle(Color(white: 0.7))
                     .fixedSize(horizontal: false, vertical: true)
                 // Liquid Glass, as every other control on Apple TV: clear at rest, white on focus.
                 GlassGroup(spacing: 20) {
                     HStack(spacing: 20) {
                         Button(action: retry) { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }.focused($retryFocused)
+                        if let switchLine {
+                            Button(action: switchLine) { Label(L10n.text("Switch Line"), systemImage: "arrow.triangle.2.circlepath") }
+                        }
                         Button(action: goBack) { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-                        Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                        if !details.isEmpty {
+                            Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                        }
                     }
                     .controlButton()
                 }
                 .padding(.top, 48)
-                if showsDetails {
+                if showsDetails, !details.isEmpty {
                     ScrollView {
                         Text(details)
-                            .font(.system(size: 23))
+                            .font(.system(size: 23, design: .monospaced))
                             .foregroundStyle(Color(white: 0.65))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
@@ -1847,6 +1921,17 @@ private struct DesktopPlaybackView: View {
     /// Play, skip and the seek bar: not while the video loads, failed, or plays elsewhere.
     private var showsTransport: Bool { !session.loading && session.error == nil && playingOn == nil && !pip.active }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
+    private var switchLineAction: (() -> Void)? {
+        if session.lines.count > 1 {
+            let next = (session.line + 1) % session.lines.count
+            return { session.choose(line: next) }
+        }
+        guard let other = store.nextLineChoice(for: channel) else { return nil }
+        return {
+            session.beginLineSwitch(to: other.flag)
+            store.selectEpisode(other, from: channel) { session.lineSwitchFailed($0) }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -1882,8 +1967,9 @@ private struct DesktopPlaybackView: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: showsChrome)
                 if let error = session.error {
-                    ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
-                               retry: { startCatalogPlayback(session, channel: channel, store: store) })
+                    ErrorState(title: L10n.text("Can't play this right now"), message: error, details: session.errorDetails ?? "", symbol: session.errorSymbol,
+                               retry: { startCatalogPlayback(session, channel: channel, store: store) },
+                               alternate: switchLineAction.map { (L10n.text("Switch Line"), "arrow.triangle.2.circlepath", $0) })
                         .padding(28).frame(maxWidth: 460)
                         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous)).padding()
                         .environment(\.colorScheme, .dark)
@@ -2604,6 +2690,10 @@ extension Store {
         guard let store, let other = store.transcodedLine(for: channel) else { return nil }
         store.selectEpisode(other, from: channel) { session?.lineSwitchFailed($0) }
         return other.flag
+    }
+    session.onFallbackLine = { [weak store, weak session] in
+        guard let store, let session else { return nil }
+        return store.switchToFallbackLine(from: channel, session: session)
     }
     if let context = channel.historyContext, let next = store.nextEpisode(after: channel),
        let catalog = store.catalog(for: channel) {

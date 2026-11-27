@@ -4169,7 +4169,7 @@ private struct BundleSignIn: Identifiable {
 }
 
 /// Cloud drives a line plays from, to start a video on a line that can play now.
-private enum CloudDrive {
+enum CloudDrive {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
     /// lines without it, so those lines are never held back for it.
     case quark, uc, xunlei
@@ -4187,16 +4187,19 @@ private enum CloudDrive {
         let text = flag.lowercased()
         return ["嘟嘟", "百度", "度盘", "baidu", "阿狸", "阿里", "aliyun"].contains { text.contains($0) }
     }
+    /// Whether a line can play automatically without popping up a drive sign-in screen.
+    static func canAutoPlay(_ flag: String, accounts: CloudDriveAccounts? = nil) -> Bool {
+        if withoutSignIn(flag) { return false }
+        guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
+        let loaded = accounts ?? (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        let cookie = drive == .quark ? loaded.quarkCookie : loaded.ucCookie
+        return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     /// The first line that can play now: not from a drive without a sign-in, nor one without the app's sign-in.
     /// Those lines still play when chosen: their plugin asks for the account with its own code.
     static func preferredFlag(_ flags: [String]) -> String? {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
-        return flags.first { flag in
-            if withoutSignIn(flag) { return false }
-            guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
-            let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
-            return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        return flags.first { canAutoPlay($0, accounts: accounts) }
     }
 }
 

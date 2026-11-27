@@ -2425,3 +2425,16 @@
 "The connection was interrupted. Try again." = "网络连接中断，请重试。";
 "Couldn't establish a secure connection to the server." = "无法与服务器建立安全连接。";
 "The source returned data Yingxia couldn't read." = "来源返回的数据格式无法解析。";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "无法与视频服务器建立安全连接，请换一条线路。";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "视频服务器返回 HTTP %lld，请稍后再试或切换其他线路。";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "无法连接片源的本地播放服务，请重试或切换其他线路。";
+"The video server took too long to respond. Try again, or switch to another line." = "视频服务器响应超时，请重试或切换其他线路。";
+"The video server couldn't be found. The source may be offline; try another line." = "找不到视频服务器，该片源可能已失效，请换一条线路。";
+"Couldn't connect to the video server. Check your network, or try another line." = "无法连接视频服务器，请检查网络或换一条线路。";
+"This video format isn't supported on this device. Try another line." = "此设备不支持该视频格式，请换一条线路。";
+"Switch Line" = "切换线路";
+"%@ didn't play. Trying %@." = "%@ 无法播放，正在尝试 %@。";
+"Trying %@…" = "正在尝试 %@…";
+"another line" = "其他线路";

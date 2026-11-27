@@ -57,7 +57,14 @@ import TVCore
     var notice: String?
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
-        didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
+        didSet {
+            if let channel = playing {
+                if let context = channel.historyContext { lineFallback.track(context) } else { lineFallback.reset() }
+                if let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) }
+            } else {
+                lineFallback.reset()
+            }
+        }
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     @ObservationIgnored private var playsAsVideo = false
@@ -119,6 +126,8 @@ import TVCore
     var filesFolder: CloudFilesFolder?
     var resolvingEpisode: Episode?
     var episodeError: String?
+    /// Bounded automatic line switching for the playing catalog episode (#2560).
+    @ObservationIgnored var lineFallback = PlaybackLineFallback()
     var autoPlayNext: Bool {
         didSet { if persistsChanges { defaults.set(autoPlayNext, forKey: "autoPlayNextEpisode") } }
     }
@@ -1166,6 +1175,39 @@ import TVCore
         return candidates.first { $0.flag == sameDrive } ?? candidates.first
     }
 
+    /// The same episode on the video's other lines, for automatic fallback and the failure screen's Switch Line (#2560).
+    func alternateLines(for channel: Channel) -> [Episode] {
+        guard let context = channel.historyContext, let catalog = catalog(for: channel) else { return [] }
+        return catalog.playlist.alternates(for: context)
+    }
+
+    /// The next line the viewer can switch to from the failure screen: an untried line first, else the first other line.
+    func nextLineChoice(for channel: Channel) -> Episode? {
+        guard let context = channel.historyContext else { return nil }
+        return lineFallback.nextManual(for: context, candidates: alternateLines(for: channel))
+    }
+
+    /// Automatically tries the next safe untried line for the same episode when the current line fails (at most
+    /// `PlaybackLineFallback.limit` switches per episode). If resolving that line fails, tries the next safe candidate
+    /// within the same budget before reporting the failure back to `session`.
+    func switchToFallbackLine(from channel: Channel, session: PlaybackSession) -> String? {
+        guard playing == channel, let context = channel.historyContext else { return nil }
+        let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        let candidates = alternateLines(for: channel)
+        guard let next = lineFallback.nextAutomatic(for: context, candidates: candidates,
+                                                    allowed: { CloudDrive.canAutoPlay($0.flag, accounts: accounts) }) else { return nil }
+        let label = next.flag.isEmpty ? L10n.text("another line") : next.flag
+        selectEpisode(next, from: channel) { [weak self, weak session] message in
+            guard let self, let session else { return }
+            if let another = self.switchToFallbackLine(from: channel, session: session) {
+                session.beginLineSwitch(to: another, failedFlag: next.flag)
+            } else {
+                session.lineSwitchFailed(message)
+            }
+        }
+        return label
+    }
+
     func selectEpisode(_ episode: Episode, from channel: Channel, failed: ((String) -> Void)? = nil) {
         guard playing == channel, let catalog = catalog(for: channel),
               catalog.video.episodes.contains(episode) else { return }
@@ -1176,6 +1218,7 @@ import TVCore
         PlaybackSession.current?.saveHistory()
         let resume = channel.historyContext.flatMap { context in playbackHistory.entries.first { $0.id == context.id } }
             .flatMap { $0.context.episodeID == channel.historyContext?.episodeID ? $0.resumePosition(for: episode, among: catalog.video.episodes) : nil }
+            ?? (alternateLines(for: channel).contains(episode) ? channel.resumePosition.flatMap { $0 > 1 ? $0 : nil } : nil)
         episodeTask = Task { [weak self] in
             guard let self else { return }
             defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
