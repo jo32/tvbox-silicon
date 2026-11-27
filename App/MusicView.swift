@@ -401,13 +401,28 @@ private struct MusicHome: View {
             }
             .padding(.bottom, 8)
             .tvFocusSection()
-            ForEach(library.history.prefix(100)) { entry in
+            ForEach(library.history.prefix(20)) { entry in
                 // One entry can go on its own, from its menu, besides Clear for all of them (#1742).
                 if let collection = entry.collection {
                     MusicCollectionRow(collection: collection) { library.remove(entry) }
                 } else if let track = entry.track {
                     MusicTrackRow(track: track, removeFromHistory: { library.remove(entry) }) { store.music.play(track) }
                 }
+            }
+            if library.history.count > 20 {
+                // The rest of a long history waits on its own page, as the liked songs have (#2004).
+                RouteLink { MusicRecentlyPlayedView() } label: {
+                    HStack(spacing: MusicLayout.gap) {
+                        Text(L10n.text("See All")).font(.headline).foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .glassRow()
+                .tvFocusSection()
+                .accessibilityIdentifier("music.recentlyPlayed.all")
             }
         } else if empty {
             EmptyPage(symbol: "music.note", title: L10n.text("Search for a Song"),
