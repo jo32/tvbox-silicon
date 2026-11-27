@@ -2427,12 +2427,14 @@ private struct DesktopPlaybackView: View {
     }
 
     private func barButton(_ symbol: String, _ label: String, help: String? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 14, weight: .medium)) }
-            .buttonStyle(.plain)
-            .frame(width: 34, height: 34)
-            .playerBarButton()
-            .help(help ?? label)
-            .accessibilityLabel(label)
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .medium))
+                .frame(width: 34, height: 34).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .playerBarButton()
+        .help(help ?? label)
+        .accessibilityLabel(label)
     }
 
     private var optionsMenu: some View {
