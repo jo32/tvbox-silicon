@@ -2118,6 +2118,7 @@
 "This address doesn't hold a subscription. Add it as a new one instead." = "このアドレスは配信設定ではありません。新しい配信設定として追加してください。";
 "Couldn't load this address: %@" = "このアドレスを読み込めません：%@";
 "Use New Address" = "新しいアドレスを使う";
+"Subscription address updated." = "配信設定 URL を更新しました。";
 "File" = "ファイル";
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "映匣はこのファイルのコピーを保存します。元のファイルを後で変更しても映匣には反映されません。更新するには、もう一度映匣で開いてください。";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "LX Music ソース「%@」を追加しました。ミュージックはこのソースで曲を再生します。ミュージック設定 › LX Music カスタムソースで管理できます。";

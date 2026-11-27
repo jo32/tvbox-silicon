@@ -30,6 +30,15 @@ test("TMDB text with a web address is left out", async () => {
   assert.equal(value!.overview, "好看");
 });
 
+test("details carry TMDB's other names for the title", async () => {
+  const tmdb = new TMDB("t", async () => json({ id: 1, name: "龙珠超", original_name: "Dragon Ball Super",
+    alternative_titles: { results: [{ title: "七龙珠超" }, { title: "" }] },
+    translations: { translations: [{ iso_639_1: "en", iso_3166_1: "US", data: { name: "Dragon Ball Super" } }] },
+    vote_count: 0, seasons: [] }), null);
+  const value = await details(tmdb, "tv", 1, "zh-CN", null);
+  assert.deepEqual(value!.otherNames, ["七龙珠超", "Dragon Ball Super"]);
+});
+
 test("recommendations come first, then similar titles, each once and only with a poster", () => {
   const item = {
     id: 1,

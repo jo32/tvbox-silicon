@@ -219,6 +219,9 @@ public enum TMDBMatch {
         /// "You may like": TMDB's recommendations, then similar titles. Absent in details saved before it was added.
         public let recommendations: [Candidate]?
         public let link: URL
+        /// Every other name TMDB lists for the work, for matching sources that list it under one of them (#2608).
+        /// Absent in details saved before it was added. A `var`: a `let` with a default value is never decoded.
+        public var otherNames: [String]? = nil
     }
 
     public struct Match: Codable, Hashable, Sendable {

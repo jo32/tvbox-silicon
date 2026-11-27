@@ -3516,7 +3516,7 @@ extension VideoDetailView {
                             if let seasonControl = embed?.seasonControl {
                                 seasonControl
                             } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                                SeasonsButton(video: video, client: client, capsule: true)
+                                SeasonsButton(video: video, client: client, capsule: true, appColorScheme: embed?.appColorScheme)
                             }
                             if items.count > (compact ? 5 : 2) {
                                 Button { episodePage = nil; showsAllEpisodes = true } label: {
@@ -3898,7 +3898,7 @@ extension VideoDetailView {
                 if let seasonControl = embed.seasonControl {
                     seasonControl
                 } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                    SeasonsButton(video: video, client: client)
+                    SeasonsButton(video: video, client: client, appColorScheme: embed.appColorScheme)
                 }
             }
             .focusSection()
@@ -3973,10 +3973,23 @@ private struct AppColorScheme: ViewModifier {
 struct OpensAtEpisode: ViewModifier {
     let episode: Episode.ID?
     @State private var position: Episode.ID?
+    /// Whether the sheet has finished opening at the playing episode. While the centre anchor stays active,
+    /// every cell crossing the middle of a large grid is pulled back to centre, which shook the episode tiles
+    /// sideways as the viewer dragged up and down a long drama (#2561). Once placed, plain tracking only
+    /// observes which item is in view and stops re-aligning it.
+    @State private var settled = false
     init(_ episode: Episode.ID?) { self.episode = episode }
     func body(content: Content) -> some View {
-        content.scrollPosition(id: $position, anchor: .center)
-            .task { if let episode { position = episode } }
+        content
+            .scrollPosition(id: $position, anchor: settled ? nil : .center)
+            .task {
+                guard let episode else { return }
+                position = episode
+                // Let the lazy grid place the episode (setting it before layout left a long series at
+                // episode 1, #1380) before handing scrolling back to plain tracking (#2561).
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                settled = true
+            }
     }
 }
 
@@ -4918,6 +4931,9 @@ struct SeasonsButton: View {
     let client: CatalogClient
     /// In the episode header, match the glass capsule used by All.
     var capsule = false
+    /// The app's light or dark look when the page forces its own (Discover detail): the sheet's rows otherwise
+    /// inherit the page's white text while the sheet background follows the app, going white on white (#2536).
+    var appColorScheme: ColorScheme? = nil
     @Environment(Store.self) private var store
     @Environment(\.openRoute) private var openRoute
     @State private var showsSeasons = false
@@ -4955,7 +4971,7 @@ struct SeasonsButton: View {
         #endif
         .sheet(isPresented: $showsSeasons) {
             // Pushed on the page's own stack; with none to push on, inside the sheet.
-            SeasonsSheet(video: video, client: client, open: openRoute.map { openRoute in
+            SeasonsSheet(video: video, client: client, appColorScheme: appColorScheme, open: openRoute.map { openRoute in
                 { found in
                     showsSeasons = false
                     openRoute(Route { AnyView(CatalogDestination(video: found.video, client: client)) })
@@ -4977,6 +4993,9 @@ struct SeasonsButton: View {
 private struct SeasonsSheet: View {
     let video: Video
     let client: CatalogClient
+    /// The app's look: a Discover page paints itself in its artwork's colours, so the sheet's inherited text would
+    /// otherwise be white against the app-coloured background (#2536). Mirrors All Episodes' `AppColorScheme`.
+    let appColorScheme: ColorScheme?
     let open: ((SeasonTitles.Found) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var found: [SeasonTitles.Found]?
@@ -5007,6 +5026,11 @@ private struct SeasonsSheet: View {
             #endif
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
         }
+        #if !os(tvOS)
+        // The Discover page forces its artwork's colour scheme onto everything it presents; the sheet's rows must
+        // use the app's own look instead (All Episodes does the same), or the text is white on white in daylight (#2536).
+        .modifier(AppColorScheme(scheme: appColorScheme))
+        #endif
         #if os(iOS)
         .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])

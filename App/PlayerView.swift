@@ -187,9 +187,12 @@ struct PlaybackView: View {
         #endif
         .onAppear {
             #if os(iOS)
-            if FloatingPlayback.shared.take(session) {
+            if let parked = FloatingPlayback.shared.take(session) {
                 // Back from Picture in Picture: the video plays on where it is.
                 startCatalogPlayback(session, channel: channel, store: store, resuming: true)
+                // Turned landscape before it floated (#2483): closing the screen dropped the turn, so put it back.
+                // Only for a player of its own screen; a watch page turns for itself.
+                if parked.landscape, playerLayout == .screen { PlayerOrientation.set(landscape: true) }
             } else {
                 FloatingPlayback.shared.end()
                 startCatalogPlayback(session, channel: channel, store: store)
@@ -1906,6 +1909,17 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        // Picture in Picture started: get the window out of the way, so only the floating window shows and the
+        // black "Playing in Picture in Picture" placeholder doesn't sit on screen (#2533). Miniaturize, never
+        // close: closing the window stops the session (windowWillClose). Back when PiP stops.
+        .onChange(of: pip.floating) { _, floating in
+            if floating {
+                guard session.error == nil else { return }
+                window.miniaturize(nil)
+            } else {
+                window.deminiaturize(nil)
+            }
+        }
         .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
@@ -2392,6 +2406,9 @@ private final class DesktopVideoNSView: NSView {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// The floating window is actually up, as on iOS (`pip.floating`): `active` is already set in WillStart,
+    /// before the window appears, so it can't tell the player when to get out of the way (#2533).
+    private(set) var floating = false
     /// Picture in Picture shows only the layer's own picture, so AVPlayer draws the subtitles there.
     @ObservationIgnored var subtitles: SubtitleCues?
     @ObservationIgnored private var controller: AVPictureInPictureController?
@@ -2429,9 +2446,13 @@ private final class DesktopVideoNSView: NSView {
             self?.subtitles?.native = true
         }
     }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.floating = true }
+    }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in
             self?.active = false
+            self?.floating = false
             self?.subtitles?.native = false
         }
     }
@@ -2710,8 +2731,8 @@ struct PlaybackBadges: View {
 }
 
 /// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520, #758): TMDB's,
-/// when the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
-/// title is in the top row too.
+/// when the video's page found the title there. A video played without opening its page (from search, history or
+/// Continue Watching) asks TMDB here as its page would, and the answer is saved for the page too.
 struct PlayerTitleLogo: View {
     let channel: Channel
     /// A phone held upright: a smaller logo.
@@ -2747,7 +2768,13 @@ struct PlayerTitleLogo: View {
             keptLogo = nil
             guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
             let key = TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
-            if !(await tmdb.prepare(key: key)) { keptLogo = await TMDBMatchStore.shared.kept(for: key)?.details?.logo }
+            guard !(await tmdb.prepare(key: key)) else { return }
+            if let kept = await TMDBMatchStore.shared.kept(for: key) { keptLogo = kept.details?.logo; return }
+            let site = catalog.client.site
+            let request = TMDBMatch.Request(video: catalog.video, listVideo: catalog.video,
+                                            source: TMDBMatch.SourceRef(key: site.key, name: site.name))
+            guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+            await tmdb.run(key: key, request: request)
         }
     }
 
