@@ -10,7 +10,7 @@ import TVCore
     private(set) var offers: [NovelSourceOffer] = NovelSources.shared.offers
     private(set) var sources: [NovelSource] = NovelSources.shared.all
     private(set) var enabledKeys: Set<String> = Set(NovelSources.shared.enabled.map(\.key))
-    private(set) var shelf: [NovelLibrary.ShelfBook] = NovelLibrary.load("shelf.json", as: [NovelLibrary.ShelfBook].self) ?? []
+    private(set) var shelf: [NovelLibrary.ShelfBook] = NovelLibrary.distinct(NovelLibrary.load("shelf.json", as: [NovelLibrary.ShelfBook].self) ?? [])
     /// What the last search found, kept while the app runs so Back to the search shows it again.
     var lastSearch: (keyword: String, hits: [NovelSearchHit]) = ("", [])
     /// The group search is limited to (nil: every source that is on). Big lists hold thousands of sources.
@@ -198,10 +198,16 @@ import TVCore
 
     // MARK: Shelf
 
-    func shelfBook(_ book: NovelBook) -> NovelLibrary.ShelfBook? { shelf.first { $0.id == book.match } }
+    /// The shelf's entry for a book, by its exact identity, else by title when the sources disagree on the author
+    /// or one leaves it out (#2308, #2315): the same book opened from another source finds its place instead of
+    /// starting over at chapter 1.
+    private func shelfIndex(_ book: NovelBook) -> Int? {
+        shelf.firstIndex { $0.id == book.match } ?? NovelLibrary.looseIndex(shelf, for: book)
+    }
+    func shelfBook(_ book: NovelBook) -> NovelLibrary.ShelfBook? { shelfIndex(book).map { shelf[$0] } }
     func isOnShelf(_ book: NovelBook) -> Bool { shelfBook(book) != nil }
     func toggleShelf(_ book: NovelBook) {
-        if isOnShelf(book) { shelf.removeAll { $0.id == book.match } }
+        if let entry = shelfBook(book) { shelf.removeAll { $0.id == entry.id } }
         else { shelf.insert(NovelLibrary.ShelfBook(book: book), at: 0) }
         saveShelf()
     }
@@ -222,10 +228,13 @@ import TVCore
     /// Where reading stopped. Reading a book puts it on the shelf, most recent first.
     func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double, seconds: Double? = nil) {
         var entry = shelfBook(book) ?? NovelLibrary.ShelfBook(book: book)
+        // The entry's identity can change with its source's author spelling: drop it under the old one, and under
+        // the new one, so a book read from two sources never sits on the shelf twice.
+        let oldID = entry.id
         entry.book = book
         entry.chapterIndex = chapter.index; entry.chapterTitle = chapter.title; entry.chapterCount = count
         entry.position = min(1, max(0, position)); entry.seconds = seconds; entry.updated = Date()
-        shelf.removeAll { $0.id == entry.id }
+        shelf.removeAll { $0.id == oldID || $0.id == entry.id }
         shelf.insert(entry, at: 0)
         saveShelf()
     }
@@ -240,12 +249,12 @@ import TVCore
     func bookmarks(_ book: NovelBook) -> [NovelBookmark] { shelfBook(book)?.bookmarks ?? [] }
     /// Marks a place. Reading has already put the book on the shelf.
     func addBookmark(_ bookmark: NovelBookmark, to book: NovelBook) {
-        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        guard let index = shelfIndex(book) else { return }
         shelf[index].mark(bookmark)
         saveShelf()
     }
     func removeBookmark(_ id: NovelBookmark.ID, from book: NovelBook) {
-        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        guard let index = shelfIndex(book) else { return }
         shelf[index].bookmarks.removeAll { $0.id == id }
         saveShelf()
     }

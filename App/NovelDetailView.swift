@@ -107,13 +107,16 @@ struct NovelDetailView: View {
     private func switchTo(_ other: NovelBook) {
         guard other.id != book.id else { return }
         let old = book
+        // The shelf's copy, found before the page moves on: the guard below used the unfilled book, so a shelf entry
+        // whose author the old source filled in never matched and the switch never ran (#2308).
+        let shelfEntry = entry
         if !alternatives.contains(where: { $0.id == old.id }) { alternatives.insert(old, at: 0) }
         book = other; details = nil; chapters = []; heroCover = nil
         Task {
-            guard store.isOnShelf(old) else { return }
+            guard let shelfEntry else { return }
             // The shelf follows to the new source, its place kept by chapter title.
             if let filled = try? await NovelBooks.shared.details(other), let list = try? await NovelBooks.shared.chapters(filled, refresh: true) {
-                store.switchSource(of: old, to: filled, chapters: list)
+                store.switchSource(of: shelfEntry.book, to: filled, chapters: list)
             }
         }
     }

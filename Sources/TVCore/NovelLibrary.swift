@@ -74,15 +74,31 @@ public enum NovelLibrary {
 
     /// Moves the shelf's entry for `old` to another source's copy (#1450), the place and bookmarks with it, where it stood.
     /// A shelf entry the new copy already made (reading it records it, and its author can differ) gives way to it.
+    /// `old` need only be the same book (#2308, #2315): the entry is found by its exact identity, else by title when
+    /// the sources disagree on the author or one leaves it out.
     /// False when `old` isn't on the shelf.
     @discardableResult
     public static func switchSource(_ shelf: inout [ShelfBook], from old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) -> Bool {
-        guard let index = shelf.firstIndex(where: { $0.id == old.match }) else { return false }
+        guard let index = shelf.firstIndex(where: { $0.id == old.match }) ?? looseIndex(shelf, for: old) else { return false }
         var entry = shelf.remove(at: index)
         entry.follow(book, chapters: chapters)
         shelf.removeAll { $0.id == entry.id }
         shelf.insert(entry, at: min(index, shelf.count))
         return true
+    }
+
+    /// The one shelf entry that is the same book spelled differently (#2308). Nil when none is, or when more than one
+    /// could be: a title alone, with no author on one side, mustn't put one book's place on another of the same name.
+    public static func looseIndex(_ shelf: [ShelfBook], for book: NovelBook) -> Int? {
+        let matches = shelf.indices.filter { shelf[$0].book.sameBook(as: book) }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// The shelf as saved, without the second entry of a book saved twice under two spellings of its author, which
+    /// now count as one (the first, most recent, is kept).
+    public static func distinct(_ shelf: [ShelfBook]) -> [ShelfBook] {
+        var seen = Set<String>()
+        return shelf.filter { seen.insert($0.id).inserted }
     }
 
     public static func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
@@ -111,15 +127,36 @@ public struct NovelBookmark: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// Finds a chapter in another source's table of contents: the same title (ignoring spaces and punctuation; the one
-/// nearest the old number when several share it), else the same number.
+/// nearest the old number when several share it), else the same name without its chapter number (sources number the
+/// same chapter differently), else the same number.
 public enum NovelChapterMatch {
     public static func key(_ title: String) -> String { title.lowercased().filter { $0.isLetter || $0.isNumber } }
+
+    /// A chapter title without its leading number ("第一章 重生" → "重生"), so the same chapter matches when sources
+    /// number it differently ("第1章 重生" is the same chapter). A title that is only its number has no name left.
+    static func strippedTitle(_ title: String) -> String {
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.hasPrefix("第") else { return key(title) }
+        let numerals: Set<Character> = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "百", "千", "万", "零", "〇", "两",
+                                        "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖", "拾", "佰", "仟"]
+        var i = text.index(after: text.startIndex)
+        while i < text.endIndex && (text[i].isNumber || numerals.contains(text[i])) { i = text.index(after: i) }
+        guard i < text.endIndex, "章节回集话卷篇部幕段".contains(text[i]) else { return key(title) }
+        return key(String(text[text.index(after: i)...]))
+    }
 
     public static func index(title: String, index: Int, in chapters: [NovelChapter]) -> Int? {
         let wanted = key(title)
         if !wanted.isEmpty {
             let same = chapters.filter { !$0.isVolume && key($0.title) == wanted }
             if let nearest = same.min(by: { abs($0.index - index) < abs($1.index - index) }) { return nearest.index }
+            // The titles differ only in how the chapter is numbered: match by the name after the number, before
+            // falling back to the number, which another source's list may not share.
+            let rest = strippedTitle(title)
+            if !rest.isEmpty {
+                let sameName = chapters.filter { !$0.isVolume && strippedTitle($0.title) == rest }
+                if let nearest = sameName.min(by: { abs($0.index - index) < abs($1.index - index) }) { return nearest.index }
+            }
         }
         guard !chapters.isEmpty else { return nil }
         let at = min(max(0, index), chapters.count - 1)
@@ -139,7 +176,7 @@ public struct NovelSearchHit: Sendable, Identifiable, Hashable {
     public init(books: [NovelBook]) {
         self.books = books
         name = NovelBook.normalized(books[0].name)
-        author = NovelBook.normalized(books[0].author)
+        author = NovelBook.normalizedAuthor(books[0].author)
         id = name + "|" + author
     }
 }
