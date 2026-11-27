@@ -622,6 +622,8 @@
 "Pinned" = "Pinned";
 "Pin source" = "Pin source";
 "Unpin source" = "Unpin source";
+"Pin to Top" = "Pin to Top";
+"Unpin" = "Unpin";
 "Pinned Group" = "Pinned Group";
 "Hide Source" = "Hide Source";
 "Open Subscription" = "Open Subscription";
@@ -717,6 +719,7 @@
 "Not loaded yet" = "Not loaded yet";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "This address lists %lld subscriptions. They were added switched off; turn on the ones you want.";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld subscriptions could not be refreshed; their last copies stay in use.";
+"%@ could not be refreshed; its last copy stays in use." = "%@ could not be refreshed; its last copy stays in use.";
 "Responding normally" = "Responding normally";
 "Slow or unreliable lately" = "Slow or unreliable lately";
 "Failing; skipped in search for now" = "Failing; skipped in search for now";
@@ -1072,6 +1075,7 @@
 "Brightness" = "Brightness";
 "Slide for Brightness and Volume" = "Slide for Brightness and Volume";
 "Tab Bar Labels" = "Tab Bar Labels";
+"Launch Page" = "Launch Page";
 "Collapse Tab Bar When Scrolling" = "Collapse Tab Bar When Scrolling";
 "Off shows only the icons in the tab bar along the bottom." = "Off shows only the icons in the tab bar along the bottom.";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "Slide up or down on the left of the video to change the brightness, or on the right to change the volume.";
@@ -1945,6 +1949,8 @@
 "Refresh List" = "Refresh List";
 "Refreshed." = "Refreshed.";
 "Remove from Bookshelf" = "Remove from Bookshelf";
+"Remove %lld books" = "Remove %lld books";
+"Remove %lld books from the Bookshelf?" = "Remove %lld books from the Bookshelf?";
 "Search All Sources" = "Search All Sources";
 "Search Books" = "Search Books";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "Search asks every source that is on. Turn off the ones that never answer to make it faster.";
@@ -2353,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram returned a page Yingxia can't read.";
 "This Telegram post is no longer in the channel's public preview." = "This Telegram post is no longer in the channel's public preview.";
 "This Telegram post has no playable video." = "This Telegram post has no playable video.";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview.";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "Only public Telegram channels can be added. Invite links and private channels have no public preview.";
 "Telegram post" = "Telegram post";
 "Latest" = "Latest";
 "The video's own subtitles are under the speech bubble button." = "The video's own subtitles are under the speech bubble button.";
@@ -2416,3 +2424,26 @@
 "This program can no longer be replayed." = "This program can no longer be replayed.";
 
 "Search results reached the memory limit. Try a more specific search." = "Search results reached the memory limit. Try a more specific search.";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "No internet connection. Check your network and try again.";
+"The server took too long to respond. Try again, or choose another source." = "The server took too long to respond. Try again, or choose another source.";
+"The server couldn't be found. The source may be offline." = "The server couldn't be found. The source may be offline.";
+"Couldn't connect to the server. It may be down or unreachable." = "Couldn't connect to the server. It may be down or unreachable.";
+"The connection was interrupted. Try again." = "The connection was interrupted. Try again.";
+"Couldn't establish a secure connection to the server." = "Couldn't establish a secure connection to the server.";
+"The source returned data Yingxia couldn't read." = "The source returned data Yingxia couldn't read.";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "Couldn't make a secure connection to the video server. Try another line.";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "The video server returned HTTP %lld. Try again later, or switch to another line.";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "Couldn't connect to the source's local playback service. Try again, or switch to another line.";
+"The video server took too long to respond. Try again, or switch to another line." = "The video server took too long to respond. Try again, or switch to another line.";
+"The video server couldn't be found. The source may be offline; try another line." = "The video server couldn't be found. The source may be offline; try another line.";
+"Couldn't connect to the video server. Check your network, or try another line." = "Couldn't connect to the video server. Check your network, or try another line.";
+"This video format isn't supported on this device. Try another line." = "This video format isn't supported on this device. Try another line.";
+"Switch Line" = "Switch Line";
+"%@ didn't play. Trying %@." = "%@ didn't play. Trying %@.";
+"Trying %@…" = "Trying %@…";
+"another line" = "another line";
+"PGS bitmap subtitles use this size and position." = "PGS bitmap subtitles use this size and position.";

@@ -621,6 +621,8 @@
 "Pinned" = "固定済み";
 "Pin source" = "ソースを固定";
 "Unpin source" = "固定を解除";
+"Pin to Top" = "トップに固定";
+"Unpin" = "固定を解除";
 "Pinned Group" = "固定";
 "Hide Source" = "ソースを隠す";
 "Open Subscription" = "元の配信設定を開く";
@@ -716,6 +718,7 @@
 "Not loaded yet" = "まだ読み込まれていません";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "このアドレスには %lld 件の配信設定があります。オフの状態で追加しました。使いたいものをオンにしてください。";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld 件の配信設定を更新できませんでした。前回のデータを引き続き使用します。";
+"%@ could not be refreshed; its last copy stays in use." = "%@ を更新できませんでした。前回のデータを引き続き使用します。";
 "Responding normally" = "正常に応答しています";
 "Slow or unreliable lately" = "最近遅いか不安定です";
 "Failing; skipped in search for now" = "失敗が続いているため、しばらく検索しません";
@@ -1071,6 +1074,7 @@
 "Brightness" = "明るさ";
 "Slide for Brightness and Volume" = "スライドで明るさと音量を調整";
 "Tab Bar Labels" = "タブバーのラベル";
+"Launch Page" = "起動ページ";
 "Collapse Tab Bar When Scrolling" = "スクロール時にタブバーを縮小";
 "Off shows only the icons in the tab bar along the bottom." = "オフにすると、下部のタブバーにアイコンだけを表示します。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "動画の左側を上下にスライドすると明るさ、右側では音量を調整できます。";
@@ -1945,6 +1949,8 @@
 "Refresh List" = "リストを更新";
 "Refreshed." = "更新しました。";
 "Remove from Bookshelf" = "本棚から削除";
+"Remove %lld books" = "%lld 冊を削除";
+"Remove %lld books from the Bookshelf?" = "本棚から %lld 冊を削除しますか？";
 "Search All Sources" = "すべてのソースを検索";
 "Search Books" = "本を検索";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "検索はオンのソースすべてに問い合わせます。応答しないソースをオフにすると速くなります。";
@@ -2353,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram が読み取れないページを返しました。";
 "This Telegram post is no longer in the channel's public preview." = "この Telegram 投稿はチャンネルの公開プレビューにありません。";
 "This Telegram post has no playable video." = "この Telegram 投稿には再生できる動画がありません。";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "この Telegram チャンネルの公開プレビューは空です。公開チャンネルだけを追加できます。公開チャンネルの中には、ウェブプレビューに投稿を表示しないものもあります。";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "公開 Telegram チャンネルだけを追加できます。招待リンクとプライベートチャンネルには公開プレビューがありません。";
 "Telegram post" = "Telegram 投稿";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "動画に含まれる字幕は吹き出しボタンにあります。";
@@ -2416,3 +2424,26 @@
 "This program can no longer be replayed." = "この番組は見逃し再生の期間が終わりました。";
 
 "Search results reached the memory limit. Try a more specific search." = "検索結果がメモリ上限に達しました。検索条件を絞り込んでください。";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "インターネットに接続されていません。ネットワークを確認して再試行してください。";
+"The server took too long to respond. Try again, or choose another source." = "サーバーの応答がタイムアウトしました。再試行するか、別のソースを選んでください。";
+"The server couldn't be found. The source may be offline." = "サーバーが見つかりませんでした。ソースがオフラインの可能性があります。";
+"Couldn't connect to the server. It may be down or unreachable." = "サーバーに接続できませんでした。停止中または到達できない可能性があります。";
+"The connection was interrupted. Try again." = "接続が中断されました。再試行してください。";
+"Couldn't establish a secure connection to the server." = "サーバーと安全な接続を確立できませんでした。";
+"The source returned data Yingxia couldn't read." = "ソースから読み取れない形式のデータが返されました。";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "動画サーバーと安全な接続を確立できませんでした。別の回線をお試しください。";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "動画サーバーが HTTP %lld を返しました。しばらくしてから再試行するか、別の回線に切り替えてください。";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "ソースのローカル再生サービスに接続できませんでした。再試行するか、別の回線に切り替えてください。";
+"The video server took too long to respond. Try again, or switch to another line." = "動画サーバーの応答がタイムアウトしました。再試行するか、別の回線に切り替えてください。";
+"The video server couldn't be found. The source may be offline; try another line." = "動画サーバーが見つかりませんでした。ソースがオフラインの可能性があります。別の回線をお試しください。";
+"Couldn't connect to the video server. Check your network, or try another line." = "動画サーバーに接続できませんでした。ネットワークを確認するか、別の回線をお試しください。";
+"This video format isn't supported on this device. Try another line." = "この動画形式はこのデバイスで再生できません。別の回線をお試しください。";
+"Switch Line" = "回線を切り替え";
+"%@ didn't play. Trying %@." = "%@ を再生できませんでした。%@ を試しています。";
+"Trying %@…" = "%@ を試しています…";
+"another line" = "別の回線";
+"PGS bitmap subtitles use this size and position." = "PGS 画像字幕にもこのサイズと位置が適用されます。";

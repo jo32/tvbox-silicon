@@ -24,6 +24,64 @@ import Testing
         #expect(SubtitleTranslation.sources(drawn.tracks, detected: [:], target: .init(identifier: "en")).isEmpty)
     }
 
+    @Test func pgsPlacementUsesAuthoredCoordinatesAndKeepsTheWholeCueVisible() {
+        let source = CGSize(width: 1920, height: 1080)
+        // The one rectangle includes the gap between the Chinese and English lines.
+        let frame = StyledSubtitleFrame(image: nil, rect: CGRect(x: 480, y: 120, width: 800, height: 160),
+                                        size: source, fitsCanvas: true)
+        let video = CGRect(x: -100, y: 58, width: 1200, height: 400)
+        let viewport = CGRect(x: 0, y: 0, width: 1000, height: 600)
+        let area = video.intersection(viewport)
+        let whole = CGRect(origin: .zero, size: source)
+        var style = SubtitleStyle()
+        #expect(frame.pgsImageRect(in: whole, visible: whole, style: style) == frame.rect)
+        let normal = frame.pgsImageRect(in: video, visible: viewport, style: style)
+        style.size = 3.75
+        let smaller = frame.pgsImageRect(in: video, visible: viewport, style: style)
+        #expect(abs(smaller.midX - normal.midX) < 0.001 && abs(smaller.midY - normal.midY) < 0.001)
+        #expect(abs(smaller.width - normal.width * 0.75) < 0.001 && abs(smaller.height - normal.height * 0.75) < 0.001)
+        style.size = SubtitleStyle.sizes.upperBound
+        for x in [0.15, 0.85] {
+            for y in [0.0, 1.0] {
+                style.place(at: CGPoint(x: x, y: y))
+                let rect = frame.pgsImageRect(in: video, visible: viewport, style: style)
+                #expect(area.contains(rect))
+                #expect(abs(rect.width / rect.height - 5) < 0.001)
+                #expect(abs(x < 0.5 ? rect.minX - area.minX : rect.maxX - area.maxX) < 0.001)
+                #expect(abs(y == 0 ? rect.minY - area.minY : rect.maxY - area.maxY) < 0.001)
+            }
+        }
+        let full = StyledSubtitleFrame(image: nil, rect: whole, size: source, fitsCanvas: true)
+        let bounded = full.pgsImageRect(in: video, visible: viewport, style: style)
+        #expect(area.contains(bounded) && bounded.height == area.height)
+        #expect(abs(bounded.width / bounded.height - source.width / source.height) < 0.001)
+        #expect(frame.pgsImageRect(in: video, visible: .zero, style: style) == .zero)
+    }
+
+    @Test func sharedStyleRestoresLegacyPositionsAndDistinguishesBottomFromAutomatic() throws {
+        let name = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(Data(#"{"x":0.5,"y":0.92,"size":7,"bold":true}"#.utf8), forKey: SubtitleStyle.key)
+        var style = SubtitleStyle.load(defaults)
+        #expect(style.followsSourcePosition && style.relativeSize == 1.4)
+        let picture = CGRect(x: 0, y: 0, width: 1280, height: 720)
+        let frame = StyledSubtitleFrame(image: nil, rect: CGRect(x: 450, y: 36, width: 350, height: 60),
+                                        size: picture.size, fitsCanvas: true)
+        let original = frame.pgsImageRect(in: picture, visible: picture, style: style)
+        #expect(original.midY == frame.rect.midY)
+        style.place(at: CGPoint(x: 0.5, y: SubtitleStyle.bottom))
+        style.save(defaults)
+        style = SubtitleStyle.load(defaults)
+        #expect(!style.followsSourcePosition && style.bold && style.relativeSize == 1.4)
+        let bottom = frame.pgsImageRect(in: picture, visible: picture, style: style)
+        #expect(abs(bottom.minY - (picture.height - bottom.height) * SubtitleStyle.bottom) < 0.001)
+        style.place(at: nil)
+        #expect(frame.pgsImageRect(in: picture, visible: picture, style: style) == original)
+        defaults.set(Data(#"{"x":0.35,"y":0.2,"size":6}"#.utf8), forKey: SubtitleStyle.key)
+        #expect(!SubtitleStyle.load(defaults).followsSourcePosition)
+    }
+
     @Test func cuesLastUntilTheNextOne() {
         let track = BitmapSubtitleTrack(name: "PGS", videoSize: CGSize(width: 1920, height: 1080))
         let image = BitmapSubtitleTrack.image([UInt8](repeating: 255, count: 4 * 4 * 4), width: 4, height: 4)!

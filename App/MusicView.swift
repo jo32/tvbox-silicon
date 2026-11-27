@@ -237,8 +237,9 @@ struct MusicView: View {
         } else if search.results.isEmpty && search.collections.isEmpty && search.busy {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 80)
         } else if search.failed {
-            ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
-                           details: failureDetails(search), retry: { search.search(query, immediately: true) }, busy: search.busy)
+            let shown = ErrorPresentation.summarize(failureDetails(search), fallback: L10n.text("Check your network connection and try again."))
+            ErrorState(title: L10n.text("Unable to Search Music"), message: shown.message,
+                           details: shown.details, retry: { search.search(query, immediately: true) }, busy: search.busy)
                 .padding(.vertical, 24).tvFocusSection()
         } else if search.filteredOut {
             EmptyResults(symbol: "line.3.horizontal.decrease", title: L10n.text("No Matches"),
@@ -401,13 +402,28 @@ private struct MusicHome: View {
             }
             .padding(.bottom, 8)
             .tvFocusSection()
-            ForEach(library.history.prefix(100)) { entry in
+            ForEach(library.history.prefix(20)) { entry in
                 // One entry can go on its own, from its menu, besides Clear for all of them (#1742).
                 if let collection = entry.collection {
                     MusicCollectionRow(collection: collection) { library.remove(entry) }
                 } else if let track = entry.track {
                     MusicTrackRow(track: track, removeFromHistory: { library.remove(entry) }) { store.music.play(track) }
                 }
+            }
+            if library.history.count > 20 {
+                // The rest of a long history waits on its own page, as the liked songs have (#2004).
+                RouteLink { MusicRecentlyPlayedView() } label: {
+                    HStack(spacing: MusicLayout.gap) {
+                        Text(L10n.text("See All")).font(.headline).foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .glassRow()
+                .tvFocusSection()
+                .accessibilityIdentifier("music.recentlyPlayed.all")
             }
         } else if empty {
             EmptyPage(symbol: "music.note", title: L10n.text("Search for a Song"),
@@ -686,8 +702,10 @@ struct MusicArtistView: View {
                     if tracks.isEmpty && (search.busy || search.query.isEmpty) {
                         ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60)
                     } else if search.failed {
-                        ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
-                                   details: search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n"),
+                        let raw = search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n")
+                        let shown = ErrorPresentation.summarize(raw, fallback: L10n.text("Check your network connection and try again."))
+                        ErrorState(title: L10n.text("Unable to Search Music"), message: shown.message,
+                                   details: shown.details,
                                    retry: { search.search(name, kind: .artists, immediately: true) }, busy: search.busy)
                             .padding(.vertical, 24).tvFocusSection()
                     } else if search.empty {
@@ -777,8 +795,9 @@ struct MusicCollectionView: View {
                 #endif
                 if loading && tracks.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
                 if let error {
-                    ErrorState(title: L10n.text("Unable to Load Songs"), message: L10n.text("Check your network connection and try again."),
-                                   details: error, retry: { Task { await load() } }, busy: loading)
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Check your network connection and try again."))
+                    ErrorState(title: L10n.text("Unable to Load Songs"), message: shown.message,
+                                   details: shown.details, retry: { Task { await load() } }, busy: loading)
                         .padding(.vertical, 24).tvFocusSection()
                 }
                 #if os(macOS)
@@ -972,5 +991,46 @@ struct MusicLikedView: View {
             .fixedSize()
             .tvFocusSection()
         }
+    }
+}
+
+/// Everything played recently, on its own page: the Music home keeps only the first twenty entries,
+/// so a long history stops pushing the rest of the page down (#2004). The rows are the home's, each
+/// removable from its menu, and Clear empties the list as it always did.
+struct MusicRecentlyPlayedView: View {
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        let library = store.music.library
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
+                HStack {
+                    SectionHeader(title: L10n.text("Recently Played"))
+                    Spacer()
+                    Button(L10n.text("Clear")) { library.clearHistory() }.controlButton()
+                }
+                .padding(.bottom, 8)
+                .tvFocusSection()
+                ForEach(library.history) { entry in
+                    if let collection = entry.collection {
+                        MusicCollectionRow(collection: collection) { library.remove(entry) }
+                    } else if let track = entry.track {
+                        MusicTrackRow(track: track, removeFromHistory: { library.remove(entry) }) { store.music.play(track) }
+                    }
+                }
+            }
+            .glassRowInsets()
+            .pageContainer()
+        }
+        .screenBackdrop()
+        .screenTitle(L10n.text("Recently Played"))
+        #if os(macOS)
+        // The section header names it, as on the other Music pages.
+        .toolbar(removing: .title)
+        #endif
+        .musicPlayerInset()
+        #if os(tvOS)
+        .onPlayPauseCommand { store.music.toggle() }
+        #endif
     }
 }

@@ -14,6 +14,32 @@ import Testing
     #expect(TelegramSource.channel(URL(string: "https://example.com/RMDJ33")!) == nil)
 }
 
+@Test func telegramHostAddressesAreRecognized() {
+    #expect(TelegramSource.isTelegramHost(URL(string: "https://t.me/RMDJ33")!))
+    #expect(TelegramSource.isTelegramHost(URL(string: "https://telegram.me/RMDJ33")!))
+    #expect(TelegramSource.isTelegramHost(URL(string: "https://t.me/+AbCdEfGh")!))
+    #expect(!TelegramSource.isTelegramHost(URL(string: "https://example.com/RMDJ33")!))
+}
+
+// A channel whose preview exposes no posts at all (its page is only its header, and its
+// posts' embed pages answer "open Telegram to view this post") reads as an explanation,
+// not as an empty list; later pages coming back empty only end the list.
+@Test func telegramEmptyPreviewSaysSoInsteadOfListingNothing() throws {
+    let posts = TelegramSource.posts(in: telegramPreview, channel: "RMDJ33")
+    let first = try TelegramSource.homeResponse(posts, page: 1)
+    #expect(first["list"]?.array?.count == 2)
+    #expect(first["pagecount"]?.int == 1000)
+    let later = try TelegramSource.homeResponse([], page: 2)
+    #expect(later["list"]?.array?.isEmpty == true)
+    #expect(later["pagecount"]?.int == 2)
+    do {
+        _ = try TelegramSource.homeResponse([], page: 1)
+        Issue.record("an empty first page should explain itself")
+    } catch {
+        #expect(error.localizedDescription.contains("Only public channels"))
+    }
+}
+
 @Test func telegramChannelImportsAsOneBuiltInSource() {
     let subscription = TelegramSource.subscription("RMDJ33", origin: URL(string: "https://t.me/RMDJ33")!)
     #expect(subscription.sites.count == 1)

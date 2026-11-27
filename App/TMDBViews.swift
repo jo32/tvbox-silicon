@@ -915,12 +915,12 @@ struct EpisodeFileDetail: View {
     }
 }
 
-/// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode without a still
+/// An episode with TMDB's still: the picture, TMDB's title for it and the source's name. An episode without a still
 /// keeps the tile's shape, with its number over the show's backdrop, or alone when there is none.
 struct TMDBEpisodeTile: View {
     let name: String
     let info: TMDBMatch.EpisodeInfo?
-    /// The file's resolution and size (4K · 5.2G), before TMDB's episode title on the second line.
+    /// The file's resolution and size (4K · 5.2G), after the source's name on the second line.
     var detail: String? = nil
     var current = false
     var loading = false
@@ -929,7 +929,7 @@ struct TMDBEpisodeTile: View {
     /// The show's pictures (`TMDBLookup.episodeBackdrops`), for an episode without a still: taken in turn by episode
     /// number, so a show with several doesn't repeat one picture down the row.
     var backdrops: [URL] = []
-    /// One line under the picture, the name then TMDB's title: the player's compact Episodes tab.
+    /// One line under the picture, TMDB's title then the name: the player's compact Episodes tab.
     var oneLine = false
     var showsOverview = false
     private var backdrop: URL? {
@@ -961,15 +961,21 @@ struct TMDBEpisodeTile: View {
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             let episodeTitle = info.map(\.name).flatMap { $0.isEmpty || $0 == name || Self.isPlaceholder($0) ? nil : $0 }
+            // TMDB's scraped title is the primary line when there is one; the resource's name moves to the caption,
+            // so the episode is still found by its file name.
+            let primary = episodeTitle ?? name
+            let resourceName: String? = episodeTitle == nil ? nil : name
             if oneLine {
-                Text(([name] + [episodeTitle].compactMap { $0 }).joined(separator: " · "))
+                Text(([primary] + [resourceName].compactMap { $0 }).joined(separator: " · "))
                     .font(.caption.weight(current ? .bold : .medium)).lineLimit(1)
                     .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             } else {
-                Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
+                Text(primary).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                     .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
                 // Always a second line, so tiles in a row stay one height.
-                let caption = [detail, episodeTitle].compactMap { $0 }
+                // The source's name first: with a still there is no number on the picture, and a long detail
+                // ("4K · 5.2G") mustn't push it off the line.
+                let caption = [resourceName, detail].compactMap { $0 }
                 Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 if showsOverview, let overview = info?.overview, !overview.isEmpty {

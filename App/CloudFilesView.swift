@@ -95,14 +95,15 @@ struct CloudFolderView: View {
     var body: some View {
         Group {
             if let files, !files.isEmpty, showsPosters, Self.hasTitles(files, drive) {
-                posterGrid(files)
+                posterGrid(files, shown: CloudPins.shared.arrange(files, drive: drive))
             } else if let files, !files.isEmpty {
                 FilesList {
                     FilesSection(title: nil, footer: nil) {
                         #if os(tvOS)
                         if Self.hasTitles(files, drive) { layoutButton.glassRow() }
                         #endif
-                        ForEach(files) { row($0, in: files) }
+                        // Pinned items first; playback still steps through the drive's own order (#1715).
+                        ForEach(CloudPins.shared.arrange(files, drive: drive)) { row($0, in: files) }
                     }
                 }
                 #if os(iOS)
@@ -174,8 +175,8 @@ struct CloudFolderView: View {
     }
 
     /// The folder's folders and videos as posters; its other files stay in the list.
-    private func posterGrid(_ files: [CloudFile]) -> some View {
-        let shown = files.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
+    private func posterGrid(_ files: [CloudFile], shown arranged: [CloudFile]) -> some View {
+        let shown = arranged.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
         let client = CloudFilesSource.client(drive, origin: store.subscription?.origin ?? URL(string: "\(CloudFiles.scheme)://\(drive.key)")!)
         return ScrollView {
             VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -202,6 +203,7 @@ struct CloudFolderView: View {
         let label = FileRowLabel(symbol: file.symbol, tint: file.tint, title: file.name, subtitle: subtitle(file), chevron: file.isFolder, artwork: file.artwork)
         if file.isFolder {
             FolderLink(drive: drive, folder: file.id, name: file.name) { label }
+                .contextMenu { pinButton(file) }
         } else if drive.plays(file) {
             let item = FavoriteItem.cloud(FavoriteCloudFile(driveKey: drive.key, folderID: folder, folderName: name, fileID: file.id, fileName: file.name, size: file.size))
             Button { play(file, in: files) } label: {
@@ -213,15 +215,27 @@ struct CloudFolderView: View {
                 }
             }
             .glassRow()
-            .contextMenu { FavoriteMenuButton(item: item, name: file.name) }
+            .contextMenu { pinButton(file); FavoriteMenuButton(item: item, name: file.name) }
             .accessibilityIdentifier("files.play." + file.name)
         } else {
             // Focusable on Apple TV all the same, or the remote couldn't scroll past these rows.
             #if os(tvOS)
             Button {} label: { label.opacity(0.55) }.glassRow()
+                .contextMenu { pinButton(file) }
             #else
             label.opacity(0.55)
+                .contextMenu { pinButton(file) }
             #endif
+        }
+    }
+
+    /// Keeps a folder or file at the top of the list, or takes the pin off (#1715).
+    private func pinButton(_ file: CloudFile) -> some View {
+        let pinned = CloudPins.shared.contains(drive: drive, file: file)
+        return Button {
+            CloudPins.shared.toggle(drive: drive, file: file)
+        } label: {
+            Label(L10n.text(pinned ? "Unpin" : "Pin to Top"), systemImage: pinned ? "pin.slash" : "pin")
         }
     }
 
