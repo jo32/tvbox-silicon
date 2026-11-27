@@ -1200,7 +1200,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 + qualities.map { option in UIAction(title: option.label, state: quality == option.id ? .on : .off) { _ in choose(option.id) } }
             items.append(UIMenu(title: L10n.text("Quality") + " · " + current, image: UIImage(systemName: "sparkles.tv"), children: options))
         }
-        if let audioTracks, audioTracks.options.count > 1 {
+        if audio.count <= 1, let audioTracks, audioTracks.options.count > 1 {
             let chooseAudioTrack = chooseAudioTrack
             let selected = selectedAudioTrack
             let options = audioTracks.options.map { option in
@@ -1214,8 +1214,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if audio.count > 1 {
             let chooseAudio = chooseAudio
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
-            let title = (audioTracks?.options.count ?? 0) > 1 ? L10n.text("Other Audio") : L10n.text("Audio")
-            items.append(UIMenu(title: title, image: UIImage(systemName: "speaker.wave.2"), children: options))
+            let current = audio.first { $0.id == audioChoice }.map { L10n.text("Audio") + " · " + $0.name } ?? L10n.text("Audio")
+            items.append(UIMenu(title: current, image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         // Always there (but for live): adding a file by its address starts here (#576).
         if let external, !live { items.append(Self.subtitleFilesMenu(external, ownSubtitles: ownSubtitles, presenter: controller)) }

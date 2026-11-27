@@ -1627,6 +1627,7 @@ import IOKit.pwr_mgt
                 self.restorePositionIfNeeded(item)
                 self.loading = self.pendingResume != nil || self.restoringPosition
                 if self.pendingResume == nil, !self.recoveryPause.consumeStayPaused() { self.player.play() }
+                self.revealPictureIfReady(); self.revealAudioIfPlaying()
                 return
             }
             self.detachItem(); self.observation = nil
@@ -1644,7 +1645,9 @@ import IOKit.pwr_mgt
     /// alone otherwise (#585). Only frames count, watched for a minute so a slow 4K stream isn't given up on.
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         let upstream = LiveRepair.upstream(url) ?? url
-        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(upstream.scheme) else { return }
+        // Not an ad-skipped stream: HLSRemux would read the source's own playlist and play the ads it skips again.
+        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), !LiveRepair.skipsAds(url),
+              ["http", "https"].contains(upstream.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
         let isAdOrRepair = LiveRepair.upstream(url) != nil
         checkingSegmentsActive = isAdOrRepair || upstream.pathExtension.lowercased() == "m3u8"
@@ -1658,7 +1661,9 @@ import IOKit.pwr_mgt
                 let playlist = isAdOrRepair || ["VOD", "LIVE"].contains(playback) || upstream.absoluteString.lowercased().contains("m3u8")
                 if playlist { self.checkingSegmentsActive = true }
                 let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
-                if self.pictureReadiness.hasFreshFrame || video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) {
+                // Only frames drawn end the check (#585): a layer can report itself ready for an HEVC-in-TS picture
+                // that never draws, and stopping here would leave that stream black with sound (#2032).
+                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) {
                     self.checkingSegmentsActive = false
                     self.revealPictureIfReady()
                     return
@@ -1707,11 +1712,7 @@ import IOKit.pwr_mgt
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
-        let position = player.currentTime().seconds
-        let wasPlaying = player.rate != 0
-        // Pause and keep the waiting screen up while HLSRemux opens, so sound doesn't play over a blank frame (#2032, #1680, #2454).
         repackagingSegments = true; checkingSegmentsActive = false
-        player.pause(); loading = true; showsPicture = false; pictureReadiness.reset()
         retrying(via: "segments")
         note(L10n.text("Repackaging the video for this device"))
         Remux.screenCaptured = Self.screenCaptured
@@ -1724,11 +1725,14 @@ import IOKit.pwr_mgt
                 return
             }
             guard let remuxed else {
-                self.repackagingSegments = false; self.loading = false
-                if wasPlaying { self.player.play() }
+                // Not repackaged (an audio-only stream, radio): it never paused, so its sound plays on.
+                self.repackagingSegments = false
                 self.revealAudioIfPlaying()
                 return
             }
+            // Repackaged: stop the sound here and keep the waiting screen up until the picture comes (#2032, #1680, #2454).
+            let position = self.player.currentTime().seconds
+            self.player.pause(); self.loading = true; self.showsPicture = false; self.pictureReadiness.reset()
             // A live stream (no duration) has no place to return to: it opens again at its live edge.
             // Use exact tolerance so playback continues where audio paused instead of repeating the last 2 s (#2032, #1680).
             if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 {
@@ -1745,7 +1749,9 @@ import IOKit.pwr_mgt
     /// Keeps at most one ungrouped audio track playing and refreshes the track picker whenever `item.tracks` populates
     /// or changes (streamed assets and HLS often populate tracks after `.readyToPlay`, #1694).
     private func syncAudioTracks(_ item: AVPlayerItem, generation activeGeneration: UUID, force: Bool = false) {
-        if UngroupedAudio.playOne(item, keeping: audioChoice) {
+        // Only where the file's own selection group doesn't cover its tracks: elsewhere AVFoundation picks the track,
+        // and a moment of two enabled tracks in a rendition switch mustn't silence the viewer's choice.
+        if force || !audioChoices.isEmpty, UngroupedAudio.playOne(item, keeping: audioChoice) {
             Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing one")
         }
         let ids = UngroupedAudio.trackIDs(item)
@@ -1753,7 +1759,11 @@ import IOKit.pwr_mgt
         observedAudioTracks = ids
         Task { [weak self] in
             let choices = await UngroupedAudio.choices(item)
-            guard let self, self.generation == activeGeneration, self.item === item else { return }
+            // The newest list only: tracks can change again while an older one loads.
+            guard let self, self.generation == activeGeneration, self.item === item, self.observedAudioTracks == ids else { return }
+            if !choices.isEmpty, UngroupedAudio.playOne(item, keeping: self.audioChoice) {
+                Diagnostics.shared.record(.info, "player", "ungrouped audio tracks arrived late; playing one")
+            }
             self.audioChoices = choices
             self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
         }
@@ -1819,7 +1829,7 @@ import IOKit.pwr_mgt
                         // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
                         // jump to the saved position and play this item's sound with no picture until then (#515).
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady() }
+                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady(); self.revealAudioIfPlaying() }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
