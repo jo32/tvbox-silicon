@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TVCore
 
@@ -48,4 +49,18 @@ import Testing
     #expect(!still.jumped(to: 100, at: 80))
     #expect(still.jumped(to: 110, at: 80))
     #expect(!still.jumped(to: .nan, at: 80))
+}
+
+@Test func resumeToleranceIsExactForRepackageHandoffAndKeyframeForHistory() {
+    #expect(SeekTolerance.resumeBefore(exact: false) == 10)
+    #expect(SeekTolerance.resumeBefore(exact: true) == 0)
+}
+
+@Test func liveRepairUpstreamUnwrapsAdSkippedAndRepairedPlaylists() {
+    let https = URL(string: "https://cdn.example.com/a/index.m3u8")!
+    let http = URL(string: "http://cdn.example.com/a/index.m3u8")!
+    #expect(LiveRepair.upstream(LiveRepair.address(https, skipsAds: true)) == https)
+    #expect(LiveRepair.upstream(LiveRepair.address(http, skipsAds: true)) == http)
+    #expect(LiveRepair.upstream(LiveRepair.address(https, skipsAds: false)) == https)
+    #expect(LiveRepair.upstream(https) == nil)
 }

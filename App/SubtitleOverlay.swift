@@ -277,8 +277,8 @@ struct SubtitleOverlay: View {
         GeometryReader { proxy in
             if !cues.native, cues.styled.isActive {
                 let picture = cues.videoRect(in: proxy.size, fills: fills, stretches: stretches)
-                let canvas = cues.styled.frame?.canvasRect(in: picture, visible: CGRect(origin: .zero, size: proxy.size)) ?? picture
-                StyledSubtitleCanvas(styled: cues.styled, picture: canvas, video: cues.pictureSize)
+                StyledSubtitleCanvas(styled: cues.styled, picture: picture, visible: CGRect(origin: .zero, size: proxy.size),
+                                     style: cues.style, video: cues.pictureSize)
             }
             if !cues.native, !cues.lines.isEmpty {
                 let picture = cues.pictureRect(in: proxy.size, fills: fills || stretches)

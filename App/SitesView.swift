@@ -70,8 +70,9 @@ struct SitesView: View {
                             }.tvFocusSection()
                         }
                         #else
-                        // The search order and hiding sources are under Edit (#973, #994).
-                        if query.isEmpty, groups.count > 1 { groupChips(groups) }
+                        // The search order and hiding sources are under Edit (#973, #994). The subscription
+                        // chips live in the pinned top bar (#2364), not here: inside this stack they scrolled
+                        // away with the site list, so a long group left no way back to the other subscriptions.
                         // A search finds sources by name; the first row looks for the videos instead (#974).
                         if pick == nil, !query.isEmpty { SearchVideosRow(query: query) }
                         #endif
@@ -120,6 +121,18 @@ struct SitesView: View {
                     // Starting or clearing a search swaps the whole page at once: never as a fade.
                     .transaction(value: query) { $0.animation = nil }
                 }
+                #if !os(tvOS)
+                // The subscription chips stay pinned above the list while it scrolls (#2364): they are the
+                // only way between groups on iPhone, iPad and Mac, and the list below them is long. tvOS
+                // keeps its folds, so it has no chips to pin. Hidden while searching, as they were in the stack.
+                .topBar {
+                    if query.isEmpty, groups.count > 1 {
+                        groupChips(groups)
+                            .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
+                            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
+                    }
+                }
+                #endif
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
@@ -1045,6 +1058,8 @@ struct HideSourcesCard: View {
 struct HiddenSourcesEditor: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Groups folded away, by group id (#2282): a long subscription list no longer has to be scrolled through.
+    @State private var collapsed = Set<String>()
 
     private func isHidden(_ site: Site) -> Bool {
         store.subscription.map { store.hiddenSources.contains(site, origin: $0.origin) } ?? false
@@ -1136,20 +1151,34 @@ struct HiddenSourcesEditor: View {
                 }
                 ForEach(groups) { group in
                     let hidden = group.sites.filter(isHidden)
+                    let folded = collapsed.contains(group.id)
                     Section {
-                        ForEach(group.sites) { site in
-                            let shown = !isHidden(site)
-                            Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
-                                .buttonStyle(.plain)
-                                .accessibilityAddTraits(shown ? [.isSelected] : [])
-                                .accessibilityIdentifier("sources.hidden.row." + site.key)
-                                #if os(iOS)
-                                .listRowBackground(Surface())
-                                #endif
+                        if !folded {
+                            ForEach(group.sites) { site in
+                                let shown = !isHidden(site)
+                                Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityAddTraits(shown ? [.isSelected] : [])
+                                    .accessibilityIdentifier("sources.hidden.row." + site.key)
+                                    #if os(iOS)
+                                    .listRowBackground(Surface())
+                                    #endif
+                            }
                         }
                     } header: {
                         HStack(spacing: 12) {
-                            Text(L10n.text(group.title)).lineLimit(1)
+                            Button {
+                                withAnimation(.smooth) {
+                                    if folded { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: folded ? "chevron.right" : "chevron.down")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    Text(L10n.text(group.title)).lineLimit(1)
+                                }
+                            }
+                            .accessibilityLabel(L10n.text(group.title))
                             Spacer(minLength: 8)
                             Button(L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
                             Button(L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
@@ -1316,10 +1345,11 @@ struct SiteView: View {
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
+                            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                             ErrorState(
                                 title: L10n.text("Unable to load this source"),
-                                message: L10n.text("Try again, or choose another source to keep watching."),
-                                details: error,
+                                message: shown.message,
+                                details: shown.details,
                                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                                 goBack: { dismiss() },
                                 busy: browser.busy
@@ -2187,6 +2217,7 @@ struct VideoDetailView: View {
     #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @State private var fullScreen = false
     /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
     @State private var turnedFullScreen = false
@@ -2561,12 +2592,16 @@ struct VideoDetailView: View {
         }
     }
     private func errorCard(_ error: String) -> some View {
-                    ErrorState(
-                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
-                        message: detail == nil
+                    let shown = ErrorPresentation.summarize(
+                        error,
+                        fallback: detail == nil
                             ? L10n.text("Try again, or go back and choose another video.")
-                            : L10n.text("Try another episode or playback source."),
-                        details: error,
+                            : L10n.text("Try another episode or playback source.")
+                    )
+                    return ErrorState(
+                        title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
+                        message: shown.message,
+                        details: shown.details,
                         retry: detail == nil ? { startRequest { await loadDetail() } } : nil,
                         goBack: { dismiss() },
                         busy: busy,
@@ -2606,7 +2641,7 @@ struct VideoDetailView: View {
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "detail \(client.reportContext)", error)
-            self.error = error.localizedDescription
+            self.error = ErrorPresentation.reason(for: error)
             #if os(tvOS)
             // The loading placeholder that held focus is gone: Retry in the hero takes it.
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }
@@ -3035,6 +3070,13 @@ struct VideoDetailView: View {
         let showsStills = items.count > 1 && (!tmdb.episodeTiles(items).isEmpty || (tmdbPending && items.count <= 60))
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
+        // The episode playing, else the one watched last, so it reads as the current one in the grid (#2572).
+        // As in watchedFlag: watchChannel only exists off tvOS, and only iOS reads it here.
+        #if os(iOS)
+        let currentID = (watchChannel?.historyContext ?? watchHistory?.context)?.episode(in: items)?.id
+        #else
+        let currentID = watchHistory?.context.episode(in: items)?.id
+        #endif
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
             ForEach(shownOrder(items)) { episode in
                 let saved = download(episode)
@@ -3042,18 +3084,18 @@ struct VideoDetailView: View {
                     if showsStills {
                         Button { startRequest { await play(episode) } } label: {
                             TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], detail: episodeDetails[episode.id],
-                                            loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
+                                            current: episode.id == currentID, loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
                         }
                         .tmdbCardButton()
                         .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
                         .accessibilityLabel(episode.name)
                     } else if longNames {
                         EpisodeRow(name: episode.name, label: episodeLabels[episode.id], file: episodeDetails[episode.id],
-                                   loading: loadingEpisode == episode.id, download: saved) {
+                                   current: episode.id == currentID, loading: loadingEpisode == episode.id, download: saved) {
                             startRequest { await play(episode) }
                         }
                     } else {
-                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true,
+                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id || episode.id == currentID, fill: true,
                              subtitle: episodeDetails[episode.id]) { startRequest { await play(episode) } }
                             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
                     }
@@ -3180,7 +3222,9 @@ struct VideoDetailView: View {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
-    /// Where the viewer stopped last time, for Continue.
+    /// Where the viewer stopped last time, for Continue. All history, a hidden source's too: its page is only reached
+    /// on purpose (its own page, a favorite), and there resuming is what the viewer wants. Only Discover, which
+    /// matches across sources by title, keeps to visible history (#2202).
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
     }
@@ -3246,10 +3290,15 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
-            // Leaving the page ends its playback, as the full-screen player's Back does.
-            if watchChannel != nil { store.playing = nil }
+            let unfolded = WatchPage.isLargeDisplay
+            // Leaving the page ends its playback, as the full-screen player's Back does. Unfolding iPhone Duo to its
+            // inner display hands playback over to the full-screen cover instead (#1967, #1528, #2103).
+            if !unfolded, watchChannel != nil { store.playing = nil }
             store.watchPageScopes.subtract(watchScopes)
-            if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
+            if fullScreen {
+                fullScreen = false
+                if unfolded { PlayerOrientation.release(forcePortrait: false) } else { PlayerOrientation.set(landscape: false) }
+            }
             turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
@@ -3284,7 +3333,7 @@ struct VideoDetailView: View {
             }
             if covered { watchCover.transition(.opacity) }
         }
-        .animation(.easeOut(duration: 0.35), value: covered)
+        .animation(covered ? .easeOut(duration: 0.35) : nil, value: covered)
     }
 
     /// The cover's words while it waits: the source finding the episode's link, then the page's player getting it ready.
@@ -3310,7 +3359,7 @@ struct VideoDetailView: View {
     /// it upright again returns to the page. The watch page holds the interface upright (`PlayerOrientation`), so it
     /// doesn't turn by itself: this listens to the phone's own turning instead.
     private func phoneTurned() {
-        guard watchChannel != nil, PlayerOrientation.available else { return }
+        guard watchChannel != nil, PlayerOrientation.available, scenePhase == .active else { return }
         switch UIDevice.current.orientation {
         case .landscapeLeft, .landscapeRight:
             guard !fullScreen else { return }
@@ -3476,9 +3525,13 @@ struct VideoDetailView: View {
 
 /// The iPhone watch page's 选集 row. Discover's title page shows it too (`DetailEmbed`), on iPad and the Mac as well.
 extension VideoDetailView {
-    /// What plays at the top of the page: one of this video's episodes.
+    /// What plays at the top of the page: one of this video's episodes, unless a standalone full-screen cover already
+    /// owns playback (for example after folding iPhone Duo from its inner display to its outer display).
     private var watchChannel: Channel? {
-        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
+        #if os(iOS)
+        guard !store.fullScreenPlayerPresented else { return nil }
+        #endif
+        return store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
     }
     /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
     private var currentEpisodeID: Episode.ID? {
@@ -3516,7 +3569,7 @@ extension VideoDetailView {
                             if let seasonControl = embed?.seasonControl {
                                 seasonControl
                             } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                                SeasonsButton(video: video, client: client, capsule: true)
+                                SeasonsButton(video: video, client: client, capsule: true, appColorScheme: embed?.appColorScheme)
                             }
                             if items.count > (compact ? 5 : 2) {
                                 Button { episodePage = nil; showsAllEpisodes = true } label: {
@@ -3811,9 +3864,10 @@ extension VideoDetailView {
             #endif
             if detail == nil {
                 if let error, !busy {
+                    let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
                     ErrorState(title: L10n.text("Unable to load video details"),
-                               message: L10n.text("Try again, or choose another source to keep watching."),
-                               details: error, retry: { startRequest { await loadDetail() } })
+                               message: shown.message,
+                               details: shown.details, retry: { startRequest { await loadDetail() } })
                 } else {
                     HStack(spacing: 8) {
                         ForEach(0..<4, id: \.self) { _ in SkeletonBlock(cornerRadius: 10).frame(width: 150, height: 54) }
@@ -3898,7 +3952,7 @@ extension VideoDetailView {
                 if let seasonControl = embed.seasonControl {
                     seasonControl
                 } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
-                    SeasonsButton(video: video, client: client)
+                    SeasonsButton(video: video, client: client, appColorScheme: embed.appColorScheme)
                 }
             }
             .focusSection()
@@ -3973,10 +4027,23 @@ private struct AppColorScheme: ViewModifier {
 struct OpensAtEpisode: ViewModifier {
     let episode: Episode.ID?
     @State private var position: Episode.ID?
+    /// Whether the sheet has finished opening at the playing episode. While the centre anchor stays active,
+    /// every cell crossing the middle of a large grid is pulled back to centre, which shook the episode tiles
+    /// sideways as the viewer dragged up and down a long drama (#2561). Once placed, plain tracking only
+    /// observes which item is in view and stops re-aligning it.
+    @State private var settled = false
     init(_ episode: Episode.ID?) { self.episode = episode }
     func body(content: Content) -> some View {
-        content.scrollPosition(id: $position, anchor: .center)
-            .task { if let episode { position = episode } }
+        content
+            .scrollPosition(id: $position, anchor: settled ? nil : .center)
+            .task {
+                guard let episode else { return }
+                position = episode
+                // Let the lazy grid place the episode (setting it before layout left a long series at
+                // episode 1, #1380) before handing scrolling back to plain tracking (#2561).
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                settled = true
+            }
     }
 }
 
@@ -4005,6 +4072,13 @@ enum WatchPage {
 
     @MainActor static func applies(_ horizontal: UserInterfaceSizeClass?, _ vertical: UserInterfaceSizeClass?) -> Bool {
         UIDevice.current.userInterfaceIdiom == .phone && !(horizontal == .regular && vertical == .regular)
+    }
+
+    /// Reads the live window scene's size classes directly: inside `onDisappear` after unfolding iPhone Duo, SwiftUI's
+    /// `@Environment` on the removed view can still hold the outer display's compact size class (#1967, #1528, #2103).
+    @MainActor static var isLargeDisplay: Bool {
+        guard let traits = UIApplication.shared.appWindowScene?.traitCollection else { return false }
+        return traits.horizontalSizeClass == .regular && traits.verticalSizeClass == .regular
     }
 
     /// iPad, where Play Automatically opens the player full screen (#1168). Not the iPad app on a Mac, whose page
@@ -4150,7 +4224,7 @@ private struct BundleSignIn: Identifiable {
 }
 
 /// Cloud drives a line plays from, to start a video on a line that can play now.
-private enum CloudDrive {
+enum CloudDrive {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
     /// lines without it, so those lines are never held back for it.
     case quark, uc, xunlei
@@ -4168,16 +4242,19 @@ private enum CloudDrive {
         let text = flag.lowercased()
         return ["嘟嘟", "百度", "度盘", "baidu", "阿狸", "阿里", "aliyun"].contains { text.contains($0) }
     }
+    /// Whether a line can play automatically without popping up a drive sign-in screen.
+    static func canAutoPlay(_ flag: String, accounts: CloudDriveAccounts? = nil) -> Bool {
+        if withoutSignIn(flag) { return false }
+        guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
+        let loaded = accounts ?? (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        let cookie = drive == .quark ? loaded.quarkCookie : loaded.ucCookie
+        return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     /// The first line that can play now: not from a drive without a sign-in, nor one without the app's sign-in.
     /// Those lines still play when chosen: their plugin asks for the account with its own code.
     static func preferredFlag(_ flags: [String]) -> String? {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
-        return flags.first { flag in
-            if withoutSignIn(flag) { return false }
-            guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
-            let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
-            return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        return flags.first { canAutoPlay($0, accounts: accounts) }
     }
 }
 
@@ -4188,6 +4265,8 @@ struct EpisodeRow: View {
     var label: String? = nil
     /// Resolution and size from the file name (4K · 5.2G), shown in place of the size tag.
     var file: String? = nil
+    /// The episode playing (else the one watched last): read as the current one, like a loading one (#2572).
+    var current = false
     let loading: Bool
     var download: DownloadItem? = nil
     let action: () -> Void
@@ -4220,7 +4299,7 @@ struct EpisodeRow: View {
                     else { Image(systemName: "play.fill").font(.system(size: Self.metrics.icon)).foregroundStyle(hovering ? .primary : .tertiary) }
                 }
                 .frame(width: Self.metrics.icon + 6)
-                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading ? .semibold : .medium))
+                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading || current ? .semibold : .medium))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 8)
                 if let detail = parts.detail {
@@ -4231,7 +4310,7 @@ struct EpisodeRow: View {
             .padding(.horizontal, Self.metrics.inset).frame(minHeight: Self.metrics.height)
             .frame(maxWidth: .infinity, alignment: .leading)
             #if !os(tvOS)
-            .background(Color.primary.opacity(loading ? 0.12 : (hovering ? 0.08 : 0.04)),
+            .background(Color.primary.opacity(loading || current ? 0.12 : (hovering ? 0.08 : 0.04)),
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             #endif
             .contentShape(Rectangle())
@@ -4493,10 +4572,11 @@ extension SiteView {
     /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
     @ViewBuilder private var spaceGrid: some View {
         if let error = browser.error {
+            let shown = ErrorPresentation.summarize(error, fallback: L10n.text("Try again, or choose another source to keep watching."))
             ErrorState(
                 title: L10n.text("Unable to load this source"),
-                message: L10n.text("Try again, or choose another source to keep watching."),
-                details: error,
+                message: shown.message,
+                details: shown.details,
                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                 goBack: { dismiss() },
                 busy: browser.busy
@@ -4918,6 +4998,9 @@ struct SeasonsButton: View {
     let client: CatalogClient
     /// In the episode header, match the glass capsule used by All.
     var capsule = false
+    /// The app's light or dark look when the page forces its own (Discover detail): the sheet's rows otherwise
+    /// inherit the page's white text while the sheet background follows the app, going white on white (#2536).
+    var appColorScheme: ColorScheme? = nil
     @Environment(Store.self) private var store
     @Environment(\.openRoute) private var openRoute
     @State private var showsSeasons = false
@@ -4955,7 +5038,7 @@ struct SeasonsButton: View {
         #endif
         .sheet(isPresented: $showsSeasons) {
             // Pushed on the page's own stack; with none to push on, inside the sheet.
-            SeasonsSheet(video: video, client: client, open: openRoute.map { openRoute in
+            SeasonsSheet(video: video, client: client, appColorScheme: appColorScheme, open: openRoute.map { openRoute in
                 { found in
                     showsSeasons = false
                     openRoute(Route { AnyView(CatalogDestination(video: found.video, client: client)) })
@@ -4977,6 +5060,9 @@ struct SeasonsButton: View {
 private struct SeasonsSheet: View {
     let video: Video
     let client: CatalogClient
+    /// The app's look: a Discover page paints itself in its artwork's colours, so the sheet's inherited text would
+    /// otherwise be white against the app-coloured background (#2536). Mirrors All Episodes' `AppColorScheme`.
+    let appColorScheme: ColorScheme?
     let open: ((SeasonTitles.Found) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var found: [SeasonTitles.Found]?
@@ -5007,6 +5093,11 @@ private struct SeasonsSheet: View {
             #endif
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
         }
+        #if !os(tvOS)
+        // The Discover page forces its artwork's colour scheme onto everything it presents; the sheet's rows must
+        // use the app's own look instead (All Episodes does the same), or the text is white on white in daylight (#2536).
+        .modifier(AppColorScheme(scheme: appColorScheme))
+        #endif
         #if os(iOS)
         .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])

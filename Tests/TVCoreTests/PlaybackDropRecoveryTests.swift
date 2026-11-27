@@ -53,4 +53,59 @@ struct PlaybackDropRecoveryTests {
         #expect(recovery.delay(after: error(NSURLErrorDomain, NSURLErrorNetworkConnectionLost), position: .nan) == nil)
         #expect(recovery.attempts == 0)
     }
+
+    @Test func pausedErrorLogReconnectKeepsPlayerPaused() {
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: true, at: 100)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: false, at: 100.1)
+        #expect(pause.stayPaused)
+        let keepPaused = pause.consumeStayPaused()
+        #expect(keepPaused)
+        #expect(!pause.stayPaused)
+    }
+
+    @Test func pausedFailureReconnectKeepsPlayerPaused() {
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: true, at: 100)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: true, at: 130)
+        #expect(pause.stayPaused)
+        // A second retry before the first restores keeps stayPaused set.
+        pause.noteReconnect(currentlyPaused: false, fromFailure: true, at: 133)
+        #expect(pause.stayPaused)
+        let keepPaused = pause.consumeStayPaused()
+        #expect(keepPaused)
+    }
+
+    @Test func failureThatPausedPlayingVideoStillResumes() {
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: false, at: 100)
+        // AVPlayer sets timeControlStatus to .paused right as it posts the failure notification.
+        pause.update(paused: true, at: 105.0)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: true, at: 105.05)
+        #expect(!pause.stayPaused)
+        let keepPaused = pause.consumeStayPaused()
+        #expect(!keepPaused)
+    }
+
+    @Test func playingAgainDropsAStalePause() {
+        // Paused, a reconnect noted it, then the viewer played from Picture in Picture's own button: the next
+        // reconnect must not keep the video paused.
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: true, at: 100)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: false, at: 101)
+        #expect(pause.stayPaused)
+        pause.update(paused: false, at: 102)
+        #expect(!pause.stayPaused)
+        let keepPaused = pause.consumeStayPaused()
+        #expect(!keepPaused)
+    }
+
+    @Test func explicitClearResumesPlayback() {
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: true, at: 10)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: true, at: 40)
+        #expect(pause.stayPaused)
+        pause.clear()
+        #expect(!pause.stayPaused)
+    }
 }

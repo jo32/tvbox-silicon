@@ -10,6 +10,9 @@ public enum SourceLists {
 public struct SourceGroup: Equatable, Sendable, Identifiable {
     public enum Kind: Equatable, Sendable {
         case pinned, builtIn, subscription(String)
+        /// The viewer's Telegram channels, on their own instead of mixed into Recommended:
+        /// they are added one channel at a time, and read differently from every other source.
+        case telegram
         /// The sources the viewer hid, last on the page.
         case hidden
     }
@@ -21,6 +24,7 @@ public struct SourceGroup: Equatable, Sendable, Identifiable {
         case .pinned: "pinned"
         case .builtIn: "builtIn"
         case .subscription(let address): address
+        case .telegram: "telegram"
         case .hidden: "hidden"
         }
     }
@@ -38,8 +42,10 @@ public enum SourceGroups {
         var groups: [SourceGroup] = []
         let pinnedSites = pinOrder.filter(eligible)
         if !pinnedSites.isEmpty { groups.append(SourceGroup(kind: .pinned, title: "Pinned Group", sites: pinnedSites)) }
-        let builtInSites = builtIns.filter { eligible($0) && !isPinned($0, fallback: builtInOrigin) }
+        let telegramSites = builtIns.filter { $0.isTelegram && eligible($0) && !isPinned($0, fallback: builtInOrigin) }
+        let builtInSites = builtIns.filter { !$0.isTelegram && eligible($0) && !isPinned($0, fallback: builtInOrigin) }
         if !builtInSites.isEmpty { groups.append(SourceGroup(kind: .builtIn, title: "Recommended", sites: builtInSites)) }
+        if !telegramSites.isEmpty { groups.append(SourceGroup(kind: .telegram, title: "Telegram", sites: telegramSites)) }
         for entry in entries where entry.enabled {
             guard let origin = documents[entry.address]?.origin else { continue }
             let own = mergedSites.filter { !$0.isBuiltIn && $0.provenance?.origin == origin && !isPinned($0, fallback: origin) && eligible($0) }
@@ -55,7 +61,8 @@ public enum SourceGroups {
     }
 
     /// The Watch Now source row. Pinned and built-in sources keep the order they were given.
-    /// Every other source follows the sources page: one subscription after another, in that page's order.
+    /// Telegram channels follow the sources page's Telegram group, and every other source follows
+    /// the sources page: one subscription after another, in that page's order.
     /// Hidden sources stay in their group on the sources page and do not join this row.
     public static func homeRow(pinned: [Site], builtIn: [Site], groups: [SourceGroup]) -> [Site] {
         let placed = Set((pinned + builtIn).map(\.id))

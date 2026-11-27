@@ -402,6 +402,23 @@ import VideoToolbox
         #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
     }
 
+    /// An MP4 tagged `hev1` whose hvcC lists no parameter sets, as Dolby's packager writes them (the sets are in the
+    /// stream). Its initialization segment gets them from the first keyframe; copied empty, AVPlayer failed at once
+    /// with CoreMedia error -4 (#769, #1644).
+    @Test func hevcWhoseSettingsAreOnlyInTheStreamPlaysRepackaged() async throws {
+        let file = try fixture("remux-hev1-bare.mp4")
+        #expect(CloudStreams.lacksParameterSets(try Data(contentsOf: file)))
+        let url = try await Remux.open(try Remux.fileSource(file))
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains("CODECS=\"hvc1.") && master.contains("RESOLUTION=320x180"))
+        let initialization = try await fetch(url.deletingLastPathComponent().appending(path: "0.mp4"))
+        #expect(RemuxPlan.box("hvcC", in: initialization) != nil && !CloudStreams.lacksParameterSets(initialization))
+        let played = await picture(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
+        #expect(played.size == CGSize(width: 320, height: 180) && played.video)
+    }
+
     @Test func aviIsConvertedForAVPlayer() async throws {
         let url = try await Remux.open(try Remux.fileSource(fixture("remux-convert.avi")))
         defer { Remux.stop(url) }

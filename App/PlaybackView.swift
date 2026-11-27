@@ -35,6 +35,9 @@ import IOKit.pwr_mgt
     private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
     @ObservationIgnored private var soughtAhead: Double?
+    /// True when `pendingResume` is an in-session handoff (`repackageSegments`): land on the exact second instead of
+    /// jumping back up to 10 s to a keyframe and repeating audio just heard (#2032, #1680, #2454).
+    @ObservationIgnored private var exactResume = false
     private var restoringPosition = false
     private(set) var restoredPosition: Double?
     private(set) var requestedResumePosition: Double?
@@ -217,6 +220,8 @@ import IOKit.pwr_mgt
     }
 
     var error: String? { didSet { if error != nil { countPlay(.failed) } } }
+    /// Technical details behind the latest failure (host, HTTP status, domain/code chain) for Show details (#2560).
+    private(set) var errorDetails: String?
     /// This play on its way to the first frame, counted for the play success rate (`PlayAttempt`).
     private var attempt: PlayAttempt?
     /// A retry rung is trying to save this play (a short constant such as "line"): if the picture then starts, the
@@ -230,6 +235,47 @@ import IOKit.pwr_mgt
     var buffering = false
     /// Whether the picture has started moving: the waiting screen stays until then, so no black frame shows between.
     private(set) var showsPicture = false
+    @ObservationIgnored private var pictureReadiness = PictureReadiness()
+    /// Whether `checkSegmentedPicture` is still watching a playlist that has shown no video frames yet.
+    @ObservationIgnored private var checkingSegmentsActive = false
+    /// Whether `repackageSegments` is currently opening `HLSRemux`.
+    @ObservationIgnored private var repackagingSegments = false
+    /// Called by the player layer / controller when `isReadyForDisplay` changes, so the waiting backdrop drops on the
+    /// exact frame the video appears (#2636, #1629, #1956) instead of lagging behind it.
+    func setDisplayReady(_ ready: Bool) {
+        pictureReadiness.displayChanged(ready)
+        if ready { revealPictureIfReady() }
+    }
+    private func revealPictureIfReady() {
+        guard !showsPicture, let item, player.currentItem === item else { return }
+        let hasFrameRate = item.tracks.contains { $0.assetTrack?.mediaType == .video && $0.isEnabled && $0.currentVideoFrameRate > 0 }
+        guard pictureReadiness.shouldReveal(itemReady: item.status == .readyToPlay,
+                                            pendingResume: pendingResume != nil || restoringPosition,
+                                            checkingPicture: checkingPicture,
+                                            repackagingSegments: repackagingSegments,
+                                            hasVideoFrameRate: hasFrameRate) else { return }
+        showPicture(delay: 0)
+    }
+    private func showPicture(delay: TimeInterval) {
+        guard !showsPicture else { return }
+        showsPicture = true
+        countPlay(.started)
+        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
+        let seconds = player.currentTime().seconds
+        let waited = max(0, Date().timeIntervalSince(openedAt) - delay)
+        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", waited))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+    }
+    /// Reveals an audio-only stream once checks confirm there is no video picture waiting to be repackaged.
+    private func revealAudioIfPlaying() {
+        guard !showsPicture, player.timeControlStatus == .playing, let item, player.currentItem === item,
+              pictureReadiness.shouldRevealWithoutFrame(itemReady: item.status == .readyToPlay,
+                                                        playing: true,
+                                                        pendingResume: pendingResume != nil || restoringPosition,
+                                                        checkingPicture: checkingPicture,
+                                                        checkingSegments: checkingSegmentsActive,
+                                                        repackagingSegments: repackagingSegments) else { return }
+        showPicture(delay: 0)
+    }
     /// When this episode (or line) began to open: the waiting screen counts from here until the first frame.
     private(set) var openedAt = Date()
     /// The SF Symbol that names the latest failure for the error screen.
@@ -244,6 +290,9 @@ import IOKit.pwr_mgt
     /// Plays another line of the same episode when this file can't play here (an MKV original);
     /// returns that line's name, or nil when there is none.
     var onUnplayableFile: (() -> String?)?
+    /// Automatically switches to another safe line of the same catalog episode when playback fails (#2560);
+    /// returns that line's name, or nil when none remain.
+    var onFallbackLine: (() -> String?)?
     /// The episode after this one, resolved for the queue; nil when there is none.
     var upcomingEpisode: (@MainActor () async -> Channel?)?
     /// Whether playback runs on into the next episode (auto-play can be switched off meanwhile).
@@ -332,6 +381,8 @@ import IOKit.pwr_mgt
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
     private var dropRecovery = PlaybackDropRecovery()
     private var reopenedAfterDrop = false
+    /// Remembers whether playback was already paused when a reconnect started, so it stays paused (#1641).
+    private var recoveryPause = PlaybackRecoveryPause()
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
     /// The item whose HLS stream is being watched for sound without a picture (`checkSegmentedPicture`).
@@ -384,6 +435,10 @@ import IOKit.pwr_mgt
                 // Stopped at the end by the Sleep Timer with the next episode queued: Play goes on to it.
                 if upcoming != nil, player.items().count > 1 { player.advanceToNextItem() } else { player.seek(to: .zero) }
             }
+            recoveryPause.clear()
+            #if !os(macOS)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            #endif
             player.play()
         } else { player.pause() }
         // The button follows the tap at once; the player's status (observed below) confirms it a moment later.
@@ -457,6 +512,8 @@ import IOKit.pwr_mgt
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
+        tracksObservation = nil; observedAudioTracks = []
+        checkingSegmentsActive = false; repackagingSegments = false
         sampler?.cancel(); sampler = nil
     }
 
@@ -554,16 +611,24 @@ import IOKit.pwr_mgt
         let detail = failure.map(Self.describe) ?? "-"
         // The proxy's own last failure when the once-a-second sample missed it (a lookup that failed at once).
         let upstream = transfer.failure ?? proxy?.stats.snapshot.failure ?? proxyReason
-        Diagnostics.shared.record(.error, "player", "failed host=\(transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host() ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
+        let host = transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host()
+        Diagnostics.shared.record(.error, "player", "failed host=\(host ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
         if retryLive(after: failure) { return }
         if tryNextLine(after: failure) { return }
         // A refused link is usually an expired one: say so in plain words rather than the system's.
         let expired = refused || [401, 403, 404, 410].contains(transfer.httpStatus ?? 0)
+        let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+        let status = transfer.httpStatus ?? item.errorLog()?.events.last?.errorStatusCode
+        let summary = PlaybackFailure.describe(failure, httpStatus: status, host: host, upstream: upstream,
+                                               isLoopback: loopback, refused: expired)
+        let isDolbyVisionRefusal = Remux.isDolbyVision(url) && Self.refusedContent(failure)
+        if !isDolbyVisionRefusal, tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
         loading = false
-        errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
+        errorSymbol = isDolbyVisionRefusal ? "play.slash.fill" : summary.symbol
+        errorDetails = summary.details
         error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
             : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
-            : failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+            : summary.message
     }
 
     /// The rung that got the stream playing, in the log: which one, and what the proxy repaired.
@@ -642,20 +707,63 @@ import IOKit.pwr_mgt
     }
 
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy or a saved download refusing
-    /// (-1004) and gives up 30 s later.
-    /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
-    /// a server that stays down shows its error.
-    private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
-        guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true || PlaybackRescue.owns(url),
+    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy, a saved download, or a
+    /// plugin's own local playback server (e.g. 127.0.0.1:19979, #1642) refusing (-1004) and gives up 30 s later.
+    /// Yingxia's own servers listen again on a new port; a plugin's own loopback server is asked for a fresh link
+    /// via `renewLink` so the plugin can rebind or return a live address. At most once a minute, so a server that
+    /// stays down falls back to another line or shows its error.
+    private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID, fromFailure: Bool = true) -> Bool {
+        guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code) else { return false }
+        let ownLoopback = Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true || PlaybackRescue.owns(url)
+        let pluginLoopback = !ownLoopback && PlaybackFailure.isLoopbackRefusal(url, errorCode: code) && renewLink != nil
+        guard ownLoopback || pluginLoopback,
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
+        recoveryPause.noteReconnect(currentlyPaused: player.timeControlStatus == .paused, fromFailure: fromFailure, at: ProcessInfo.processInfo.systemUptime)
         loopbackRecovered = .now; retrying(via: "loopback")
-        let position = player.currentTime().seconds
+        let current = player.currentTime().seconds
+        let position = current.isFinite && current > 0 ? current : (pendingResume ?? 0)
         detachItem(); observation = nil; loading = true
-        Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
+        Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) own=\(ownLoopback) at=\(position.isFinite ? Int(position) : -1)s; recovering")
         let adapter = proxy.flatMap { $0.serves(url) ? $0 : nil }
         preparation = Task { [weak self] in
+            if pluginLoopback {
+                guard let self else { return }
+                // Give a waking plugin server a brief beat, then ask the source for a fresh playback link.
+                try? await Task.sleep(for: .milliseconds(500))
+                guard self.generation == active, !Task.isCancelled else { return }
+                let renewed = await self.renewLink?(channel)
+                guard self.generation == active, !Task.isCancelled else { return }
+                if let renewed {
+                    let reopened = Channel(name: channel.name, group: channel.group, url: renewed.url, logo: channel.logo,
+                                           headers: renewed.headers, skipScope: channel.skipScope, historyContext: channel.historyContext,
+                                           resumePosition: position > 0 ? position : channel.resumePosition,
+                                           subtitles: renewed.subtitles.isEmpty ? channel.subtitles : renewed.subtitles,
+                                           skips: renewed.skips.isEmpty ? channel.skips : renewed.skips,
+                                           bilibiliPart: channel.bilibiliPart)
+                    do {
+                        let prepared = try await self.prepare(reopened)
+                        guard self.generation == active, !Task.isCancelled else { return Self.stopAdapter(prepared) }
+                        if prepared.matroska {
+                            Self.stopAdapter(prepared)
+                            self.handleUnplayableMatroska()
+                            return
+                        }
+                        if position > 0 { self.pendingResume = position }
+                        self.playing = reopened; self.automatic = prepared.url
+                        self.configure(reopened, url: prepared.url, generation: active)
+                        return
+                    } catch {
+                        guard self.generation == active, !Task.isCancelled else { return }
+                        Diagnostics.shared.failure("player", "loopback renew prepare", error)
+                    }
+                }
+                let fallbackError = NSError(domain: NSURLErrorDomain, code: code)
+                if self.tryNextLine(after: fallbackError) { return }
+                let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                if self.tryCatalogFallback(after: fallbackError, channel: channel, details: summary.details) { return }
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
+            }
             var fresh: URL?, failure: Error?
             do {
                 if let adapter { fresh = try await adapter.relisten(url) }
@@ -670,7 +778,12 @@ import IOKit.pwr_mgt
             guard let self, self.generation == active, !Task.isCancelled else { return }
             guard let fresh else {
                 if let failure { Diagnostics.shared.failure("player", "loopback relisten", failure) }
-                self.error = failure?.localizedDescription ?? L10n.text("Playback was interrupted."); self.loading = false; return
+                let fallbackError = failure ?? NSError(domain: NSURLErrorDomain, code: code)
+                if self.tryNextLine(after: fallbackError) { return }
+                let summary = PlaybackFailure.describe(fallbackError, host: url.host(), isLoopback: true)
+                if self.tryCatalogFallback(after: fallbackError, channel: channel, details: summary.details) { return }
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
             }
             if position.isFinite, position > 0 { self.pendingResume = position }
             if self.automatic == url { self.automatic = fresh }
@@ -689,6 +802,7 @@ import IOKit.pwr_mgt
         let current = player.currentTime().seconds
         let position = pendingResume ?? (current.isFinite ? current : 0)
         guard let delay = dropRecovery.delay(after: failure, position: position) else { return false }
+        recoveryPause.noteReconnect(currentlyPaused: player.timeControlStatus == .paused, fromFailure: true, at: ProcessInfo.processInfo.systemUptime)
         reopenedAfterDrop = true; retrying(via: "drop")
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "dropped host=\(transfer.host ?? url.host() ?? "-") at=\(Int(position))s attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening")
@@ -776,9 +890,12 @@ import IOKit.pwr_mgt
             }
             guard let remuxed else {
                 if self.tryNextLine(after: failure) { return }
+                let summary = PlaybackFailure.describe(failure, host: self.transfer.host ?? channel.url.host())
+                if self.tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
                 self.loading = false
-                self.errorSymbol = "play.slash.fill"
-                self.error = failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+                self.errorSymbol = summary.symbol
+                self.errorDetails = summary.details
+                self.error = summary.message
                 return
             }
             self.configure(channel, url: remuxed, generation: active)
@@ -820,7 +937,10 @@ import IOKit.pwr_mgt
             case .webPage:
                 Diagnostics.shared.record(.warning, "player.webpage", "a web page, not a video host=\(url.host() ?? "-") source=\(channel.historyContext?.sourceKey ?? "-")")
                 if self.tryNextLine(after: failure) { return }
+                let details = PlaybackFailure.describe(failure, host: url.host()).details
+                if self.tryCatalogFallback(after: failure, channel: channel, details: details) { return }
                 self.loading = false; self.errorSymbol = "safari"
+                self.errorDetails = details
                 self.error = L10n.text("This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.")
                 return
             case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
@@ -894,10 +1014,54 @@ import IOKit.pwr_mgt
         return (url: fresh.url, headers: fresh.headers.merging(CloudStreams.playlistHeaders(for: fresh.url) ?? [:]) { $1 })
     }
 
-    /// The other line could not be resolved either: show why instead of loading forever.
+    /// Clears the failure state immediately while asking the source for a fresh link on Retry (#1642).
+    func beginRetry() {
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
+        loading = true; showsPicture = false; openedAt = .now
+    }
+
+    /// Shows the waiting state while switching to another line of the same episode (#2560).
+    /// Keeps any earlier `errorDetails` (or records `preservingDetails`) so if the switch itself fails to resolve,
+    /// the viewer still sees the technical details from the original playback failure.
+    func beginLineSwitch(to line: String, failedFlag: String? = nil, preservingDetails details: String? = nil) {
+        let target = line.isEmpty ? L10n.text("another line") : line
+        if let details { errorDetails = details }
+        error = nil; errorSymbol = "play.slash.fill"; loading = true
+        if let failed = failedFlag, !failed.isEmpty {
+            switchNotice = L10n.text("%@ didn't play. Trying %@.", failed, target)
+        } else {
+            switchNotice = L10n.text("Trying %@…", target)
+        }
+    }
+
+    /// Tries the next safe line of the same catalog episode (bounded by `PlaybackLineFallback`), returning true if
+    /// a switch started (#2560). Offline failures affect every line and never trigger an automatic switch.
+    private func tryCatalogFallback(after failure: Error?, channel: Channel, details: String? = nil) -> Bool {
+        guard PlaybackFailure.describe(failure).allowsAutomaticLineSwitch else { return false }
+        guard let next = onFallbackLine?() else { return false }
+        retrying(via: "catalog-line")
+        detachItem(); observation = nil
+        beginLineSwitch(to: next, failedFlag: channel.historyContext?.episodeFlag, preservingDetails: details)
+        Diagnostics.shared.record(.warning, "player", "catalog line failed \(failure.map(Self.describe) ?? "-"); switching to \(next)")
+        return true
+    }
+
+    /// The other line could not be resolved either: show why instead of loading forever, keeping earlier technical details.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
         switchNotice = nil; error = message; loading = false
+    }
+
+    /// Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: switch to the drive's
+    /// transcoded line, or stop loading and show an error instead of leaving the spinner running.
+    private func handleUnplayableMatroska() {
+        if let line = onUnplayableFile?() {
+            Diagnostics.shared.record(.warning, "player", "mkv original; switching to line=\(line)")
+            switchNotice = L10n.text("The original file is MKV, which Apple devices can't play, so the %@ line is playing instead.", line)
+            return
+        }
+        Diagnostics.shared.record(.warning, "player", "mkv original; no transcoded line")
+        error = L10n.text("This video is an MKV file, which Apple devices can't play."); loading = false
     }
 
     func setSpeed(_ speed: Float) {
@@ -1143,7 +1307,7 @@ import IOKit.pwr_mgt
         return nil
     }
 
-    /// Selects a detailed audio option from the tvOS transport-bar menu (#2388).
+    /// Selects a detailed audio option from the Audio menu, remembered for the next episode (#2388, #2184).
     func chooseAudioTrack(_ option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) {
         guard let item, player.currentItem === item, let tracks = mediaTracks.audio, tracks.group == group,
               tracks.options.contains(option) else { return }
@@ -1155,6 +1319,14 @@ import IOKit.pwr_mgt
 
     /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
     func chooseSubtitle(_ option: AVMediaSelectionOption?, in group: AVMediaSelectionGroup) {
+        if let audio = mediaTracks.audio, audio.group == group {
+            // AVKit has already switched; only remember the viewer's pick (#2184).
+            if let option, let index = audio.options.firstIndex(of: option) {
+                AudioChoice.remember(audio.descriptions[index], for: subtitleScope)
+            }
+            mediaTracks.selectionChanged()
+            return
+        }
         guard let item, player.currentItem === item, let tracks = mediaTracks.legible, tracks.group == group else { return }
         let description: TrackLabel.Option?
         if let option {
@@ -1218,6 +1390,8 @@ import IOKit.pwr_mgt
         AVTextStyleRule(textMarkupAttributes: SubtitleStyle.load().attributes).map { [$0] } ?? []
     }
     private var observation: NSKeyValueObservation?
+    private var tracksObservation: NSKeyValueObservation?
+    @ObservationIgnored private var observedAudioTracks: [CMPersistentTrackID] = []
     private var failureObserver: NSObjectProtocol?
     private var preparation: Task<Void, Never>?
     /// The local HLS proxy the stream plays through: always on the Mac, elsewhere after a direct failure (`retryThroughProxy`).
@@ -1231,8 +1405,8 @@ import IOKit.pwr_mgt
     static weak var current: PlaybackSession?
     func start(_ channel: Channel) {
         Self.current = self
-        // The queue has already moved on to this episode by itself.
-        if let advanced, advanced == channel { self.advanced = nil; return }
+        // The queue has already moved on to this episode by itself; never swallow an explicit restart after an error.
+        if let advanced, advanced == channel, error == nil { self.advanced = nil; return }
         lines = channel.alternates.isEmpty ? [] : channel.lines
         line = 0; triedLines = [0]
         open(channel)
@@ -1266,7 +1440,7 @@ import IOKit.pwr_mgt
 
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
-        stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
+        stop(); error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; pictureReadiness.reset(); openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         let live = channel.replay == nil && (LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live"))
         begin(channel, live: live)
         isLive = live
@@ -1274,7 +1448,7 @@ import IOKit.pwr_mgt
         attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false; rescues = 0
         stopRescue(); rescueAttempt = PlaybackRescue.Attempt()
-        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
+        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false; recoveryPause.clear()
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -1311,7 +1485,11 @@ import IOKit.pwr_mgt
             catch {
                 guard self.generation == activeGeneration, !Task.isCancelled else { return }
                 if self.tryNextLine(after: error) { return }
-                self.error = error.localizedDescription; self.loading = false; return
+                let loopback = ["127.0.0.1", "localhost"].contains(channel.url.host() ?? "")
+                let summary = PlaybackFailure.describe(error, host: channel.url.host(), isLoopback: loopback)
+                if self.tryCatalogFallback(after: error, channel: channel, details: summary.details) { return }
+                self.errorSymbol = summary.symbol; self.errorDetails = summary.details
+                self.error = summary.message; self.loading = false; return
             }
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
             #if os(macOS)
@@ -1320,15 +1498,7 @@ import IOKit.pwr_mgt
             #endif
             // Drives keep originals as uploaded. One that couldn't be repackaged for AVPlayer: say so now, or
             // switch to the drive's transcoded line, instead of letting AVPlayer fail with a vague error.
-            if prepared.matroska {
-                if let line = self.onUnplayableFile?() {
-                    Diagnostics.shared.record(.warning, "player", "mkv original; switching to line=\(line)")
-                    self.switchNotice = L10n.text("The original file is MKV, which Apple devices can't play, so the %@ line is playing instead.", line)
-                    return
-                }
-                Diagnostics.shared.record(.warning, "player", "mkv original; no transcoded line")
-                self.error = L10n.text("This video is an MKV file, which Apple devices can't play."); self.loading = false; return
-            }
+            if prepared.matroska { self.handleUnplayableMatroska(); return }
             let address = prepared.url
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
@@ -1342,14 +1512,17 @@ import IOKit.pwr_mgt
     }
     private func configure(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
         clockMark = nil
+        error = nil; errorDetails = nil
         #if !os(macOS)
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Not a reason to stop: the item plays on, its sound once the session can start (AVAudioSession '!pla'
-            // when another app holds it). As an error it hid a playing video behind the error screen.
-            Diagnostics.shared.failure("player", "audio session", error)
+        if !recoveryPause.stayPaused {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                // Not a reason to stop: the item plays on, its sound once the session can start (AVAudioSession '!pla'
+                // when another app holds it). As an error it hid a playing video behind the error screen.
+                Diagnostics.shared.failure("player", "audio session", error)
+            }
         }
         #endif
         if !url.isFileURL {
@@ -1382,7 +1555,9 @@ import IOKit.pwr_mgt
         let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
         if qaSpeed > 0 { player.defaultRate = qaSpeed }
         #endif
-        if pendingResume == nil { player.play() } else { seekAhead() }
+        if pendingResume == nil {
+            if !recoveryPause.consumeStayPaused() { player.play() }
+        } else { seekAhead() }
         #if DEBUG
         // `-qaSeek <seconds>` starts playback there, for screenshots.
         let qaSeek = UserDefaults.standard.double(forKey: "qaSeek")
@@ -1485,7 +1660,8 @@ import IOKit.pwr_mgt
                 self.checkingPicture = false
                 self.restorePositionIfNeeded(item)
                 self.loading = self.pendingResume != nil || self.restoringPosition
-                if self.pendingResume == nil { self.player.play() }
+                if self.pendingResume == nil, !self.recoveryPause.consumeStayPaused() { self.player.play() }
+                self.revealPictureIfReady(); self.revealAudioIfPlaying()
                 return
             }
             self.detachItem(); self.observation = nil
@@ -1502,28 +1678,55 @@ import IOKit.pwr_mgt
     /// HEVC track but doesn't show it, and a 4K stream that takes longer than eight seconds to start, both play sound
     /// alone otherwise (#585). Only frames count, watched for a minute so a slow 4K stream isn't given up on.
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
-        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
+        let upstream = LiveRepair.upstream(url) ?? url
+        // Not an ad-skipped stream: HLSRemux would read the source's own playlist and play the ads it skips again.
+        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), !LiveRepair.skipsAds(url),
+              ["http", "https"].contains(upstream.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
+        let isAdOrRepair = LiveRepair.upstream(url) != nil
+        checkingSegmentsActive = isAdOrRepair || upstream.pathExtension.lowercased() == "m3u8"
+            || ["VOD", "LIVE"].contains(item.accessLog()?.events.last?.playbackType ?? "")
         Task { [weak self] in
             var pictureless = 0
             for _ in 0..<120 {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
+                let playback = item.accessLog()?.events.last?.playbackType ?? ""
+                let playlist = isAdOrRepair || ["VOD", "LIVE"].contains(playback) || upstream.absoluteString.lowercased().contains("m3u8")
+                if playlist { self.checkingSegmentsActive = true }
                 let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
-                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) { return }
+                // Only frames drawn end the check (#585): a layer can report itself ready for an HEVC-in-TS picture
+                // that never draws, and stopping here would leave that stream black with sound (#2032).
+                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) {
+                    self.checkingSegmentsActive = false
+                    self.revealPictureIfReady()
+                    return
+                }
                 // The rate counts frames drawn, so it reads 0 too for a picture nothing draws (a hidden or minimized
                 // window). Only HEVC is listed without being shown; any other listed picture plays, as before #585.
-                if !video.isEmpty, await !Self.mayBeHEVC(video) { return }
+                if !video.isEmpty, await !Self.mayBeHEVC(video) {
+                    guard self.generation == active, self.item === item else { return }
+                    self.checkingSegmentsActive = false
+                    self.revealAudioIfPlaying()
+                    return
+                }
                 guard self.generation == active, self.item === item else { return }
                 // The first frames land a beat after sound starts; four checks without any is no picture.
                 guard self.player.timeControlStatus == .playing else { pictureless = 0; continue }
                 pictureless += 1
                 guard pictureless >= 4 else { continue }
                 // Only a playlist can be repackaged; a plain file mustn't be read whole to find that out.
-                let playback = item.accessLog()?.events.last?.playbackType ?? ""
-                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { continue }
-                self.repackageSegments(item, channel: channel, url: url, generation: active)
+                guard playlist else {
+                    self.checkingSegmentsActive = false
+                    self.revealAudioIfPlaying()
+                    return
+                }
+                self.repackageSegments(item, channel: channel, url: upstream, generation: active)
                 return
+            }
+            if let self, self.generation == active, self.item === item {
+                self.checkingSegmentsActive = false
+                self.revealAudioIfPlaying()
             }
         }
     }
@@ -1543,6 +1746,7 @@ import IOKit.pwr_mgt
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
+        repackagingSegments = true; checkingSegmentsActive = false
         retrying(via: "segments")
         note(L10n.text("Repackaging the video for this device"))
         Remux.screenCaptured = Self.screenCaptured
@@ -1550,14 +1754,25 @@ import IOKit.pwr_mgt
             var remuxed: URL?
             do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
             catch { if !Task.isCancelled { Diagnostics.shared.record(.info, "player", "hls not repackaged \(Self.describe(error))") } }
-            guard let self, self.generation == active, !Task.isCancelled, self.item === item, let remuxed else {
+            guard let self, self.generation == active, !Task.isCancelled, self.item === item else {
                 if let remuxed { Remux.stop(remuxed) }
                 return
             }
+            guard let remuxed else {
+                // Not repackaged (an audio-only stream, radio): it never paused, so its sound plays on.
+                self.repackagingSegments = false
+                self.revealAudioIfPlaying()
+                return
+            }
+            // Repackaged: stop the sound here and keep the waiting screen up until the picture comes (#2032, #1680, #2454).
             let position = self.player.currentTime().seconds
+            self.player.pause(); self.loading = true; self.showsPicture = false; self.pictureReadiness.reset()
             // A live stream (no duration) has no place to return to: it opens again at its live edge.
-            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 { self.pendingResume = position }
-            self.loading = true
+            // Use exact tolerance so playback continues where audio paused instead of repeating the last 2 s (#2032, #1680).
+            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 {
+                self.pendingResume = position
+                self.exactResume = true
+            }
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)
             self.externalSubtitles.playing(remuxed)
@@ -1565,12 +1780,53 @@ import IOKit.pwr_mgt
         }
     }
 
+    /// Keeps at most one ungrouped audio track playing and refreshes the track picker whenever `item.tracks` populates
+    /// or changes (streamed assets and HLS often populate tracks after `.readyToPlay`, #1694).
+    private func syncAudioTracks(_ item: AVPlayerItem, generation activeGeneration: UUID, force: Bool = false) {
+        // Only where the file's own selection group doesn't cover its tracks: elsewhere AVFoundation picks the track,
+        // and a moment of two enabled tracks in a rendition switch mustn't silence the viewer's choice.
+        if force || !audioChoices.isEmpty, UngroupedAudio.playOne(item, keeping: audioChoice) {
+            Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing one")
+        }
+        let ids = UngroupedAudio.trackIDs(item)
+        guard force || ids != observedAudioTracks else { return }
+        observedAudioTracks = ids
+        Task { [weak self] in
+            let choices = await UngroupedAudio.choices(item)
+            // The newest list only: tracks can change again while an older one loads.
+            guard let self, self.generation == activeGeneration, self.item === item, self.observedAudioTracks == ids else { return }
+            if !choices.isEmpty, UngroupedAudio.playOne(item, keeping: self.audioChoice) {
+                Diagnostics.shared.record(.info, "player", "ungrouped audio tracks arrived late; playing one")
+            }
+            self.audioChoices = choices
+            self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+            if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
+        }
+        if !force, item.status == .readyToPlay {
+            Task { [weak self] in
+                guard let self, self.item === item else { return }
+                await self.mediaTracks.load(item)
+                guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
+                if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                    self.externalSubtitles.nativeChosen()
+                }
+            }
+        }
+    }
+
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil; liveReadyAt = nil
+        audioChoices = []; audioChoice = nil; observedAudioTracks = []; liveReadyAt = nil
         mediaTracks.follow(item)
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
+        tracksObservation = item.observe(\.tracks, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == activeGeneration, self.item === item else { return }
+                self.syncAudioTracks(item, generation: activeGeneration)
+                self.revealPictureIfReady()
+            }
+        }
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
             let timeline = status == .readyToPlay && item.duration.isNumeric
@@ -1584,14 +1840,7 @@ import IOKit.pwr_mgt
                     if self.isLive { self.liveReadyAt = .now }
                     self.lineReadyAt = .now; self.lineWatch?.cancel(); self.lineWatch = nil
                     self.noteRungRecovered(url)
-                    if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
-                    Task { [weak self] in
-                        let choices = await UngroupedAudio.choices(item)
-                        guard let self, self.generation == activeGeneration, self.item === item else { return }
-                        self.audioChoices = choices
-                        self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
-                        if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
-                    }
+                    self.syncAudioTracks(item, generation: activeGeneration, force: true)
                     Task { [weak self] in
                         guard let self, self.item === item else { return }
                         await self.mediaTracks.load(item)
@@ -1600,11 +1849,14 @@ import IOKit.pwr_mgt
                            self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
                             self.externalSubtitles.nativeChosen()
                         }
-                        _ = self.restoreAudioChoice(item, tracks: self.mediaTracks.audio, scope: self.subtitleScope)
+                        if self.audioChoices.isEmpty, UngroupedAudio.trackIDs(item).count <= (self.mediaTracks.audio?.options.count ?? 0) {
+                            _ = self.restoreAudioChoice(item, tracks: self.mediaTracks.audio, scope: self.subtitleScope)
+                        }
                     }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
+                    self.revealPictureIfReady()
                     Diagnostics.shared.record(.info, "player", "ready host=\(self.transfer.host ?? channel.url.host() ?? "-")")
                     if !self.rescueAttempt.ready, url == self.rescueAttempt.address, let rung = self.rescueAttempt.rung, let began = self.rescueAttempt.began {
                         Diagnostics.shared.record(.warning, "player", "rescued rung=\(rung) trouble=\(self.rescueAttempt.trouble?.rawValue ?? "-") host=\(self.rescueAttempt.origin?.host() ?? "-") after=\(began.duration(to: .now).components.seconds)s")
@@ -1616,7 +1868,7 @@ import IOKit.pwr_mgt
                         // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
                         // jump to the saved position and play this item's sound with no picture until then (#515).
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item) }
+                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady(); self.revealAudioIfPlaying() }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
@@ -1628,7 +1880,7 @@ import IOKit.pwr_mgt
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     let giveUp = { @MainActor [weak self] (reason: String?) -> Void in
-                        guard let self else { return }
+                        guard let self, self.generation == activeGeneration else { return }
                         self.giveUp(failure, item: item, channel: channel, url: url, refused: refused, network: network, proxyReason: reason)
                     }
                     // The rest of the chain; a link the container rescue finds nothing for comes back here. One tail: `giveUp`.
@@ -1646,15 +1898,25 @@ import IOKit.pwr_mgt
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self, weak item] notification in
             let failure = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
-            let message = failure?.localizedDescription
+            let refused = Self.refusedLink(failure, log: item?.errorLog())
+            let logStatus = item?.errorLog()?.events.last?.errorStatusCode
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
                 if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                 if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
-                Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
+                let host = self.transfer.host ?? channel.url.host()
+                Diagnostics.shared.record(.error, "player", "interrupted host=\(host ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 if self.tryNextLine(after: failure) { return }
-                self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
+                let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+                let summary = PlaybackFailure.describe(failure, httpStatus: self.transfer.httpStatus ?? logStatus,
+                                                       host: host, upstream: self.transfer.failure,
+                                                       isLoopback: loopback, refused: refused)
+                if self.tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
+                self.errorSymbol = summary.symbol
+                self.errorDetails = summary.details
+                self.error = failure == nil ? L10n.text("Playback was interrupted.") : summary.message
+                self.loading = false
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -1685,24 +1947,32 @@ import IOKit.pwr_mgt
                 if playing, !self.sleepFade.isActive, self.sleepFadeRevision != nil { self.cancelSleepFade() }
                 self.buffering = waiting
                 self.paused = paused
+                self.recoveryPause.update(paused: paused, at: ProcessInfo.processInfo.systemUptime)
                 // No plugin conversion ahead of time while a video plays or loads: it ran a core flat out (#1428).
                 PluginConversionAhead.playbackChanged(!paused)
                 #if os(macOS)
                 self.displayAwake.hold(!paused)
                 #endif
                 if paused { self.clearBoost(); self.saveHistory() }
-                // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 // A queued episode the queue moved to plays under the picture already on screen.
                 if playing, self.showsPicture { self.countPlay(.started) }
                 if playing, !self.showsPicture {
-                    Task { @MainActor [weak self] in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing, !self.showsPicture else { return }
-                        self.showsPicture = true
-                        self.countPlay(.started)
-                        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
-                        let seconds = self.player.currentTime().seconds
-                        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", Date().timeIntervalSince(self.openedAt) - 0.35))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+                    self.revealPictureIfReady()
+                    if !self.showsPicture {
+                        Task { @MainActor [weak self] in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing,
+                                  !self.showsPicture, let item = self.item, self.player.currentItem === item else { return }
+                            self.revealPictureIfReady()
+                            guard !self.showsPicture,
+                                  self.pictureReadiness.shouldRevealWithoutFrame(itemReady: item.status == .readyToPlay,
+                                                                                 playing: true,
+                                                                                 pendingResume: self.pendingResume != nil || self.restoringPosition,
+                                                                                 checkingPicture: self.checkingPicture,
+                                                                                 checkingSegments: self.checkingSegmentsActive,
+                                                                                 repackagingSegments: self.repackagingSegments) else { return }
+                            self.showPicture(delay: 0.35)
+                        }
                     }
                 }
             }
@@ -1776,7 +2046,7 @@ import IOKit.pwr_mgt
         if next.failure == nil, let error = item.errorLog()?.events.last, let date = error.date, now.timeIntervalSince(date) < 30 {
             // The loopback server behind the episode stopped listening: AVPlayer would keep trying it for 30 s.
             if error.errorDomain == NSURLErrorDomain,
-               recoverLoopback(error.errorStatusCode, channel: channel, url: url, generation: activeGeneration) { return false }
+               recoverLoopback(error.errorStatusCode, channel: channel, url: url, generation: activeGeneration, fromFailure: false) { return false }
             if (400..<600).contains(error.errorStatusCode) { next.httpStatus = error.errorStatusCode }
             next.failure = error.errorComment ?? "\(error.errorDomain) \(error.errorStatusCode)"
         }
@@ -1869,25 +2139,29 @@ import IOKit.pwr_mgt
         subtitles.follow(nil)
         mediaTracks.follow(nil)
         subtitleScope = nil
-        historyContext = nil; pendingResume = nil; restoringPosition = false
+        historyContext = nil; pendingResume = nil; restoringPosition = false; exactResume = false
+        checkingSegmentsActive = false; repackagingSegments = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
-        onPlaybackEnded = nil; onUnplayableFile = nil
+        onPlaybackEnded = nil; onUnplayableFile = nil; onFallbackLine = nil
         if player.currentItem != nil {
             let seconds = player.currentTime().seconds
             Diagnostics.shared.record(.info, "player", "stop at=\(seconds.isFinite ? Int(seconds) : -1)s")
         }
         generation = UUID()
+        recoveryPause.clear()
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
         transfer = Transfer(); steps = []
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
         if let proxy { Task { await proxy.stop() } }; proxy = nil
         observation = nil
+        tracksObservation = nil; observedAudioTracks = []
         timeObservation = nil
         muteObservation = nil
         volumeObservation = nil
@@ -1921,7 +2195,7 @@ import IOKit.pwr_mgt
         lastHistoryPosition = nil
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
+        restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil; exactResume = false
         subtitleScope = Self.subtitleScope(for: channel)
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
@@ -1954,18 +2228,21 @@ import IOKit.pwr_mgt
         // A live stream (a sports line a source lists as an episode) has no duration, so there is no place to
         // return to. Waiting for one left "loading" on and the player paused for good (#683, #717): play it from its live edge.
         if item.duration.isIndefinite {
-            pendingResume = nil; soughtAhead = nil; loading = false
-            if !editingSkip { player.play() }
+            pendingResume = nil; soughtAhead = nil; exactResume = false; loading = false
+            revealPictureIfReady()
+            if !editingSkip, !recoveryPause.consumeStayPaused() { player.play() }
             return
         }
         guard let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
         let activeGeneration = generation
+        let before = SeekTolerance.resumeBefore(exact: exactResume)
         // The item opened at the saved place (`seekAhead`) and is there: it plays from where it already loaded.
         let ahead = soughtAhead; soughtAhead = nil
         let landed = player.currentTime().seconds
-        if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - 10.5, landed <= target + 0.5 {
-            pendingResume = nil; loading = false
+        if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - (before + 0.5), landed <= target + 0.5 {
+            pendingResume = nil; exactResume = false; loading = false
             restoredPosition = landed
+            revealPictureIfReady()
             Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(landed) opened there")
             Task { await self.playRestored(item, generation: activeGeneration) }
             return
@@ -1974,17 +2251,20 @@ import IOKit.pwr_mgt
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
         note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
         // Up to 10 s early, at the keyframe before the saved place: the player shows it without first reading and
-        // decoding the frames up to the exact second (half a second and more from a cloud drive).
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+        // decoding the frames up to the exact second (half a second and more from a cloud drive). Exact when handing
+        // off from repackaging so audio just heard isn't repeated.
+        let toleranceBefore = before > 0 ? CMTime(seconds: before, preferredTimescale: 600) : .zero
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: toleranceBefore,
                     toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
-                self.restoringPosition = false; self.pendingResume = nil; self.loading = false
+                self.restoringPosition = false; self.pendingResume = nil; self.exactResume = false; self.loading = false
                 guard finished else {
                     self.error = L10n.text("The player could not restore the saved position. Try again.")
                     return
                 }
                 self.restoredPosition = self.player.currentTime().seconds
+                self.revealPictureIfReady()
                 Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(self.restoredPosition ?? -1)")
                 await self.playRestored(item, generation: activeGeneration)
             }
@@ -1997,7 +2277,9 @@ import IOKit.pwr_mgt
     private func seekAhead() {
         guard let target = pendingResume, target.isFinite, target > 0, !Self.oldResume else { return }
         soughtAhead = target
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+        let before = SeekTolerance.resumeBefore(exact: exactResume)
+        let toleranceBefore = before > 0 ? CMTime(seconds: before, preferredTimescale: 600) : .zero
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: toleranceBefore,
                     toleranceAfter: .zero)
     }
 
@@ -2009,7 +2291,7 @@ import IOKit.pwr_mgt
         let drive = (item.asset as? AVURLAsset)?.url
         let quick = if let drive { await CloudStreams.keepsUp(drive) } else { false }
         guard generation == activeGeneration else { return }
-        if !editingSkip {
+        if !editingSkip, !recoveryPause.consumeStayPaused() {
             if quick { player.playImmediately(atRate: player.defaultRate) } else { player.play(); if !Self.oldResume { resumeAfterJump() } }
         }
         saveHistory()
@@ -2298,12 +2580,14 @@ extension PlaybackSession {
                             let tracks = await MediaTracks.subtitleGroup(queued)
                             guard let self, self.upcoming?.item === queued else { return }
                             _ = self.restoreSubtitleChoice(queued, tracks: tracks, scope: Self.subtitleScope(for: next))
-                            if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
-                                _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
-                            }
+                            // Our own picker's tracks when the file has them, else its selection group's.
                             let choices = await UngroupedAudio.choices(queued)
-                            if !choices.isEmpty, self.upcoming?.item === queued {
-                                _ = self.restoreUngroupedAudioChoice(queued, choices: choices, scope: Self.subtitleScope(for: next))
+                            if !choices.isEmpty {
+                                if self.upcoming?.item === queued {
+                                    _ = self.restoreUngroupedAudioChoice(queued, choices: choices, scope: Self.subtitleScope(for: next))
+                                }
+                            } else if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
+                                _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
                             }
                         }
                         if let intro, intro.enabled, intro.introEnd > 0,
@@ -2391,10 +2675,11 @@ extension PlaybackSession {
         upcomingObservation = nil; upcomingTask = nil; self.upcoming = nil
         player.actionAtItemEnd = .pause
         generation = UUID()
+        recoveryPause.clear()
         let activeGeneration = generation
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
-        error = nil; switchNotice = nil; quality = nil
+        error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil; quality = nil
         // A queued next episode is a point video, never live. It is a play of its own, counted here: it never opens.
         begin(channel, live: false)
         attempt = PlayAttempt(live: false, address: channel.url)

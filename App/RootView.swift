@@ -8,6 +8,8 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     /// Apple TV's sidebar item for the song playing, first while one is loaded; it opens the player.
     case nowPlaying = "Now Playing"
     var id: String { rawValue }
+    /// Pages the app can open on: places one browses from, not Search, Settings or a folded tab (#1673).
+    static let launchChoices: [AppSection] = [.home, .discover, .live, .music, .manga, .novels, .sites, .files, .favorites, .downloads]
     /// The raw values are also saved settings and QA arguments, so the offline cache keeps its old one.
     var title: String { self == .downloads ? L10n.text("Offline Cache") : L10n.text(rawValue) }
     /// Where Software Update lives: Settings, or More when Settings is folded into it.
@@ -230,7 +232,8 @@ struct RootView: View {
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .musicNowPlaying(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 }), zoom: nowPlayingZoom)
-            .onChange(of: store.section) { _, section in
+            // `initial`: the launch page (#1673) can be a section under More before any change happens.
+            .onChange(of: store.section, initial: true) { _, section in
                 if phoneTabs && inMore.contains(section) {
                     moreSection = section; morePath = NavigationPath([section])
                     store.section = .more

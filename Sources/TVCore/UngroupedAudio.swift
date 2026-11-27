@@ -13,21 +13,35 @@ public enum UngroupedAudio {
         public let language: String?
     }
 
-    /// Leaves only the first enabled sound track playing when the item plays more than one at once; true when it
-    /// switched any off.
-    @MainActor @discardableResult public static func playOne(_ item: AVPlayerItem) -> Bool {
+    /// Leaves only one enabled sound track playing when the item plays more than one at once; true when it switched
+    /// any off. Keeps `preferred` when it is among the enabled tracks, otherwise the first enabled track.
+    @MainActor @discardableResult public static func playOne(_ item: AVPlayerItem, keeping preferred: CMPersistentTrackID? = nil) -> Bool {
         let playing = audio(item).filter(\.isEnabled)
         guard playing.count > 1 else { return false }
-        for track in playing.dropFirst() { track.isEnabled = false }
+        let kept = preferred.flatMap { id in playing.first { $0.assetTrack?.trackID == id } } ?? playing.first
+        for track in playing where track !== kept { track.isEnabled = false }
         return true
     }
 
-    /// The sound tracks to choose between, in the file's order; empty when there is only one, or when the file
-    /// groups them and the selection group offers them.
+    /// The item's audio track IDs in order, so the player can detect when tracks populate or change after `.readyToPlay` (#1694).
+    @MainActor public static func trackIDs(_ item: AVPlayerItem) -> [CMPersistentTrackID] {
+        audio(item).compactMap { $0.assetTrack?.trackID }
+    }
+
+    /// Whether the item needs our own track picker instead of relying solely on the `.audible` selection group: true
+    /// when there are multiple audio tracks and the selection group does not cover all of them (ungrouped dubs,
+    /// separate alternate groups, or an ungrouped track alongside a grouped pair).
+    static func needsPicker(trackCount: Int, audibleOptionCount: Int) -> Bool {
+        trackCount > 1 && audibleOptionCount < trackCount
+    }
+
+    /// The sound tracks to choose between, in the file's order; empty when there is only one, or when the file's
+    /// `.audible` selection group already covers every audio track.
     @MainActor public static func choices(_ item: AVPlayerItem) async -> [Choice] {
         let tracks = audio(item).compactMap(\.assetTrack)
         guard tracks.count > 1 else { return [] }
-        if let group = try? await item.asset.loadMediaSelectionGroup(for: .audible), group.options.count > 1 { return [] }
+        let grouped = (try? await item.asset.loadMediaSelectionGroup(for: .audible))?.options.count ?? 0
+        guard needsPicker(trackCount: tracks.count, audibleOptionCount: grouped) else { return [] }
         var titles: [String?] = [], languages: [String?] = []
         for track in tracks {
             let loaded = try? await track.load(.extendedLanguageTag, .languageCode, .commonMetadata)

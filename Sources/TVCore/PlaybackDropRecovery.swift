@@ -56,3 +56,58 @@ public struct PlaybackDropRecovery: Sendable {
     /// Core Media's "media load failed" (-15628) and "no response for media file" (-12889).
     static let stalledMedia: Set<Int> = [-15628, -12889]
 }
+
+/// Tracks whether playback was already paused when a loopback relisten or drop reconnect started, so reopening the
+/// stream restores its position without unpausing a paused player (such as a paused PiP window tucked to the edge of
+/// the screen, #1641).
+public struct PlaybackRecoveryPause: Sendable, Equatable {
+    /// How long playback must have been paused before an error notification to count as paused by the viewer rather
+    /// than paused by the error itself: AVPlayer transitions `timeControlStatus` to `.paused` right as it posts
+    /// `AVPlayerItemFailedToPlayToEndTime`.
+    public static let failureGrace: TimeInterval = 0.5
+
+    /// Whether the current reconnect should leave the player paused once it has restored its position.
+    public private(set) var stayPaused = false
+    /// Monotonic uptime when `timeControlStatus` last became `.paused`, or nil while playing or buffering.
+    private var pausedSince: TimeInterval?
+
+    public init() {}
+
+    /// Records whether `player.timeControlStatus == .paused` at `now` (monotonic uptime in seconds).
+    public mutating func update(paused: Bool, at now: TimeInterval) {
+        if paused {
+            if pausedSince == nil { pausedSince = now }
+        } else {
+            pausedSince = nil
+            // Playing again, by whatever means (Picture in Picture's own button too): a reconnect noted while paused
+            // no longer holds, or the next one would stay paused against the viewer's play.
+            stayPaused = false
+        }
+    }
+
+    /// Call before reopening after a loopback loss or connection drop.
+    /// `fromFailure`: true when called from a failure callback (`AVPlayerItemFailedToPlayToEndTime` or item `.failed`),
+    /// false when called from `sample()` on a still-live item's error log.
+    public mutating func noteReconnect(currentlyPaused: Bool, fromFailure: Bool, at now: TimeInterval) {
+        if stayPaused { return }
+        guard currentlyPaused else { return }
+        if !fromFailure {
+            stayPaused = true
+        } else if let pausedSince, now - pausedSince >= Self.failureGrace {
+            stayPaused = true
+        }
+    }
+
+    /// Consumes `stayPaused` once the reopened item is ready to play (or stay paused). Returns true when playback
+    /// should remain paused instead of calling `player.play()`.
+    public mutating func consumeStayPaused() -> Bool {
+        defer { stayPaused = false }
+        return stayPaused
+    }
+
+    /// The viewer explicitly asked to play, or a new playback/stop reset the session.
+    public mutating func clear() {
+        stayPaused = false
+        pausedSince = nil
+    }
+}

@@ -621,6 +621,8 @@
 "Pinned" = "已置顶";
 "Pin source" = "置顶源";
 "Unpin source" = "取消置顶";
+"Pin to Top" = "置顶";
+"Unpin" = "取消置顶";
 "Pinned Group" = "置顶";
 "Hide Source" = "隐藏源";
 "Open Subscription" = "打开所属订阅";
@@ -716,6 +718,7 @@
 "Not loaded yet" = "尚未加载";
 "This address lists %lld subscriptions. They were added switched off; turn on the ones you want." = "此地址包含 %lld 个订阅，已全部添加并处于关闭状态；请打开你想用的订阅。";
 "%lld subscriptions could not be refreshed; their last copies stay in use." = "%lld 个订阅更新失败，将继续使用上次的副本。";
+"%@ could not be refreshed; its last copy stays in use." = "%@ 更新失败，将继续使用上次的副本。";
 "Responding normally" = "响应正常";
 "Slow or unreliable lately" = "最近较慢或不稳定";
 "Failing; skipped in search for now" = "连续失败，暂时不参与搜索";
@@ -1071,6 +1074,7 @@
 "Brightness" = "亮度";
 "Slide for Brightness and Volume" = "滑动调节亮度和音量";
 "Tab Bar Labels" = "标签栏文字";
+"Launch Page" = "启动页面";
 "Collapse Tab Bar When Scrolling" = "滚动时收起标签栏";
 "Off shows only the icons in the tab bar along the bottom." = "关闭后，底部标签栏只显示图标。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "在视频左侧上下滑动调节亮度，在右侧上下滑动调节音量。";
@@ -1945,6 +1949,8 @@
 "Refresh List" = "刷新列表";
 "Refreshed." = "已刷新。";
 "Remove from Bookshelf" = "从书架移除";
+"Remove %lld books" = "移除 %lld 本";
+"Remove %lld books from the Bookshelf?" = "要从书架移除 %lld 本？";
 "Search All Sources" = "搜索全部书源";
 "Search Books" = "搜索书籍";
 "Search asks every source that is on. Turn off the ones that never answer to make it faster." = "搜索会询问所有已开启的书源。关掉从不响应的书源可以搜得更快。";
@@ -2118,6 +2124,7 @@
 "This address doesn't hold a subscription. Add it as a new one instead." = "此地址不是订阅，请作为新的订阅添加。";
 "Couldn't load this address: %@" = "无法加载此地址：%@";
 "Use New Address" = "改用新地址";
+"Subscription address updated." = "订阅地址已更新。";
 "File" = "文件";
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "映匣会保存这个文件的副本。之后修改原文件不会同步到映匣；需要更新时，请再次用映匣打开它。";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "已添加洛雪音源“%@”，音乐会通过它播放歌曲。可在“音乐设置 › 洛雪音乐自定义源”中管理。";
@@ -2352,6 +2359,8 @@
 "Telegram returned a page Yingxia can't read." = "Telegram 返回了映匣无法读取的页面。";
 "This Telegram post is no longer in the channel's public preview." = "这条 Telegram 帖子已不在频道的公开预览中。";
 "This Telegram post has no playable video." = "这条 Telegram 帖子没有可播放的视频。";
+"This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "这个 Telegram 频道的公开预览是空的。只有公开频道能添加，而且有些公开频道不在网页预览中显示帖子。";
+"Only public Telegram channels can be added. Invite links and private channels have no public preview." = "只能添加公开的 Telegram 频道。邀请链接和私密频道没有公开预览。";
 "Telegram post" = "Telegram 帖子";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "视频自带的字幕在对话气泡按钮里。";
@@ -2415,3 +2424,26 @@
 "This program can no longer be replayed." = "这个节目已过了回看期限。";
 
 "Search results reached the memory limit. Try a more specific search." = "搜索结果已达到内存上限，请尝试更具体的关键词。";
+
+// Specific error reasons on failure cards (#1675).
+"No internet connection. Check your network and try again." = "没有网络连接，请检查网络后重试。";
+"The server took too long to respond. Try again, or choose another source." = "服务器响应超时，请重试或换一个来源。";
+"The server couldn't be found. The source may be offline." = "找不到服务器，该来源可能已下线。";
+"Couldn't connect to the server. It may be down or unreachable." = "无法连接到服务器，该服务可能暂时不可用。";
+"The connection was interrupted. Try again." = "网络连接中断，请重试。";
+"Couldn't establish a secure connection to the server." = "无法与服务器建立安全连接。";
+"The source returned data Yingxia couldn't read." = "来源返回的数据格式无法解析。";
+
+// Playback failure localization and line fallback (#2560).
+"Couldn't make a secure connection to the video server. Try another line." = "无法与视频服务器建立安全连接，请换一条线路。";
+"The video server returned HTTP %lld. Try again later, or switch to another line." = "视频服务器返回 HTTP %lld，请稍后再试或切换其他线路。";
+"Couldn't connect to the source's local playback service. Try again, or switch to another line." = "无法连接片源的本地播放服务，请重试或切换其他线路。";
+"The video server took too long to respond. Try again, or switch to another line." = "视频服务器响应超时，请重试或切换其他线路。";
+"The video server couldn't be found. The source may be offline; try another line." = "找不到视频服务器，该片源可能已失效，请换一条线路。";
+"Couldn't connect to the video server. Check your network, or try another line." = "无法连接视频服务器，请检查网络或换一条线路。";
+"This video format isn't supported on this device. Try another line." = "此设备不支持该视频格式，请换一条线路。";
+"Switch Line" = "切换线路";
+"%@ didn't play. Trying %@." = "%@ 无法播放，正在尝试 %@。";
+"Trying %@…" = "正在尝试 %@…";
+"another line" = "其他线路";
+"PGS bitmap subtitles use this size and position." = "PGS 位图字幕共用这里的大小和位置。";

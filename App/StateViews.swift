@@ -213,15 +213,20 @@ struct ErrorState: View {
     let details: String
     var symbol = "exclamationmark.triangle.fill"
     var retry: (() -> Void)?
+    var alternate: (title: String, symbol: String, perform: () -> Void)?
     var goBack: (() -> Void)?
     var busy = false
     var backTitle = L10n.text("Back to sources")
 
     var body: some View {
-        StateMessage(symbol: symbol, title: title, message: message, tone: .problem, details: details, hasActions: retry != nil || goBack != nil) {
+        StateMessage(symbol: symbol, title: title, message: message, tone: .problem, details: details, hasActions: retry != nil || alternate != nil || goBack != nil) {
             if let retry {
                 Button(action: retry) { Label(L10n.text("Retry"), systemImage: "arrow.clockwise").padding(.horizontal, 12) }
                     .controlButton(prominent: true).disabled(busy)
+            }
+            if let alternate {
+                Button(action: alternate.perform) { Label(alternate.title, systemImage: alternate.symbol).padding(.horizontal, 8) }
+                    .controlButton().disabled(busy)
             }
             if let goBack {
                 Button(action: goBack) { Text(backTitle).padding(.horizontal, 8) }.controlButton()

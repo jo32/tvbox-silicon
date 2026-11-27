@@ -30,6 +30,13 @@ struct DiscoverDetailView: View {
     @State private var tvOverviewShown = false
     #endif
     private var details: TMDBMatch.Details? { model.details }
+    /// The overview: TMDB's when it has one, else the matched source's synopsis (#2367).
+    /// A source's synopsis comes from vod_content, so it only helps when the source sends one.
+    private var overview: String {
+        let tmdb = details?.overview ?? item.overview
+        if !tmdb.isEmpty { return tmdb }
+        return sources?.chosen?.video.synopsis ?? ""
+    }
     private var dark: Bool { model.paint?.isDark ?? true }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
     private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
@@ -42,6 +49,9 @@ struct DiscoverDetailView: View {
         .task(id: item.key) { await model.load(item) }
         .onChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
+        }
+        .onChange(of: details?.otherNames) { _, names in
+            if let names { sources?.addNames(names) }
         }
         .onChange(of: store.subscription?.importedAt) { _, _ in startSources() }
         // A video playing over the page (the player covers it without the page going away) pauses the search for the
@@ -66,7 +76,7 @@ struct DiscoverDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         Text(details?.name ?? item.name).font(.title2.bold())
                         if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).foregroundStyle(.secondary) }
-                        Text(details?.overview ?? item.overview).font(.body).lineSpacing(5).selectable()
+                        Text(overview).font(.body).lineSpacing(5).selectable()
                     }.padding(24)
                 }.navigationTitle(L10n.text("Overview"))
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
@@ -207,7 +217,7 @@ struct DiscoverDetailView: View {
                 if item.mediaType == .tv { DiscoverFollowButton(item: followItem) }
             }
             Button { overviewShown = true } label: {
-                Text(details?.overview ?? item.overview).font(.system(size: 12)).lineLimit(3)
+                Text(overview).font(.system(size: 12)).lineLimit(3)
                     .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.overview")
@@ -238,10 +248,11 @@ struct DiscoverDetailView: View {
 
     /// The most recent unfinished watch for this title, if any. Continue Playing takes the place of Search Sources,
     /// which the page already does on its own, and carries on where the viewer stopped. iPhone only.
+    /// From visible history only (#2202): a hidden source's entry for this title must not offer to carry on.
     #if os(iOS)
     private var resumeEntry: PlaybackHistoryEntry? {
         let name = item.name
-        return store.playbackHistory.entries
+        return store.visibleHistory
             .filter { !$0.completed }
             // The same name only: a name inside another ("家" in "一家人", a first season in its sequel's "… 第二季") would
             // carry on with a different title. Without one, Search Sources finds it.
@@ -307,6 +318,8 @@ struct DiscoverDetailView: View {
         let model = sources ?? DiscoverSources.of(work)
         if sources == nil { sources = model }
         model.start(store)
+        // The details may already be in (a page reopened): match on TMDB's other names too (#2608).
+        if let names = details?.otherNames { model.addNames(names) }
     }
     private func stopSources() {
         sources?.stop()
@@ -646,7 +659,7 @@ private struct DiscoverMacSeasonButton: View {
     /// Every source asked has answered.
     private(set) var finished = false
     @ObservationIgnored private let keyword: String
-    @ObservationIgnored private let wanted: SourceTitleMatch.Wanted
+    @ObservationIgnored private var wanted: SourceTitleMatch.Wanted
     @ObservationIgnored private var found: [SourceTitleMatch.Candidate] = []
     /// The Watch Now row's order, by source key: the best match comes from the source highest in it.
     @ObservationIgnored private var order: [String: Int] = [:]
@@ -714,6 +727,20 @@ private struct DiscoverMacSeasonButton: View {
     func choose(_ candidate: SourceTitleMatch.Candidate) {
         grace?.cancel(); grace = nil
         chosen = candidate
+    }
+
+    /// TMDB's other names for the title arrived with its details: widen the match and re-match the
+    /// answers already in, so a source listing it under another name is found (#2608). A match
+    /// already showing stays showing; new matches go under Change Source.
+    func addNames(_ names: [String]) {
+        guard let widened = wanted.widened(with: names) else { return }
+        wanted = widened
+        generation += 1
+        pending = 0
+        grace?.cancel(); grace = nil
+        found = []; matches = []
+        for result in search.results { absorb(result) }
+        settle()
     }
 
     private func absorb(_ result: SearchSourceResult) {
@@ -1170,7 +1197,7 @@ extension DiscoverDetailView {
                     }
                 }.frame(width: 368).focusSection()
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(details?.overview ?? item.overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
+                    Text(overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
                     Text(metadata).font(.system(size: 26)).opacity(0.65).lineLimit(1)
                     if let rating = details?.rating ?? item.rating {
                         HStack(spacing: 10) {
@@ -1206,7 +1233,7 @@ extension DiscoverDetailView {
             VStack(alignment: .leading, spacing: 24) {
                 Text(details?.name ?? item.name).font(.system(size: 56, weight: .bold)).lineLimit(2)
                 if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.system(size: 30, weight: .medium)).opacity(0.7) }
-                Text(details?.overview ?? item.overview).font(.system(size: 30)).lineSpacing(6).lineLimit(14)
+                Text(overview).font(.system(size: 30)).lineSpacing(6).lineLimit(14)
                 Text(metadata).font(.system(size: 26)).opacity(0.6)
             }
             .frame(maxWidth: 1300, alignment: .leading)
