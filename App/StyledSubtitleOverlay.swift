@@ -80,7 +80,7 @@ struct StyledSubtitleCanvas: View {
     let styled: StyledSubtitles
     let picture: CGRect
     let visible: CGRect
-    let pgsStyle: PGSSubtitleStyle
+    let style: SubtitleStyle
     /// The picture's own size in pixels (`presentationSize`).
     let video: CGSize
     @Environment(\.displayScale) private var scale
@@ -88,7 +88,7 @@ struct StyledSubtitleCanvas: View {
     var body: some View {
         Group {
             if let frame = styled.frame, frame.fitsCanvas {
-                PGSSubtitleImage(frame: frame, style: pgsStyle, picture: picture, visible: visible)
+                PGSSubtitleImage(frame: frame, style: style, picture: picture, visible: visible)
             } else {
                 StyledSubtitleLayer(frame: styled.frame)
                     .frame(width: picture.width, height: picture.height)
@@ -107,16 +107,16 @@ struct StyledSubtitleCanvas: View {
     }
 }
 
-/// Used in both the player and the bilingual settings preview. The bitmap already contains every line.
+/// The decoded bitmap already contains every line, including the gap between two languages.
 struct PGSSubtitleImage: View {
     let frame: StyledSubtitleFrame
-    let style: PGSSubtitleStyle
+    let style: SubtitleStyle
     let picture: CGRect
     let visible: CGRect
 
     var body: some View {
         if let image = frame.image {
-            let rect = style.imageRect(for: frame, in: picture, visible: visible)
+            let rect = frame.pgsImageRect(in: picture, visible: visible, style: style)
             Image(decorative: image, scale: 1)
                 .resizable()
                 .frame(width: rect.width, height: rect.height)

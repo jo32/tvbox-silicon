@@ -32,43 +32,54 @@ import Testing
         let video = CGRect(x: -100, y: 58, width: 1200, height: 400)
         let viewport = CGRect(x: 0, y: 0, width: 1000, height: 600)
         let area = video.intersection(viewport)
-        let original = PGSSubtitleStyle().imageRect(for: frame, in: CGRect(origin: .zero, size: source),
-                                                    visible: CGRect(origin: .zero, size: source))
-        #expect(original == frame.rect)
-        let normal = PGSSubtitleStyle().imageRect(for: frame, in: video, visible: viewport)
-        let smaller = PGSSubtitleStyle(scale: 0.5).imageRect(for: frame, in: video, visible: viewport)
+        let whole = CGRect(origin: .zero, size: source)
+        var style = SubtitleStyle()
+        #expect(frame.pgsImageRect(in: whole, visible: whole, style: style) == frame.rect)
+        let normal = frame.pgsImageRect(in: video, visible: viewport, style: style)
+        style.size = 3.75
+        let smaller = frame.pgsImageRect(in: video, visible: viewport, style: style)
         #expect(abs(smaller.midX - normal.midX) < 0.001 && abs(smaller.midY - normal.midY) < 0.001)
-        #expect(abs(smaller.width * 2 - normal.width) < 0.001 && abs(smaller.height * 2 - normal.height) < 0.001)
-        for x in [0.0, 1.0] {
+        #expect(abs(smaller.width - normal.width * 0.75) < 0.001 && abs(smaller.height - normal.height * 0.75) < 0.001)
+        style.size = SubtitleStyle.sizes.upperBound
+        for x in [0.15, 0.85] {
             for y in [0.0, 1.0] {
-                let rect = PGSSubtitleStyle(scale: 2, position: CGPoint(x: x, y: y)).imageRect(for: frame, in: video, visible: viewport)
+                style.place(at: CGPoint(x: x, y: y))
+                let rect = frame.pgsImageRect(in: video, visible: viewport, style: style)
                 #expect(area.contains(rect))
                 #expect(abs(rect.width / rect.height - 5) < 0.001)
-                #expect(abs((x == 0 ? rect.minX - area.minX : rect.maxX - area.maxX)) < 0.001)
-                #expect(abs((y == 0 ? rect.minY - area.minY : rect.maxY - area.maxY)) < 0.001)
+                #expect(abs(x < 0.5 ? rect.minX - area.minX : rect.maxX - area.maxX) < 0.001)
+                #expect(abs(y == 0 ? rect.minY - area.minY : rect.maxY - area.maxY) < 0.001)
             }
         }
-        let full = StyledSubtitleFrame(image: nil, rect: CGRect(origin: .zero, size: source), size: source, fitsCanvas: true)
-        let bounded = PGSSubtitleStyle(scale: 2).imageRect(for: full, in: video, visible: viewport)
+        let full = StyledSubtitleFrame(image: nil, rect: whole, size: source, fitsCanvas: true)
+        let bounded = full.pgsImageRect(in: video, visible: viewport, style: style)
         #expect(area.contains(bounded) && bounded.height == area.height)
         #expect(abs(bounded.width / bounded.height - source.width / source.height) < 0.001)
-        #expect(PGSSubtitleStyle().imageRect(for: frame, in: video, visible: .zero) == .zero)
+        #expect(frame.pgsImageRect(in: video, visible: .zero, style: style) == .zero)
     }
 
-    @Test func pgsPreferencesAreIndependentOfTextAndRestoreSourceDefaults() throws {
+    @Test func sharedStyleRestoresLegacyPositionsAndDistinguishesBottomFromAutomatic() throws {
         let name = UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
-        var text = SubtitleStyle()
-        text.size = 7
-        text.save(defaults)
-        #expect(PGSSubtitleStyle.load(defaults) == PGSSubtitleStyle())
-        let custom = PGSSubtitleStyle(scale: 1.5, position: CGPoint(x: 0.2, y: 0.7))
-        custom.save(defaults)
-        #expect(PGSSubtitleStyle.load(defaults) == custom)
-        PGSSubtitleStyle().save(defaults)
-        #expect(PGSSubtitleStyle.load(defaults).position == nil && PGSSubtitleStyle.load(defaults).scale == 1)
-        #expect(SubtitleStyle.load(defaults) == text)
+        defaults.set(Data(#"{"x":0.5,"y":0.92,"size":7,"bold":true}"#.utf8), forKey: SubtitleStyle.key)
+        var style = SubtitleStyle.load(defaults)
+        #expect(style.followsSourcePosition && style.relativeSize == 1.4)
+        let picture = CGRect(x: 0, y: 0, width: 1280, height: 720)
+        let frame = StyledSubtitleFrame(image: nil, rect: CGRect(x: 450, y: 36, width: 350, height: 60),
+                                        size: picture.size, fitsCanvas: true)
+        let original = frame.pgsImageRect(in: picture, visible: picture, style: style)
+        #expect(original.midY == frame.rect.midY)
+        style.place(at: CGPoint(x: 0.5, y: SubtitleStyle.bottom))
+        style.save(defaults)
+        style = SubtitleStyle.load(defaults)
+        #expect(!style.followsSourcePosition && style.bold && style.relativeSize == 1.4)
+        let bottom = frame.pgsImageRect(in: picture, visible: picture, style: style)
+        #expect(abs(bottom.minY - (picture.height - bottom.height) * SubtitleStyle.bottom) < 0.001)
+        style.place(at: nil)
+        #expect(frame.pgsImageRect(in: picture, visible: picture, style: style) == original)
+        defaults.set(Data(#"{"x":0.35,"y":0.2,"size":6}"#.utf8), forKey: SubtitleStyle.key)
+        #expect(!SubtitleStyle.load(defaults).followsSourcePosition)
     }
 
     @Test func cuesLastUntilTheNextOne() {

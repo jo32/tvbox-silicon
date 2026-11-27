@@ -37,16 +37,17 @@ struct SubtitleStyleView: View {
 
 /// The positions one choice puts a subtitle back to, centred across.
 enum SubtitleSpot: CaseIterable, Hashable {
-    case top, middle, bottom
-    var y: Double {
+    case automatic, top, middle, bottom
+    private var y: Double {
         switch self {
         case .top: SubtitleStyle.top
         case .middle: SubtitleStyle.middle
-        case .bottom: SubtitleStyle.bottom
+        case .automatic, .bottom: SubtitleStyle.bottom
         }
     }
     var title: String {
         switch self {
+        case .automatic: L10n.text("Automatic")
         case .top: L10n.text("Top")
         case .middle: L10n.text("Middle")
         case .bottom: L10n.text("Bottom")
@@ -54,22 +55,28 @@ enum SubtitleSpot: CaseIterable, Hashable {
     }
     /// The spot `style` sits at, or nil when it was moved somewhere else.
     static func of(_ style: SubtitleStyle) -> SubtitleSpot? {
-        allCases.first { abs(style.x - 0.5) < 0.001 && abs(style.y - $0.y) < 0.001 }
+        if style.followsSourcePosition { return .automatic }
+        return allCases.first { $0 != .automatic && abs(style.x - 0.5) < 0.001 && abs(style.y - $0.y) < 0.001 }
+    }
+
+    func apply(to style: inout SubtitleStyle) {
+        style.place(at: self == .automatic ? nil : CGPoint(x: 0.5, y: y))
     }
 }
 
 extension SubtitleStyle {
     var positionTitle: String { SubtitleSpot.of(self)?.title ?? L10n.text("Custom") }
     /// The size as a share of the standard one: 100% is the standard size.
-    var sizeTitle: String { (size / SubtitleStyle().size).formatted(.percent.precision(.fractionLength(0))) }
+    var sizeTitle: String { relativeSize.formatted(.percent.precision(.fractionLength(0))) }
     /// Moved by `dx` and `dy` (fractions of the picture) and kept on the picture. A drag `snaps` to the centre line
     /// when it comes close; the remote's steps land on it by themselves.
     func moved(dx: Double, dy: Double, from start: SubtitleStyle, snaps: Bool = true) -> SubtitleStyle {
+        guard dx != 0 || dy != 0 else { return start }
         var moved = self
-        moved.x = start.x + dx
-        moved.y = start.y + dy
-        if snaps, abs(moved.x - 0.5) < 0.025 { moved.x = 0.5 }
-        if !snaps { moved.x = (moved.x * 1000).rounded() / 1000; moved.y = (moved.y * 1000).rounded() / 1000 }
+        var x = start.x + dx, y = start.y + dy
+        if snaps, abs(x - 0.5) < 0.025 { x = 0.5 }
+        if !snaps { x = (x * 1000).rounded() / 1000; y = (y * 1000).rounded() / 1000 }
+        moved.place(at: CGPoint(x: x, y: y))
         return moved.clamped
     }
 }
@@ -108,7 +115,7 @@ struct SubtitlePreview: View {
     @State private var start: SubtitleStyle?
 
     private static let picture = "subtitlePreview.picture"
-    static var sample: [String] { [L10n.text("This is how subtitles will look"), L10n.text("on every video you play")] }
+    static let sample = ["我们快到了。", "We're almost there."]
 
     var body: some View {
         GeometryReader { proxy in
@@ -209,7 +216,7 @@ private struct FormSubtitleStylePage: View {
             Group {
                 Section {
                     Picker(L10n.text("Position"), selection: Binding(get: { SubtitleSpot.of(style) },
-                                                                  set: { if let spot = $0 { style.x = 0.5; style.y = spot.y } })) {
+                                                                  set: { if let spot = $0 { spot.apply(to: &style) } })) {
                         ForEach(SubtitleSpot.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
                     }
                     .pickerStyle(.segmented)
@@ -217,7 +224,10 @@ private struct FormSubtitleStylePage: View {
                 } header: {
                     Text(L10n.text("Position"))
                 } footer: {
-                    Text(L10n.text("Drag the subtitle on the picture to put it anywhere. It snaps to the center line."))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.text("Drag the subtitle on the picture to put it anywhere. It snaps to the center line."))
+                        Text(L10n.text("PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position."))
+                    }
                 }
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -300,11 +310,6 @@ private struct FormSubtitleStylePage: View {
                     Text(L10n.text("Timing"))
                 } footer: {
                     Text(L10n.text("Positive values show subtitles later. Applies to the video playing now."))
-                }
-                Section {
-                    SettingsLinkRow(symbol: "captions.bubble", tint: .indigo, title: L10n.text("PGS Bitmap Subtitles")) {
-                        PGSSubtitleStyleView()
-                    }
                 }
                 Section {
                     Button(L10n.text("Reset to Standard")) { style = SubtitleStyle() }
@@ -397,11 +402,11 @@ private struct TVSubtitleStylePage: View {
                         TVSettingsAction(title: L10n.text("Position"), value: style.positionTitle) {
                             let spots = SubtitleSpot.allCases
                             let next = SubtitleSpot.of(style).flatMap { spots.firstIndex(of: $0) }.map { spots[($0 + 1) % spots.count] } ?? .bottom
-                            style.x = 0.5; style.y = next.y
+                            next.apply(to: &style)
                         }
                         TVSettingsAction(title: L10n.text("Adjust Position")) { positioning = true }
                     }
-                    TVSettingsSection(title: L10n.text("Text")) {
+                    TVSettingsSection(title: L10n.text("Text"), footer: L10n.text("PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position.")) {
                         TVSettingsAction(title: L10n.text("Size"), value: style.sizeTitle) {
                             style.size = Self.sizes.first { $0 > style.size + 0.01 } ?? Self.sizes[0]
                         }
@@ -422,9 +427,6 @@ private struct TVSubtitleStylePage: View {
                         }
                     }
                     TVSettingsSection {
-                        TVSettingsLink(title: L10n.text("PGS Bitmap Subtitles")) { PGSSubtitleStyleView() }
-                    }
-                    TVSettingsSection {
                         TVSettingsAction(title: L10n.text("Reset to Standard")) { style = SubtitleStyle() }
                             .disabled(style == SubtitleStyle())
                     }
@@ -439,13 +441,7 @@ private struct TVSubtitleStylePage: View {
         .padding(.horizontal, Layout.gutter)
         .screenBackdrop()
         .screenTitle("")
-        .fullScreenCover(isPresented: $positioning) {
-            TVSubtitlePositioner {
-                SubtitlePreview(style: $style, guides: true, cornerRadius: 0)
-            } move: { dx, dy in
-                style = style.moved(dx: dx, dy: dy, from: style, snaps: false)
-            }
-        }
+        .fullScreenCover(isPresented: $positioning) { TVSubtitlePositioner(style: $style) }
     }
 
     private static func next<Choice: CaseIterable & Equatable>(_ choice: Choice) -> Choice where Choice.AllCases == [Choice] {
@@ -456,16 +452,15 @@ private struct TVSubtitleStylePage: View {
 
 /// The subtitle over the whole screen, at the size it plays: each press of an arrow (or swipe) moves it a step,
 /// Select or Menu puts it down. The picture is the only thing that can be focused, so the arrows can't leave it.
-struct TVSubtitlePositioner<Preview: View>: View {
-    @ViewBuilder var preview: Preview
-    let move: (Double, Double) -> Void
+private struct TVSubtitlePositioner: View {
+    @Binding var style: SubtitleStyle
     @Environment(\.dismiss) private var dismiss
     private let step = 0.02
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black
-            preview
+            SubtitlePreview(style: $style, guides: true, cornerRadius: 0)
             Label(L10n.text("Swipe or press the arrows to move the subtitle. Press Select when it's in place."),
                   systemImage: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: 26, weight: .medium))
@@ -477,10 +472,10 @@ struct TVSubtitlePositioner<Preview: View>: View {
                 .buttonStyle(BareButtonStyle())
                 .onMoveCommand { direction in
                     switch direction {
-                    case .up: move(0, -step)
-                    case .down: move(0, step)
-                    case .left: move(-step, 0)
-                    case .right: move(step, 0)
+                    case .up: style = style.moved(dx: 0, dy: -step, from: style, snaps: false)
+                    case .down: style = style.moved(dx: 0, dy: step, from: style, snaps: false)
+                    case .left: style = style.moved(dx: -step, dy: 0, from: style, snaps: false)
+                    case .right: style = style.moved(dx: step, dy: 0, from: style, snaps: false)
                     @unknown default: break
                     }
                 }

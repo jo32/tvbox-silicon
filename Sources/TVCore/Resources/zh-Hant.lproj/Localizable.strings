@@ -2416,7 +2416,4 @@
 
 "Search results reached the memory limit. Try a more specific search." = "搜尋結果已達到記憶體上限，請嘗試更具體的關鍵字。";
 
-"PGS Bitmap Subtitles" = "PGS 點陣字幕";
-"Use Source Position" = "回復片源位置";
-"Source Position" = "片源位置";
-"Drag the bilingual subtitle in the preview to move both lines." = "在預覽中拖曳雙語字幕，可以一起移動兩行。";
+"PGS bitmap subtitles use this size and position. Automatic keeps each cue in its original position." = "PGS 點陣字幕共用這裡的大小和位置。選「自動」時，每條字幕會依片源指定的位置顯示。";
