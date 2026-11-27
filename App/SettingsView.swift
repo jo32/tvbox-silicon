@@ -2095,7 +2095,6 @@ struct SubscriptionDetailView: View {
     }
     var body: some View {
         let current = store.subscriptions.first { $0.address == address } ?? entry
-        let index = store.subscriptions.firstIndex { $0.address == address } ?? 0
         let failure = store.subscriptionErrors[address]
         let copy = store.documents[address]
         let edited = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3167,6 +3166,15 @@ struct TVSubscriptionPage: View {
                 // Reload this list alone, keeping the others' copies (#2198).
                 TVSettingsAction(title: L10n.text("Refresh"), busy: store.importing) { Task { await store.refreshSubscription(current) } }
                     .disabled(store.importing || !current.enabled)
+            }
+            // Apple TV has no Arrange Subscriptions (drag) and no source chips, so the order is set here (#1184).
+            if store.subscriptions.count > 1 {
+                TVSettingsSection(title: L10n.text("Order")) {
+                    if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
+                    if index > 0 { TVSettingsAction(title: L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
+                    if index < store.subscriptions.count - 1 { TVSettingsAction(title: L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
+                    if index < store.subscriptions.count - 2 { TVSettingsAction(title: L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
+                }
             }
             TVSettingsSection(title: L10n.text("Remove")) {
                 TVSettingsAction(title: L10n.text("Remove"), destructive: true) { confirmsRemoval = true }
