@@ -920,7 +920,7 @@ struct EpisodeFileDetail: View {
 struct TMDBEpisodeTile: View {
     let name: String
     let info: TMDBMatch.EpisodeInfo?
-    /// The file's resolution and size (4K · 5.2G), before TMDB's episode title on the second line.
+    /// The file's resolution and size (4K · 5.2G), after the source's name on the second line.
     var detail: String? = nil
     var current = false
     var loading = false
@@ -973,7 +973,9 @@ struct TMDBEpisodeTile: View {
                 Text(primary).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                     .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
                 // Always a second line, so tiles in a row stay one height.
-                let caption = [detail, resourceName].compactMap { $0 }
+                // The source's name first: with a still there is no number on the picture, and a long detail
+                // ("4K · 5.2G") mustn't push it off the line.
+                let caption = [resourceName, detail].compactMap { $0 }
                 Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 if showsOverview, let overview = info?.overview, !overview.isEmpty {
