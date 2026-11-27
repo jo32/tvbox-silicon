@@ -26,42 +26,53 @@ public enum PlaybackSkipLookup {
 
     /// The duration must be known. Cancel the consuming task when the playing media changes.
     /// Each snapshot includes every marker already accepted, even if the other kind arrived later.
+    /// A 15-second total deadline ends the stream even if a provider keeps sending data.
     public static func lookup(_ media: Media, session: URLSession = .shared) -> AsyncStream<[PlaybackSkip]> {
         lookup(media, transport: { try await session.data(for: $0) })
     }
 
     enum Provider: CaseIterable, Equatable, Sendable { case theOtherDB, theIntroDB, introDB }
     typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private enum Event: Sendable { case response([PlaybackSkip]), deadline }
 
-    /// Injecting the transport keeps both the real request contracts and completion races testable.
-    static func lookup(_ media: Media, transport: @escaping Transport) -> AsyncStream<[PlaybackSkip]> {
+    /// Injecting the transport and deadline keeps request contracts and completion races testable.
+    static func lookup(_ media: Media, transport: @escaping Transport,
+                       waitForDeadline: @escaping @Sendable () async throws -> Void = {
+                           try await Task.sleep(for: .seconds(15))
+                       }) -> AsyncStream<[PlaybackSkip]> {
         let requests = Provider.allCases.compactMap { provider in
             request(for: provider, media: media).map { (provider, $0) }
         }
         return AsyncStream { continuation in
             guard !requests.isEmpty else { continuation.finish(); return }
             let worker = Task {
-                await withTaskGroup(of: [PlaybackSkip].self) { group in
+                await withTaskGroup(of: Event.self) { group in
                     // Finish inside the group body: a slow child's cancellation cleanup must not
                     // delay the final snapshot or the consumer seeing the end of the stream.
                     defer { group.cancelAll(); continuation.finish() }
+                    group.addTask {
+                        try? await waitForDeadline()
+                        return .deadline
+                    }
                     for (provider, request) in requests {
                         group.addTask {
-                            guard !Task.isCancelled else { return [] }
+                            guard !Task.isCancelled else { return .response([]) }
                             do {
                                 let (data, response) = try await transport(request)
                                 guard !Task.isCancelled, let http = response as? HTTPURLResponse,
-                                      (200..<300).contains(http.statusCode) else { return [] }
-                                return parse(data, from: provider, duration: media.duration)
+                                      (200..<300).contains(http.statusCode) else { return .response([]) }
+                                return .response(parse(data, from: provider, duration: media.duration))
                             } catch {
                                 // No-data, HTTP failures and one provider's own cancellation are local.
-                                return []
+                                return .response([])
                             }
                         }
                     }
                     var intro: [PlaybackSkip]?, outro: [PlaybackSkip]?
-                    for await segments in group {
-                        guard !Task.isCancelled else { return }
+                    var remaining = requests.count
+                    for await event in group {
+                        guard !Task.isCancelled, case .response(let segments) = event else { return }
+                        remaining -= 1
                         var changed = false
                         if intro == nil {
                             let found = segments.filter { $0.kind == .intro }
@@ -72,7 +83,7 @@ public enum PlaybackSkipLookup {
                             if !found.isEmpty { outro = found; changed = true }
                         }
                         if changed { continuation.yield((intro ?? []) + (outro ?? [])) }
-                        if intro != nil, outro != nil { return }
+                        if remaining == 0 || (intro != nil && outro != nil) { return }
                     }
                 }
             }

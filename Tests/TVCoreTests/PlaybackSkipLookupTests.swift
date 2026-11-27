@@ -63,6 +63,47 @@ private actor SkipLookupTransport {
     func fail(_ host: String, _ error: URLError) { pending.removeValue(forKey: host)?.resume(throwing: error) }
 }
 
+/// Tests release the deadline explicitly, and can hold its cleanup after cancellation too.
+private actor SkipLookupDeadline {
+    private var pending: CheckedContinuation<Void, any Error>?
+    private var startWaiter: CheckedContinuation<Void, Never>?
+    private var cancelWaiter: CheckedContinuation<Void, Never>?
+    private var started = false
+    private let holdOnCancellation: Bool
+    private(set) var cancelled = false
+
+    init(holdOnCancellation: Bool = false) { self.holdOnCancellation = holdOnCancellation }
+
+    func wait() async throws {
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { continuation in
+                pending = continuation
+                started = true
+                startWaiter?.resume(); startWaiter = nil
+            }
+        } onCancel: {
+            Task { await self.cancel() }
+        }
+    }
+
+    func waitForStart() async {
+        if !started { await withCheckedContinuation { startWaiter = $0 } }
+    }
+
+    func waitForCancellation() async {
+        if !cancelled { await withCheckedContinuation { cancelWaiter = $0 } }
+    }
+
+    func fire() { pending?.resume(); pending = nil }
+
+    private func cancel() {
+        cancelled = true
+        if !holdOnCancellation { pending?.resume(throwing: CancellationError()); pending = nil }
+        cancelWaiter?.resume(); cancelWaiter = nil
+    }
+}
+
 private func skipLookupMedia(duration: Double = 1_000) -> PlaybackSkipLookup.Media {
     .init(tmdbID: 226045, imdbID: "tt0903747", season: 1, episode: 1, duration: duration)
 }
@@ -143,16 +184,70 @@ struct PlaybackSkipLookupTests {
         #expect(await transport.requests.count == 3) // has_more does not trigger bulk pagination
     }
 
+    @Test(arguments: [false, true])
+    func deadlineCancelsSuspendedProvidersWithPartialOrNoResults(hasIntro: Bool) async {
+        let hosts: Set<String> = [otherDBHost, theIntroDBHost, introDBHost]
+        let transport = SkipLookupTransport(holdOnCancellation: hosts)
+        let deadline = SkipLookupDeadline()
+        var iterator = PlaybackSkipLookup.lookup(skipLookupMedia(), transport: { try await transport.send($0) },
+                                               waitForDeadline: { try await deadline.wait() }).makeAsyncIterator()
+        await transport.waitForRequests(3)
+        await deadline.waitForStart()
+        if hasIntro {
+            await transport.respond(otherDBHost, #"{"items":[{"version_runtime":1000,"marker":[{"marker_type":"intro","time_start":0,"time_end":27}]}]}"#)
+            #expect(await iterator.next() == [PlaybackSkip(start: 0, end: 27, kind: .intro)])
+        }
+
+        await deadline.fire()
+        // End arrives while the remaining requests still refuse to finish their cancellation cleanup.
+        #expect(await iterator.next() == nil)
+        let expected = hasIntro ? hosts.subtracting([otherDBHost]) : hosts
+        await transport.waitForCancellations(expected.count)
+        #expect(await transport.cancelled == expected)
+        for host in expected {
+            await transport.respond(host, #"{"intro":{"start_ms":1000,"end_ms":3000},"outro":{"start_ms":900000,"end_ms":1000000}}"#)
+        }
+        #expect(await iterator.next() == nil)
+    }
+
+    @Test(arguments: [false, true])
+    func allProvidersFinishingDoesNotWaitForDeadline(hasIntro: Bool) async {
+        let transport = SkipLookupTransport()
+        let deadline = SkipLookupDeadline(holdOnCancellation: true)
+        var iterator = PlaybackSkipLookup.lookup(skipLookupMedia(), transport: { try await transport.send($0) },
+                                               waitForDeadline: { try await deadline.wait() }).makeAsyncIterator()
+        await transport.waitForRequests(3)
+        await deadline.waitForStart()
+        if hasIntro {
+            await transport.respond(otherDBHost, #"{"items":[{"version_runtime":1000,"marker":[{"marker_type":"intro","time_start":0,"time_end":27}]}]}"#)
+            #expect(await iterator.next() == [PlaybackSkip(start: 0, end: 27, kind: .intro)])
+        } else {
+            await transport.respond(otherDBHost, #"{"items":[]}"#)
+        }
+        await transport.respond(theIntroDBHost, #"{"intro":[],"credits":[]}"#)
+        await transport.respond(introDBHost, #"{"intro":null,"outro":null}"#)
+        #expect(await iterator.next() == nil)
+        await deadline.waitForCancellation()
+        #expect(await deadline.cancelled)
+        // The deadline itself is still suspended; stream completion must not wait for it either.
+        await deadline.fire()
+    }
+
     @Test func consumerCancellationCancelsEverySuspendedTransport() async {
         let transport = SkipLookupTransport()
+        let deadline = SkipLookupDeadline()
         let consumer = Task {
-            for await _ in PlaybackSkipLookup.lookup(skipLookupMedia(), transport: { try await transport.send($0) }) {}
+            for await _ in PlaybackSkipLookup.lookup(skipLookupMedia(), transport: { try await transport.send($0) },
+                                                   waitForDeadline: { try await deadline.wait() }) {}
         }
         await transport.waitForRequests(3)
+        await deadline.waitForStart()
         consumer.cancel()
         await consumer.value
         await transport.waitForCancellations(3)
         #expect(await transport.cancelled == [otherDBHost, theIntroDBHost, introDBHost])
+        await deadline.waitForCancellation()
+        #expect(await deadline.cancelled)
     }
 
     @Test func otherDBUsesSecondsAndOnlyTheClosestCoherentVersion() {
