@@ -422,6 +422,10 @@ private final class SkipSessionProtocol: URLProtocol, @unchecked Sendable {
     static let probe = SkipSessionProbe()
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func startLoading() { Task { await Self.probe.start(request) } }
+    override func startLoading() {
+        let request = self.request
+        let probe = Self.probe
+        Task { [request, probe] in await probe.start(request) }
+    }
     override func stopLoading() { Task { await Self.probe.stop() } }
 }
