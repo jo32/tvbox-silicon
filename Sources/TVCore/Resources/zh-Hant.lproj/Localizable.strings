@@ -1071,6 +1071,7 @@
 "Brightness" = "亮度";
 "Slide for Brightness and Volume" = "滑動調整亮度和音量";
 "Tab Bar Labels" = "標籤列文字";
+"Launch Page" = "啟動頁面";
 "Collapse Tab Bar When Scrolling" = "捲動時收合標籤列";
 "Off shows only the icons in the tab bar along the bottom." = "關閉後，底部標籤列只顯示圖示。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "在影片左側上下滑動調整亮度，在右側上下滑動調整音量。";
