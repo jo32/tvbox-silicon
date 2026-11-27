@@ -70,8 +70,9 @@ struct SitesView: View {
                             }.tvFocusSection()
                         }
                         #else
-                        // The search order and hiding sources are under Edit (#973, #994).
-                        if query.isEmpty, groups.count > 1 { groupChips(groups) }
+                        // The search order and hiding sources are under Edit (#973, #994). The subscription
+                        // chips live in the pinned top bar (#2364), not here: inside this stack they scrolled
+                        // away with the site list, so a long group left no way back to the other subscriptions.
                         // A search finds sources by name; the first row looks for the videos instead (#974).
                         if pick == nil, !query.isEmpty { SearchVideosRow(query: query) }
                         #endif
@@ -120,6 +121,18 @@ struct SitesView: View {
                     // Starting or clearing a search swaps the whole page at once: never as a fade.
                     .transaction(value: query) { $0.animation = nil }
                 }
+                #if !os(tvOS)
+                // The subscription chips stay pinned above the list while it scrolls (#2364): they are the
+                // only way between groups on iPhone, iPad and Mac, and the list below them is long. tvOS
+                // keeps its folds, so it has no chips to pin. Hidden while searching, as they were in the stack.
+                .topBar {
+                    if query.isEmpty, groups.count > 1 {
+                        groupChips(groups)
+                            .padding(.horizontal, Layout.gutter).padding(.vertical, 8)
+                            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
+                    }
+                }
+                #endif
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
