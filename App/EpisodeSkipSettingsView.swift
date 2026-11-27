@@ -22,6 +22,9 @@ struct EpisodeSkipSettingsView: View {
     @State private var enabled = false
     @State private var intro = ""
     @State private var outro = ""
+    /// The online intro and outro switch (#2653), for a video; saved with the rest.
+    @State private var online = false
+    private var video: PlaybackSession? { book ? nil : session as? PlaybackSession }
 
     private var draft: EpisodeSkipSettings? {
         guard let introEnd = intro.isEmpty ? 0 : EpisodeSkipSettings.parseTime(intro),
@@ -51,6 +54,15 @@ struct EpisodeSkipSettingsView: View {
                         Text(book ? L10n.text("Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining.")
                              : L10n.text("Times apply to this series and all its episodes. Automatic skipping is a global switch. The outro is remembered as time remaining."))
                             .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if video != nil {
+                    Section {
+                        Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: $online)
+                            .settingsSwitch()
+                            .accessibilityIdentifier("player.skip.online")
+                    } footer: {
+                        Text(L10n.text("Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves."))
                     }
                 }
                 Section(L10n.text("Intro ends at")) {
@@ -83,7 +95,7 @@ struct EpisodeSkipSettingsView: View {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("Save")) {
-                        if let draft { session.applySkipSettings(draft); dismiss() }
+                        if let draft { session.applySkipSettings(draft); video?.looksUpSkipsOnline = online; dismiss() }
                     }
                     .disabled(draft == nil || (enabled && issue != nil))
                     .accessibilityIdentifier("player.skip.save")
@@ -94,6 +106,7 @@ struct EpisodeSkipSettingsView: View {
             session.beginEditingSkip()
             let value = session.skipSettings
             enabled = value.enabled
+            online = video?.looksUpSkipsOnline ?? false
             intro = value.introEnd > 0 ? EpisodeSkipSettings.formatTime(value.introEnd) : ""
             outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(max(0, session.skipDuration - value.outroLength)) : ""
         }
