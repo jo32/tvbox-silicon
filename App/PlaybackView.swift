@@ -56,6 +56,16 @@ import IOKit.pwr_mgt
     private(set) var sourceSkips: [PlaybackSkip] = []
     private(set) var skipOffer: PlaybackSkip?
     private var skippedSource = Set<PlaybackSkip>()
+    @ObservationIgnored var skipMatchKey: ((Channel) -> String?)?
+    @ObservationIgnored private var skipLookup: Task<Void, Never>?
+    @ObservationIgnored private var skipLookupRevision = UUID()
+    @ObservationIgnored private var skipLookupStarted = false
+    @ObservationIgnored private var skipChannel: Channel?
+    /// Not before then: a title not identified yet is looked for again every 30 s, not on every sample.
+    @ObservationIgnored private var skipLookupNotBefore = Date.distantPast
+    /// Works whose details were fetched again for an IMDb ID this run: once each, whatever came back.
+    @ObservationIgnored private static var skipDetailsRefreshed = Set<String>()
+    private var remoteSkips: [PlaybackSkip] = []
     /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
     /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
     enum SkipNotice: Equatable {
@@ -122,10 +132,55 @@ import IOKit.pwr_mgt
     /// The source's credits: skipped by themselves when the viewer has intros and outros skipped and set no times of
     /// their own for this video; otherwise offered while they play.
     private func updateSourceSkip(time: Double) {
-        let current = PlaybackSkip.current(sourceSkips, at: time).flatMap { skippedSource.contains($0) ? nil : $0 }
+        // A source's own markers take priority for each kind. Online markers only fill what it did not supply.
+        let online = remoteSkips.filter { skip in !sourceSkips.contains { $0.kind == skip.kind } }
+        let current = PlaybackSkip.current(sourceSkips + online, at: time).flatMap { skippedSource.contains($0) ? nil : $0 }
         if current != skipOffer { skipOffer = current }
-        guard current != nil, player.rate > 0, skipSettings.enabled, skipSettings.introEnd == 0, skipSettings.outroLength == 0 else { return }
+        // Only the source's own markers skip by themselves; online ones are crowd-sourced, so they offer Skip (#2653).
+        guard let current, sourceSkips.contains(current), player.rate > 0, skipSettings.enabled, skipSettings.introEnd == 0,
+              skipSettings.outroLength == 0 else { return }
         skipSourceSegment()
+    }
+
+    /// Once the playing item's duration is known, ask all three marker services without delaying playback.
+    private func loadRemoteSkipsIfNeeded(duration: Double) {
+        guard !skipLookupStarted, PlaybackSkipLookup.enabled, Date() >= skipLookupNotBefore, duration.isFinite, duration > 0,
+              TMDBMatch.enabled, let channel = skipChannel else { return }
+        skipLookupStarted = true
+        guard let key = skipMatchKey?(channel) else { return }
+        let episodeName = channel.historyContext?.episodeName ?? channel.name
+        let revision = skipLookupRevision
+        skipLookup = Task { [weak self] in
+            let choice = await TMDBMatchStore.shared.choice(for: key)
+            let answer = await TMDBMatchStore.shared.kept(for: key)
+            guard !Task.isCancelled else { return }
+            guard let match = PlaybackSkipLookup.Media.match(answer: answer, choice: choice) else {
+                // The video page may still be identifying a title when playback starts. Retry the local cache
+                // on a later sample, without starting another identification request or repeating a known refusal.
+                if choice == nil, answer == nil, let self, self.skipLookupRevision == revision {
+                    self.skipLookupStarted = false
+                    self.skipLookup = nil
+                    self.skipLookupNotBefore = Date().addingTimeInterval(30)
+                }
+                return
+            }
+            var details = answer?.details.flatMap { $0.id == match.id && $0.mediaType == match.mediaType ? $0 : nil }
+            // Refresh legacy cached details once to obtain IMDb, which IntroDB requires. The other services use TMDB.
+            // Once per work and season a run: many titles (most Chinese dramas) have no IMDb ID at all, and each
+            // refetch is a full details request to the Worker.
+            let refresh = "\(match.mediaType)/\(match.id)/\(match.season.map(String.init) ?? "-")"
+            if details?.imdbID == nil || (match.mediaType == .tv && match.numbering == .absolute && details?.season?.number != match.season),
+               Self.skipDetailsRefreshed.insert(refresh).inserted {
+                if let fresh = try? await TMDBMatch.details(match.mediaType, id: match.id, season: match.season), !Task.isCancelled {
+                    details = fresh
+                }
+            }
+            guard !Task.isCancelled, let media = PlaybackSkipLookup.Media(match: match, details: details, episodeName: episodeName, duration: duration) else { return }
+            for await skips in PlaybackSkipLookup.lookup(media) {
+                guard let self, self.skipLookupRevision == revision, !Task.isCancelled else { return }
+                self.remoteSkips = skips
+            }
+        }
     }
 
     /// A Bilibili part's chapters and subtitle files, asked for once its picture is on its way so its start never waits.
@@ -197,6 +252,7 @@ import IOKit.pwr_mgt
         duration = length.isFinite ? max(0, length) : 0
         guard skipScope != nil, !editingSkip, !seekingSegment, pendingResume == nil, !restoringPosition,
               item.status == .readyToPlay else { return }
+        loadRemoteSkipsIfNeeded(duration: length)
         updateSourceSkip(time: time)
         updateSkipNotice(time: time, duration: length)
         var pass = skipPass
@@ -476,6 +532,9 @@ import IOKit.pwr_mgt
         guard let item else { return }
         UngroupedAudio.play(id, in: item)
         audioChoice = UngroupedAudio.playing(item)
+        if let id = audioChoice, let choice = audioChoices.first(where: { $0.id == id }) {
+            AudioChoice.remember(choice, for: subtitleScope)
+        }
     }
 
     /// Plays the stream at `quality` (nil: automatic) from where it is now.
@@ -1304,16 +1363,26 @@ import IOKit.pwr_mgt
         return nil
     }
 
-    /// Selects a detailed audio option from the tvOS transport-bar menu (#2388).
+    /// Selects a detailed audio option from the Audio menu, remembered for the next episode (#2388, #2184).
     func chooseAudioTrack(_ option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) {
         guard let item, player.currentItem === item, let tracks = mediaTracks.audio, tracks.group == group,
               tracks.options.contains(option) else { return }
         guard item.currentMediaSelection.selectedMediaOption(in: group) != option else { return }
+        let description = tracks.options.firstIndex(of: option).map { tracks.descriptions[$0] }
         mediaTracks.select(option, in: tracks)
+        AudioChoice.remember(description, for: subtitleScope)
     }
 
     /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
     func chooseSubtitle(_ option: AVMediaSelectionOption?, in group: AVMediaSelectionGroup) {
+        if let audio = mediaTracks.audio, audio.group == group {
+            // AVKit has already switched; only remember the viewer's pick (#2184).
+            if let option, let index = audio.options.firstIndex(of: option) {
+                AudioChoice.remember(audio.descriptions[index], for: subtitleScope)
+            }
+            mediaTracks.selectionChanged()
+            return
+        }
         guard let item, player.currentItem === item, let tracks = mediaTracks.legible, tracks.group == group else { return }
         let description: TrackLabel.Option?
         if let option {
@@ -1344,6 +1413,27 @@ import IOKit.pwr_mgt
         if let group = tracks?.group, item.currentMediaSelection.selectedMediaOption(in: group) != option {
             item.select(option, in: group)
         }
+        return true
+    }
+
+    /// A missing track may fall back for this episode. Only the viewer can change the remembered choice.
+    private func restoreAudioChoice(_ item: AVPlayerItem, tracks: MediaTracks.Group?, scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope) else { return false }
+        guard let tracks, let index = choice.match(tracks.descriptions, in: scope) else { return false }
+        let option = tracks.options[index]
+        if item.currentMediaSelection.selectedMediaOption(in: tracks.group) != option {
+            item.select(option, in: tracks.group)
+        }
+        return true
+    }
+
+    /// The remembered dub of a file whose tracks AVFoundation offers no choice between. Only the viewer can change
+    /// the remembered choice; `audioChoice` follows only the item playing, not one queued for later.
+    private func restoreUngroupedAudioChoice(_ item: AVPlayerItem, choices: [UngroupedAudio.Choice], scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope), let id = choice.match(choices, in: scope) else { return false }
+        guard UngroupedAudio.playing(item) != id else { return true }
+        UngroupedAudio.play(id, in: item)
+        if item === self.item { audioChoice = id }
         return true
     }
 
@@ -1766,6 +1856,7 @@ import IOKit.pwr_mgt
             }
             self.audioChoices = choices
             self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+            if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
         }
         if !force, item.status == .readyToPlay {
             Task { [weak self] in
@@ -1809,9 +1900,13 @@ import IOKit.pwr_mgt
                     Task { [weak self] in
                         guard let self, self.item === item else { return }
                         await self.mediaTracks.load(item)
-                        guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
-                        if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                        guard self.generation == activeGeneration, self.item === item else { return }
+                        if !self.externalSubtitles.manuallyChoseFile,
+                           self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
                             self.externalSubtitles.nativeChosen()
+                        }
+                        if self.audioChoices.isEmpty, UngroupedAudio.trackIDs(item).count <= (self.mediaTracks.audio?.options.count ?? 0) {
+                            _ = self.restoreAudioChoice(item, tracks: self.mediaTracks.audio, scope: self.subtitleScope)
                         }
                     }
                     self.checkingPicture = Self.repackagable(url)
@@ -2106,6 +2201,8 @@ import IOKit.pwr_mgt
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
+        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        skipLookupStarted = false; skipChannel = nil; remoteSkips = []; skipLookupNotBefore = .distantPast
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
         onPlaybackEnded = nil; onUnplayableFile = nil; onFallbackLine = nil
         if player.currentItem != nil {
@@ -2172,6 +2269,8 @@ import IOKit.pwr_mgt
         if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
+        skipLookup?.cancel(); skipLookup = nil; skipLookupRevision = UUID()
+        skipLookupStarted = false; skipChannel = live ? nil : channel; remoteSkips = []; skipLookupNotBefore = .distantPast
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
         bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0
@@ -2541,6 +2640,15 @@ extension PlaybackSession {
                             let tracks = await MediaTracks.subtitleGroup(queued)
                             guard let self, self.upcoming?.item === queued else { return }
                             _ = self.restoreSubtitleChoice(queued, tracks: tracks, scope: Self.subtitleScope(for: next))
+                            // Our own picker's tracks when the file has them, else its selection group's.
+                            let choices = await UngroupedAudio.choices(queued)
+                            if !choices.isEmpty {
+                                if self.upcoming?.item === queued {
+                                    _ = self.restoreUngroupedAudioChoice(queued, choices: choices, scope: Self.subtitleScope(for: next))
+                                }
+                            } else if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
+                                _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
+                            }
                         }
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {

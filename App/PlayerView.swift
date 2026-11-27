@@ -2770,7 +2770,7 @@ struct MediaAudioMenus: View {
         } else if let audio = session.mediaTracks.audio, audio.options.count > 1 {
             Menu(L10n.text("Audio")) {
                 Picker(L10n.text("Audio"), selection: Binding(get: { session.mediaTracks.selected(in: audio) },
-                                                              set: { session.mediaTracks.select($0, in: audio) })) {
+                                                              set: { if let option = $0 { session.chooseAudioTrack(option, in: audio.group) } })) {
                     ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                 }
                 .pickerStyle(.inline)
@@ -2840,6 +2840,15 @@ extension Store {
     // The video page's TMDB match names the video for subtitle sources (#576 M2).
     session.externalSubtitles.tmdbKey = { [weak store] channel in
         store?.catalog(for: channel).map { TMDBMatchStore.key(source: $0.client.site.key, video: $0.video.id) }
+    }
+    session.skipMatchKey = { [weak store] channel in
+        if let catalog = store?.catalog(for: channel) {
+            return TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
+        }
+        guard let context = channel.historyContext,
+              let client = store?.historyClient(PlaybackHistoryEntry(context: context, position: 0, duration: 0, updatedAt: Date())) else { return nil }
+        // History keeps the original source key; a merged subscription may have renamed its site's cache key.
+        return TMDBMatchStore.key(source: client.site.key, video: context.videoID)
     }
     session.skipDefaults = store.playbackDefaults
     session.catalogDanmaku.enabled = UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil

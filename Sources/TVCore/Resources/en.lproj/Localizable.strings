@@ -2447,3 +2447,7 @@
 "Trying %@…" = "Trying %@…";
 "another line" = "another line";
 "PGS bitmap subtitles use this size and position." = "PGS bitmap subtitles use this size and position.";
+
+// Online intro and outro times, opt-in (#2653).
+"Look Up Intro and Outro Times Online" = "Look Up Intro and Outro Times Online";
+"Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves." = "Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves.";

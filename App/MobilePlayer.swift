@@ -904,7 +904,7 @@ struct MobilePlayerView: View {
                 }
             } else if let audio = tracks.audio, audio.options.count > 1 {
                 Menu(L10n.text("Audio")) {
-                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { if let option = $0 { session.chooseAudioTrack(option, in: audio.group) } })) {
                         ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)

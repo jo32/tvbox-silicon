@@ -2447,3 +2447,7 @@
 "Trying %@…" = "正在嘗試 %@…";
 "another line" = "其他線路";
 "PGS bitmap subtitles use this size and position." = "PGS 點陣字幕共用這裡的大小和位置。";
+
+// Online intro and outro times, opt-in (#2653).
+"Look Up Intro and Outro Times Online" = "在線查找片頭片尾時間";
+"Looks up a TV episode's or movie's intro and outro times in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Their times show a Skip button; they don't skip by themselves." = "在 TheIntroDB、IntroDB 和 TheOtherDB 中查找劇集或電影的片頭片尾時間，這些服務會因此得知你在播放什麼。它們的時間只顯示「跳過」按鈕，不會自動跳過。";
