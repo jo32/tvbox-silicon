@@ -1,6 +1,115 @@
 {
   "releases": [
     {
+      "version": "1.8.32",
+      "build": 70,
+      "date": "2026-11-27",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.32/Yingxia-1.8.32-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.32/Yingxia-1.8.32-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "play.rectangle",
+          "title": {
+            "en": "A new Mac player, like the iPhone's",
+            "zh-Hans": "全新 Mac 播放器，和 iPhone 一样",
+            "zh-Hant": "全新 Mac 播放器，和 iPhone 一樣",
+            "ja": "iPhone と同じ新しい Mac プレーヤー"
+          },
+          "detail": {
+            "en": "The Mac player now has the iPhone's controls: play and skip in the middle, the show's logo and video tags above the seek bar, frame previews while you drag, and volume, speed, Episodes and Full Screen beside the time. Every button appears once, and Picture in Picture and AirPlay sit at the top right.",
+            "zh-Hans": "Mac 播放器换上了 iPhone 的控制：播放和快进快退在中间，进度条上方有剧集 Logo 和视频标签，拖动时能预览画面，音量、倍速、选集和全屏就在时间旁边。每个按钮只出现一次，画中画和雷射在右上角。",
+            "zh-Hant": "Mac 播放器換上了 iPhone 的控制：播放和快轉倒轉在中間，進度列上方有劇集 Logo 和影片標籤，拖動時能預覽畫面，音量、倍速、選集和全螢幕就在時間旁邊。每個按鈕只出現一次，子母畫面和 AirPlay 在右上角。",
+            "ja": "Mac のプレーヤーが iPhone と同じ操作になりました。中央に再生とスキップ、シークバーの上に作品のロゴとビデオタグ、ドラッグ中はフレームプレビュー、時間の横に音量・速度・エピソード・フルスクリーン。ボタンの重複がなくなり、ピクチャ・イン・ピクチャと AirPlay は右上にあります。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "forward.fill",
+          "title": {
+            "en": "Smoother seeking in big drive files",
+            "zh-Hans": "大网盘文件拖动更顺滑",
+            "zh-Hant": "大型雲端硬碟檔案拖動更順暢",
+            "ja": "大きなクラウドドライブのファイルでシークがなめらかに"
+          },
+          "detail": {
+            "en": "Dragging the seek bar in a large Quark or other cloud-drive video no longer downloads from every place you pass. The preview frames load only what they show, so playback picks up quickly where you let go.",
+            "zh-Hans": "在夸克等网盘的大视频里拖动进度条时，不再从划过的每个位置下载。预览画面只加载要显示的那一点，松手后很快就从那里接着播。",
+            "zh-Hant": "在夸克等雲端硬碟的大型影片裡拖動進度列時，不再從劃過的每個位置下載。預覽畫面只載入要顯示的那一點，放開後很快就從那裡接著播。",
+            "ja": "Quark などクラウドドライブの大きな動画でシークバーをドラッグしても、通り過ぎた位置ごとにダウンロードしなくなりました。プレビューは表示する分だけ読み込むので、指を離した場所からすぐに再生が続きます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "play.circle",
+          "title": {
+            "en": "More links play",
+            "zh-Hans": "更多链接能播放",
+            "zh-Hant": "更多連結能播放",
+            "ja": "再生できるリンクが増加"
+          },
+          "detail": {
+            "en": "Streams the system player gives up on now play through a repairing local relay: broken HLS playlists, files that ignore byte ranges, sites with bad certificates and links that expire mid-show are renewed in place. Huya and Douyu live in CatPawOpen play again, and playlists served by Android TVBox's local server load.",
+            "zh-Hans": "系统播放器放弃的流现在会经本地修复中转播放：损坏的 HLS 列表、不支持分段读取的文件、证书有问题的网站，以及播到一半过期的链接都会就地续上。CatPawOpen 里的虎牙、斗鱼直播又能播了，安卓 TVBox 本地服务提供的列表也能加载。",
+            "zh-Hant": "系統播放器放棄的串流現在會經本機修復中繼播放：損壞的 HLS 列表、不支援分段讀取的檔案、憑證有問題的網站，以及播到一半過期的連結都會就地續上。CatPawOpen 裡的虎牙、鬥魚直播又能播了，Android TVBox 本機服務提供的列表也能載入。",
+            "ja": "システムのプレーヤーがあきらめたストリームも、端末内の修復リレーで再生できるようになりました。壊れた HLS プレイリスト、バイト範囲を無視するファイル、証明書に問題のあるサイト、再生中に期限が切れるリンクもその場で更新します。CatPawOpen の Huya・Douyu ライブが再び再生でき、Android TVBox のローカルサーバーが提供するプレイリストも読み込めます。"
+          }
+        },
+        {
+          "symbol": "tv",
+          "title": {
+            "en": "Live TV replay and a better guide",
+            "zh-Hans": "直播回看更好用，节目单更准",
+            "zh-Hant": "直播回看更好用，節目表更準",
+            "ja": "ライブ TV の見逃し配信と番組表がより便利に"
+          },
+          "detail": {
+            "en": "Replay programs use your local time, and Apple TV's channel guide reaches Replay Programs from the search bar. The guide matches channels by their exact IDs, keeps large guides for three hours, and tries a failed channel again after a few minutes.",
+            "zh-Hans": "回看节目按你所在地的时间显示，Apple TV 的频道节目单从搜索栏往下就能到“回看节目”。节目单按频道的确切 ID 匹配，大型节目单会保留三小时，某个频道加载失败会在几分钟后重试。",
+            "zh-Hant": "回看節目按你所在地的時間顯示，Apple TV 的頻道節目表從搜尋列往下就能到「回看節目」。節目表按頻道的確切 ID 配對，大型節目表會保留三小時，某個頻道載入失敗會在幾分鐘後重試。",
+            "ja": "見逃し番組は現地の時刻で表示され、Apple TV のチャンネルガイドでは検索バーから下へ移動すると「見逃し番組」に届きます。番組表はチャンネルを正確な ID で照合し、大きな番組表は 3 時間保持、読み込みに失敗したチャンネルは数分後に再試行します。"
+          }
+        },
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Subtitles remembered per series",
+            "zh-Hans": "字幕选择按剧记住",
+            "zh-Hant": "字幕選擇按劇記住",
+            "ja": "字幕の選択をシリーズごとに記憶"
+          },
+          "detail": {
+            "en": "The subtitle track you pick, or Off, is kept for the rest of the series, even among several tracks in the same language. Bilingual PGS subtitles keep their shape on cropped films, and the Mac's Audio and Subtitles menus show each track's full details.",
+            "zh-Hans": "你选的字幕轨道（或关闭）会一直沿用到整部剧，同一语言有好几条轨道时也一样。裁切过的电影里双语 PGS 字幕不再变形，Mac 的音频和字幕菜单会显示每条轨道的详细信息。",
+            "zh-Hant": "你選的字幕軌道（或關閉）會一直沿用到整部劇，同一語言有好幾條軌道時也一樣。裁切過的電影裡雙語 PGS 字幕不再變形，Mac 的音訊和字幕選單會顯示每條軌道的詳細資訊。",
+            "ja": "選んだ字幕トラック（またはオフ）は、同じ言語のトラックが複数あってもシリーズの最後まで保たれます。クロップされた映画でも二言語の PGS 字幕が潰れず、Mac のオーディオと字幕メニューには各トラックの詳細が表示されます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Telegram channels page past their first twenty posts. Music keeps its shuffle and its search history, and Apple TV's screen saver stays off while music plays. Audiobooks resume at the exact second, failed posters load again, and search retries a source whose next page failed. Player controls stay up while a menu is open, and plenty of smaller fixes.",
+            "zh-Hans": "Telegram 频道能翻到前 20 条之后的帖子。音乐会记住随机播放和搜索记录，播放音乐时 Apple TV 不再进入屏幕保护。有声书精确到秒续播，加载失败的海报会再试一次，搜索时某个源下一页失败会重试。打开菜单时播放控制不再自动隐藏，另有许多小修复。",
+            "zh-Hant": "Telegram 頻道能翻到前 20 則之後的貼文。音樂會記住隨機播放和搜尋記錄，播放音樂時 Apple TV 不再進入螢幕保護程式。有聲書精確到秒續播，載入失敗的海報會再試一次，搜尋時某個來源下一頁失敗會重試。打開選單時播放控制不再自動隱藏，另有許多小修正。",
+            "ja": "Telegram チャンネルで最初の 20 件より前の投稿も読めます。ミュージックはシャッフルと検索履歴を保ち、再生中は Apple TV のスクリーンセーバが起動しません。オーディオブックは秒単位で再開し、読み込めなかったポスターはもう一度読み込み、検索で次のページに失敗したソースは再試行します。メニューを開いている間はプレーヤーの操作ボタンが消えません。ほかにも細かな修正を多数行いました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.31",
       "build": 69,
       "date": "2026-11-25",
@@ -5907,11 +6016,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 69,
+      "build": 70,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 69,
+      "build": 70,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

@@ -1,8 +1,8 @@
-#if os(iOS)
 import SwiftUI
 import AVKit
-import MediaPlayer
 import TVCore
+#if os(iOS)
+import MediaPlayer
 
 /// The iPhone and iPad player. The picture plays in a layer of our own and every control is drawn here: AVKit's
 /// controls on iOS keep AirPlay and volume in a row of their own above anything laid over them and take no buttons
@@ -1258,11 +1258,16 @@ extension View {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// The position and the length in a capsule over a scrubber the width of the screen, as in YouTube's player, and
 /// scrubbing as in Telegram's: while dragged, only the bar, the time and a frame from that point (above the handle)
 /// follow the finger, and the video seeks once, when the finger lifts. Seeking the playing video along with the finger
 /// left it stuttering behind. A view of its own, so only it redraws as the position moves.
-private struct SeekBar<Accessory: View>: View {
+struct SeekBar<Accessory: View>: View {
     /// The height of the time's row, which the accessory shares: the episode buttons are 36 points round.
     static var timeRow: CGFloat { 36 }
     let clock: PlayerClock
@@ -1433,6 +1438,10 @@ private struct SeekBar<Accessory: View>: View {
     }
 }
 
+#endif
+
+#if os(iOS)
+
 /// The top row's three parts: Back, the title and the buttons. All in one row while the title keeps `minimumTitle`;
 /// otherwise Back and the buttons share the first row and the title has the next one to itself. On a screen too
 /// narrow even for Back beside the buttons, the buttons take the first row alone and Back goes beside the title.
@@ -1494,8 +1503,13 @@ private struct PlayerTopBar: SwiftUI.Layout {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// A round glass button of the given size, for play and skip in the middle of the picture.
-private struct PlayerCircleStyle: ButtonStyle {
+struct PlayerCircleStyle: ButtonStyle {
     var size: CGFloat
     @Environment(\.isEnabled) private var enabled
     @Environment(\.chromeGrouped) private var grouped
@@ -1512,6 +1526,10 @@ private struct PlayerCircleStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: configuration.isPressed)
     }
 }
+
+#endif
+
+#if os(iOS)
 
 /// AirPlay, drawn like the buttons beside it: the 15 pt mark, not the system's bigger, heavier one (#1560). All of it is
 /// UIKit: the system's button, all but invisible, takes the tap and opens its picker itself, with our mark on top. A
@@ -1896,6 +1914,9 @@ private struct BatteryGauge: View {
         let channel: Channel
         let session: PlaybackSession
         let pip: PictureInPicture
+        /// The player was turned landscape before it floated (#2483): closing the screen drops the turn
+        /// (`PlayerOrientation.release()` on disappear), so it is carried here and put back on return.
+        let landscape: Bool
     }
     private(set) var parked: Parked?
     private weak var store: Store?
@@ -1905,7 +1926,7 @@ private struct BatteryGauge: View {
     /// The player screen is closing while its window floats: the session plays on in it.
     func park(_ channel: Channel, session: PlaybackSession, pip: PictureInPicture, store: Store) {
         if let parked, parked.session !== session { end() }
-        parked = Parked(channel: channel, session: session, pip: pip)
+        parked = Parked(channel: channel, session: session, pip: pip, landscape: PlayerOrientation.mask == .landscape)
         self.store = store
         // The window plays on into the next episode as the player does (#1719, #2127), but nothing opens over the app:
         // the queue moves on inside the window, and the window's return to the app opens the player on the episode it
@@ -1918,7 +1939,7 @@ private struct BatteryGauge: View {
         session.onAdvance = { [weak self, weak store, weak session] next in
             guard let self, let parked = self.parked, parked.session === session else { return }
             store?.followFloating(to: next, from: parked.channel)
-            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip)
+            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip, landscape: parked.landscape)
         }
     }
 
@@ -1927,14 +1948,15 @@ private struct BatteryGauge: View {
     /// The video floating, for a player screen opening on `channel`.
     func parked(for channel: Channel) -> Parked? { parked?.channel == channel ? parked : nil }
 
-    /// A player screen opened with the floating session: it is the screen's again. False for any other session.
-    func take(_ session: PlaybackSession) -> Bool {
-        guard let parked, parked.session === session else { return false }
+    /// A player screen opened with the floating session: it is the screen's again, and the caller learns whether it
+    /// was turned landscape before it floated (#2483). Nil for any other session.
+    func take(_ session: PlaybackSession) -> Parked? {
+        guard let parked, parked.session === session else { return nil }
         self.parked = nil
         // Opened from the app rather than the window's button: the video comes back from the window.
         if restoring == nil { parked.pip.stop() }
         finishRestoring()
-        return true
+        return parked
     }
 
     /// The window's return button: the player opens again on the video. With the player still open there's nothing to do.
@@ -1971,6 +1993,11 @@ private struct BatteryGauge: View {
     }
 }
 
+#endif
+
+// Shared with the Mac player, which draws the same controls (DesktopPlaybackView).
+#if !os(tvOS)
+
 /// The playing item's position and duration, four times a second while it plays.
 @MainActor @Observable final class PlayerClock {
     private(set) var position: Double = 0
@@ -2001,6 +2028,7 @@ private struct BatteryGauge: View {
         token = nil
         loading = nil
         dropReader()
+        dropPreviewAsset()
     }
 
     /// The player's position now, read without waiting for the next tick.
@@ -2013,6 +2041,8 @@ private struct BatteryGauge: View {
     private(set) var preview: CGImage?
     @ObservationIgnored private var generator: AVAssetImageGenerator?
     @ObservationIgnored private var generatorItem: ObjectIdentifier?
+    /// The generator's asset when it is a drive file's preview asset (`dropPreviewAsset`).
+    @ObservationIgnored private var previewAsset: AVAsset?
     /// An item AVFoundation made no frame from (an HLS stream, say): no more tries for it.
     @ObservationIgnored private var previewless: ObjectIdentifier?
     @ObservationIgnored private var generating = false
@@ -2060,6 +2090,7 @@ private struct BatteryGauge: View {
                 if !Task.isCancelled { self?.dropReader() }
             }
         }
+        dropPreviewAsset()
         let tolerance = SeekTolerance.release(secondsPerPoint: scrubPrecision)
         scrubPrecision = 0
         if let target = scrubbing { seek(to: target, tolerance: tolerance) }
@@ -2093,7 +2124,11 @@ private struct BatteryGauge: View {
             return readStream(seconds, from: reader.reader, of: identity)
         }
         if generatorItem != identity {
-            let generator = AVAssetImageGenerator(asset: item.asset)
+            dropPreviewAsset()
+            // A drive file's frames come from an asset of their own, which reads only what they show (`CloudStreams.previewAsset`).
+            let cloud = (item.asset as? AVURLAsset).flatMap { CloudStreams.previewAsset(for: $0.url) }
+            previewAsset = cloud
+            let generator = AVAssetImageGenerator(asset: cloud ?? item.asset)
             generator.appliesPreferredTrackTransform = true
             generator.maximumSize = CGSize(width: 320, height: 320)
             generator.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
@@ -2104,11 +2139,14 @@ private struct BatteryGauge: View {
         guard let generator else { return }
         nextPreview = nil
         generating = true
+        let asked = ObjectIdentifier(generator)
         generator.generateCGImageAsynchronously(for: CMTime(seconds: seconds, preferredTimescale: 600)) { [weak self] image, _, _ in
             nonisolated(unsafe) let frame = image
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.generating = false
+                // Let go at the end of the drag (`dropPreviewAsset`), which calls off what it was reading.
+                guard self.generator.map(ObjectIdentifier.init) == asked else { return self.makePreview() }
                 if let frame { if self.scrubbing != nil { self.preview = frame } }
                 else if self.preview == nil {
                     // No frame from the generator: a stream. Its second reader takes over where one may open.
@@ -2160,6 +2198,17 @@ private struct BatteryGauge: View {
         }
     }
 
+    /// A drive file's preview asset and its generator, let go when the finger lifts: its reads are called off, so none
+    /// goes on downloading from a dragged place while the video waits for the place it landed. The next drag opens
+    /// another (its index is still in the stream's cache).
+    private func dropPreviewAsset() {
+        guard let asset = previewAsset else { return }
+        previewAsset = nil
+        generator = nil
+        generatorItem = nil
+        CloudStreams.endPreview(asset)
+    }
+
     private func dropReader() {
         readerIdle?.cancel(); readerIdle = nil
         guard let reader else { return }
@@ -2175,6 +2224,7 @@ private struct BatteryGauge: View {
             item = player.currentItem
             buffered = 0
             dropReader()
+            dropPreviewAsset()
             loading = item?.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
                 Task { @MainActor [weak self] in self?.measureLoaded() }
             }
@@ -2198,6 +2248,10 @@ private struct BatteryGauge: View {
         if abs(value - buffered) >= 1 || (value == 0) != (buffered == 0) { buffered = value }
     }
 }
+
+#endif
+
+#if os(iOS)
 
 /// The video on the Lock Screen, in Control Center and on headphones, with play, pause, skip and scrub: AVKit's
 /// own player published these by itself. Music holds Now Playing only while no video plays (MusicRemoteControl).

@@ -242,7 +242,9 @@ async function match(request: Request, env: Env, ctx: ExecutionContext): Promise
         const usage = await env.DB.prepare("INSERT INTO usage (day, runs) VALUES (?, 1) ON CONFLICT (day) DO UPDATE SET runs = runs + 1 RETURNING runs")
           .bind(today)
           .first<{ runs: number }>();
-        if ((usage?.runs ?? 0) > Number(env.DAILY_RUNS || 2000)) {
+        // Counted for the record; a cap applies only when DAILY_RUNS is above 0 (none by default).
+        const cap = Number(env.DAILY_RUNS || 0);
+        if (cap > 0 && (usage?.runs ?? 0) > cap) {
           await send({ type: "error", code: "busy", message: "The lookup service is at its daily limit. Try again tomorrow." });
           return;
         }

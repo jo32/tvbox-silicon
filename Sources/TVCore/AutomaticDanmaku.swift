@@ -9,7 +9,7 @@ public enum OfficialVideoPage {
             "v.qq.com": #"^/x/(?:cover/[a-zA-Z0-9]+/[a-zA-Z0-9]+|page/[a-zA-Z0-9]+)\.html$"#,
             "v.youku.com": #"^/v_show/id_[a-zA-Z0-9=]+\.html$"#,
             "www.mgtv.com": #"^/b/[0-9]+/[0-9]+\.html$"#,
-            "www.bilibili.com": #"^/bangumi/play/ep[0-9]+/?$"#]
+            "www.bilibili.com": #"^(?:/bangumi/play/ep[0-9]+|/video/BV[0-9A-Za-z]+)/?$"#]
         guard let pattern = patterns[host], parts.path.range(of: pattern, options: .regularExpression) != nil else { return nil }
         parts.scheme = "https"; parts.host = host; parts.query = nil; parts.fragment = nil
         return parts.url

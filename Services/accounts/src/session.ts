@@ -21,6 +21,7 @@ export interface Identity {
 }
 
 // The person who signs in with `identity`, made the first time. A name or label only fills in what is empty or changed.
+// A changed name is refreshed too (#2569): Telegram's display name can be renamed after the first sign-in.
 export async function userFor(env: Env, identity: Identity): Promise<User> {
   const found = await env.DB.prepare(
     "SELECT u.* FROM identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.subject = ?",
@@ -33,7 +34,7 @@ export async function userFor(env: Env, identity: Identity): Promise<User> {
       updates.push(env.DB.prepare("UPDATE identities SET refresh = ?, client = ? WHERE provider = ? AND subject = ?")
         .bind(identity.refresh, identity.client ?? null, identity.provider, identity.subject));
     }
-    if (identity.name && !found.name) {
+    if (identity.name && identity.name !== found.name) {
       updates.push(env.DB.prepare("UPDATE users SET name = ? WHERE id = ?").bind(identity.name, found.id));
       found.name = identity.name;
     }
