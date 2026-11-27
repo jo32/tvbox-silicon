@@ -550,6 +550,7 @@ struct FormSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    @AppStorage("app.appearance") private var appearance = "system"
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     #if os(macOS)
     @State private var choosesFile = false
@@ -863,6 +864,15 @@ struct FormSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
+                Picker(selection: $appearance) {
+                    Text(L10n.text("System")).tag("system")
+                    Text(L10n.text("Light")).tag("light")
+                    Text(L10n.text("Dark")).tag("dark")
+                } label: {
+                    FormLabel(symbol: "circle-half-circle.fill", tint: .gray, title: L10n.text("Appearance"))
+                }
+                .accessibilityIdentifier("settings.appearance")
+                .settingsAnchor(.appearance)
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
                     .settingsAnchor(.playback)
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
@@ -896,6 +906,15 @@ struct FormSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
+                Picker(selection: $appearance) {
+                    Text(L10n.text("System")).tag("system")
+                    Text(L10n.text("Light")).tag("light")
+                    Text(L10n.text("Dark")).tag("dark")
+                } label: {
+                    FormLabel(symbol: "circle-half-circle.fill", tint: .gray, title: L10n.text("Appearance"))
+                }
+                .accessibilityIdentifier("settings.appearance")
+                .settingsAnchor(.appearance)
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 languagePickerRows
@@ -1312,6 +1331,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case watchNow
     case appIcon
     case colorTheme
+    case appearance
     case playback
     case playURL
     case editTabBar
@@ -1617,6 +1637,8 @@ private extension FormSettingsView {
         }
         add(.colorTheme, title: L10n.text("Color Theme"), section: secGeneral, subtitle: ColorThemes.shared.current.title,
             keywords: ["color", "theme", "appearance", "dark", "主题", "配色", "外观"])
+        add(.appearance, title: L10n.text("Appearance"), section: secGeneral,
+            keywords: ["appearance", "light", "dark", "mode", "外观", "深色", "浅色", "夜间"])
 
         #if os(iOS)
         add(.playback, title: L10n.text("Playback"), section: secPlayback,
