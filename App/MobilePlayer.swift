@@ -889,19 +889,19 @@ struct MobilePlayerView: View {
                     if VideoEnhancement.canUpscale { Toggle(L10n.text("Sharper Picture"), isOn: $upscalesVideo) }
                 }
             }
-            if let audio = tracks.audio, audio.options.count > 1 {
-                Menu(L10n.text("Audio")) {
-                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
-                        ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
-                    }
-                    .pickerStyle(.inline)
-                }
-            }
-            // A file whose sound tracks AVFoundation offers no choice between (#428).
+            // A file whose sound tracks AVFoundation offers no complete choice between (#428, #1694), else the
+            // item's audible media selection group.
             if session.audioChoices.count > 1 {
                 Menu(L10n.text("Audio")) {
                     Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
                         ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .pickerStyle(.inline)
+                }
+            } else if let audio = tracks.audio, audio.options.count > 1 {
+                Menu(L10n.text("Audio")) {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
+                        ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)
                 }

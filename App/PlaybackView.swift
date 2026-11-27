@@ -509,6 +509,7 @@ import IOKit.pwr_mgt
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
+        tracksObservation = nil; observedAudioTracks = []
         checkingSegmentsActive = false; repackagingSegments = false
         sampler?.cancel(); sampler = nil
     }
@@ -1355,6 +1356,8 @@ import IOKit.pwr_mgt
         AVTextStyleRule(textMarkupAttributes: SubtitleStyle.load().attributes).map { [$0] } ?? []
     }
     private var observation: NSKeyValueObservation?
+    private var tracksObservation: NSKeyValueObservation?
+    @ObservationIgnored private var observedAudioTracks: [CMPersistentTrackID] = []
     private var failureObserver: NSObjectProtocol?
     private var preparation: Task<Void, Never>?
     /// The local HLS proxy the stream plays through: always on the Mac, elsewhere after a direct failure (`retryThroughProxy`).
@@ -1739,12 +1742,46 @@ import IOKit.pwr_mgt
         }
     }
 
+    /// Keeps at most one ungrouped audio track playing and refreshes the track picker whenever `item.tracks` populates
+    /// or changes (streamed assets and HLS often populate tracks after `.readyToPlay`, #1694).
+    private func syncAudioTracks(_ item: AVPlayerItem, generation activeGeneration: UUID, force: Bool = false) {
+        if UngroupedAudio.playOne(item, keeping: audioChoice) {
+            Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing one")
+        }
+        let ids = UngroupedAudio.trackIDs(item)
+        guard force || ids != observedAudioTracks else { return }
+        observedAudioTracks = ids
+        Task { [weak self] in
+            let choices = await UngroupedAudio.choices(item)
+            guard let self, self.generation == activeGeneration, self.item === item else { return }
+            self.audioChoices = choices
+            self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+        }
+        if !force, item.status == .readyToPlay {
+            Task { [weak self] in
+                guard let self, self.item === item else { return }
+                await self.mediaTracks.load(item)
+                guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
+                if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                    self.externalSubtitles.nativeChosen()
+                }
+            }
+        }
+    }
+
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil; liveReadyAt = nil
+        audioChoices = []; audioChoice = nil; observedAudioTracks = []; liveReadyAt = nil
         mediaTracks.follow(item)
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
+        tracksObservation = item.observe(\.tracks, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == activeGeneration, self.item === item else { return }
+                self.syncAudioTracks(item, generation: activeGeneration)
+                self.revealPictureIfReady()
+            }
+        }
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
             let timeline = status == .readyToPlay && item.duration.isNumeric
@@ -1758,13 +1795,7 @@ import IOKit.pwr_mgt
                     if self.isLive { self.liveReadyAt = .now }
                     self.lineReadyAt = .now; self.lineWatch?.cancel(); self.lineWatch = nil
                     self.noteRungRecovered(url)
-                    if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
-                    Task { [weak self] in
-                        let choices = await UngroupedAudio.choices(item)
-                        guard let self, self.generation == activeGeneration, self.item === item else { return }
-                        self.audioChoices = choices
-                        self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
-                    }
+                    self.syncAudioTracks(item, generation: activeGeneration, force: true)
                     Task { [weak self] in
                         guard let self, self.item === item else { return }
                         await self.mediaTracks.load(item)
@@ -2081,6 +2112,7 @@ import IOKit.pwr_mgt
         error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
         if let proxy { Task { await proxy.stop() } }; proxy = nil
         observation = nil
+        tracksObservation = nil; observedAudioTracks = []
         timeObservation = nil
         muteObservation = nil
         volumeObservation = nil
