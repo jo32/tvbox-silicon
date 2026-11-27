@@ -6,8 +6,9 @@ import Foundation
 /// episodes are the video it carries, the episode-range links into its comment thread
 /// (short-drama channels post one range per comment), and any external "main line" link;
 /// playback resolves a comment or embed page to its direct video address when the public
-/// page carries one, and otherwise hands the page to the usual web detection. Private
-/// channels and invite links have no public preview and are not accepted.
+/// page carries one, and otherwise hands the page to the usual web detection. The address may name the entry
+/// that reads t.me where the network blocks it (`TelegramEndpoint`, #2556). Private channels and invite links
+/// have no public preview and are not accepted.
 public enum TelegramSource {
     static let keyPrefix = "builtin.telegram."
     static let api = "csp_YingxiaTelegram"
@@ -16,8 +17,9 @@ public enum TelegramSource {
     /// `t.me/s/<channel>`, or a post in it. Invite links (`t.me/+…`, `t.me/joinchat/…`)
     /// and private channels (`t.me/c/…`) name none.
     public static func channel(_ url: URL) -> String? {
-        guard let host = url.host()?.lowercased(), ["t.me", "telegram.me", "telegram.dog", "www.t.me"].contains(host) else { return nil }
-        let parts = url.pathComponents.filter { $0 != "/" }
+        guard let address = TelegramEndpoint.split(url)?.telegram,
+              let host = address.host()?.lowercased(), TelegramEndpoint.hosts.contains(host) else { return nil }
+        let parts = address.pathComponents.filter { $0 != "/" }
         guard let first = parts.first else { return nil }
         let candidate: String
         if first == "s" {
@@ -29,16 +31,19 @@ public enum TelegramSource {
         return isUsername(candidate) ? candidate : nil
     }
 
-    /// A subscription holding just this channel's source.
+    /// A subscription holding just this channel's source, read through the entry `origin` named if it named one.
     public static func subscription(_ channel: String, origin: URL) -> Subscription {
-        Subscription(origin: origin, importedAt: Date(), sites: [site(channel)], lives: [], raw: [:])
+        let endpoint = TelegramEndpoint.split(origin)?.endpoint ?? .direct
+        return Subscription(origin: origin, importedAt: Date(), sites: [site(channel, endpoint: endpoint)], lives: [], raw: [:])
     }
 
-    static func site(_ channel: String) -> Site {
+    static func site(_ channel: String, endpoint: TelegramEndpoint = .direct) -> Site {
         let key = keyPrefix + channel.lowercased(), name = "Telegram @\(channel)"
+        var ext: [String: JSONValue] = ["channel": .string(channel)]
+        // Kept with the source, not the subscription: a merge or a reload must read it as it was added (#2556).
+        if !endpoint.isDirect { ext["endpoint"] = .string(endpoint.base.absoluteString) }
         let raw: [String: JSONValue] = ["key": .string(key), "name": .string(name), "type": .number(3), "api": .string(api),
-                                        "searchable": .number(1), "quickSearch": .number(1),
-                                        "ext": .object(["channel": .string(channel)])]
+                                        "searchable": .number(1), "quickSearch": .number(1), "ext": .object(ext)]
         return Site(key: key, name: name, type: 3, api: api, raw: raw)
     }
 
@@ -53,12 +58,14 @@ public enum TelegramSource {
     /// Answers a spider request (`play`, `ids`, `wd`, or the home page) in TVBox's JSON.
     static func request(_ site: Site, params: [String: String], http: HTTPClient) async throws -> [String: JSONValue] {
         guard let channel = channel(of: site) else { throw TVError.invalidURL }
-        if let address = params["play"] { return try await play(address, http: http) }
+        let endpoint = TelegramEndpoint.endpoint(of: site)
+        if let address = params["play"] { return try await play(address, endpoint: endpoint, http: http) }
         if let ids = params["ids"], let id = Int(ids) {
-            return ["list": .array([.object(try details(try await post(channel: channel, id: id, http: http), channel: channel))])]
+            return ["list": .array([.object(try details(try await post(channel: channel, id: id, endpoint: endpoint, http: http),
+                                                      channel: channel, endpoint: endpoint))])]
         }
         let page = max(1, Int(params["pg"] ?? "") ?? 1)
-        let posts = try await fetchPage(channel: channel, page: page, http: http)
+        let posts = try await fetchPage(channel: channel, page: page, endpoint: endpoint, http: http)
         if let query = params["wd"]?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
             let found = posts.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.text.localizedCaseInsensitiveContains(query) }
             return ["list": .array(found.map { .object(videoFields($0)) }), "pagecount": .number(1)]
@@ -73,27 +80,29 @@ public enum TelegramSource {
     /// A direct media address plays as-is. A Telegram embed or comment page is read for the
     /// video address it carries, so playback stays in the app; a page without one (an
     /// external line, or a video too large for the public widget) goes to web detection.
-    private static func play(_ address: String, http: HTTPClient) async throws -> [String: JSONValue] {
+    private static func play(_ address: String, endpoint: TelegramEndpoint, http: HTTPClient) async throws -> [String: JSONValue] {
         let header: JSONValue = .object(["Referer": .string("https://t.me/"), "User-Agent": .string(HTTPClient.userAgent)])
         if CatalogClient.isDirectMedia(address) { return ["parse": .number(0), "url": .string(address), "header": header] }
-        if let url = try? WebAddress.resolve(address), let html = try? await fetch(url, http: http), let video = video(in: html) {
-            return ["parse": .number(0), "url": .string(video), "header": header]
+        if let url = try? WebAddress.resolve(address) {
+            if let html = try? await fetch(endpoint.address(url), http: http), let video = video(in: html) {
+                return ["parse": .number(0), "url": .string(video), "header": header]
+            }
         }
         return ["parse": .number(1), "url": .string(address), "header": header]
     }
 
     /// The preview page's posts, newest first.
-    private static func latest(channel: String, http: HTTPClient) async throws -> [Post] {
-        try await fetchPage(channel: channel, page: 1, http: http)
+    private static func latest(channel: String, endpoint: TelegramEndpoint = .direct, http: HTTPClient) async throws -> [Post] {
+        try await fetchPage(channel: channel, page: 1, endpoint: endpoint, http: http)
     }
 
     /// One page of the channel's posts, newest first. The preview page holds about twenty posts;
     /// older ones come from `?before=<oldest id>`, so page N walks from the newest page down to it.
-    private static func fetchPage(channel: String, page: Int, http: HTTPClient) async throws -> [Post] {
+    private static func fetchPage(channel: String, page: Int, endpoint: TelegramEndpoint, http: HTTPClient) async throws -> [Post] {
         var before: Int? = nil
         var shown: [Post] = []
         for _ in 1...page {
-            let html = try await fetch(previewURL(channel: channel, before: before), http: http)
+            let html = try await fetch(previewURL(channel: channel, before: before, endpoint: endpoint), http: http)
             shown = Array(posts(in: html, channel: channel).reversed())
             guard let oldest = shown.last?.id else { return [] }
             before = oldest
@@ -102,22 +111,22 @@ public enum TelegramSource {
     }
 
     /// The preview page, or the older posts before a post id.
-    static func previewURL(channel: String, before: Int?) -> URL {
+    static func previewURL(channel: String, before: Int?, endpoint: TelegramEndpoint = .direct) -> URL {
         if let before {
-            return URL(string: "https://t.me/s/\(channel)?before=\(before)")!
+            return endpoint.address("s/\(channel)", query: [URLQueryItem(name: "before", value: String(before))])
         }
-        return URL(string: "https://t.me/s/\(channel)")!
+        return endpoint.address("s/\(channel)")
     }
 
     /// One post, from its embed page; the preview page is the fallback when the embed
     /// page carries no post of its own.
-    private static func post(channel: String, id: Int, http: HTTPClient) async throws -> Post {
-        if let html = try? await fetch(URL(string: "https://t.me/\(channel)/\(id)?embed=1")!, http: http),
+    private static func post(channel: String, id: Int, endpoint: TelegramEndpoint, http: HTTPClient) async throws -> Post {
+        if let html = try? await fetch(endpoint.address("\(channel)/\(id)", query: [URLQueryItem(name: "embed", value: "1")]), http: http),
            let post = posts(in: html, channel: channel).first(where: { $0.id == id }) { return post }
         // The embed page didn't carry it: the preview page that ends at it (`?before=` the next id) has it in one
         // request, however old it is; walking the pages from the newest down took one request per twenty posts, and
         // the whole channel's history for a post that is gone.
-        let html = try await fetch(previewURL(channel: channel, before: id + 1), http: http)
+        let html = try await fetch(previewURL(channel: channel, before: id + 1, endpoint: endpoint), http: http)
         if let post = posts(in: html, channel: channel).first(where: { $0.id == id }) { return post }
         throw TVError.unsupported(L10n.text("This Telegram post is no longer in the channel's public preview."))
     }
@@ -139,7 +148,7 @@ public enum TelegramSource {
 
     /// A post's details: its own video first, then its comment-thread episode ranges and
     /// external lines, in the order the post writes them.
-    static func details(_ post: Post, channel: String) throws -> [String: JSONValue] {
+    static func details(_ post: Post, channel: String, endpoint: TelegramEndpoint = .direct) throws -> [String: JSONValue] {
         var episodes: [(name: String, address: String)] = []
         var seen = Set<String>()
         func add(_ name: String, _ address: String) {
@@ -147,7 +156,7 @@ public enum TelegramSource {
             episodes.append((lineName(name.isEmpty ? L10n.text("Play") : name), address))
         }
         if let video = post.video { add(L10n.text("Play"), video) }
-        for link in post.links { add(link.name, embedAddress(link.url)) }
+        for link in post.links { add(link.name, embedAddress(link.url, endpoint: endpoint)) }
         guard !episodes.isEmpty else {
             throw TVError.unsupported(L10n.text("This Telegram post has no playable video."))
         }
@@ -163,14 +172,15 @@ public enum TelegramSource {
         name.replacingOccurrences(of: "$", with: "＄").replacingOccurrences(of: "#", with: "＃")
     }
 
-    /// A Telegram post or comment address as its embed page, which carries the video.
-    static func embedAddress(_ address: String) -> String {
-        guard var components = URLComponents(string: address), let host = components.host?.lowercased(),
-              host == "t.me" || host == "telegram.me" else { return address }
-        var items = components.queryItems ?? []
+    /// A Telegram post or comment address as its embed page, which carries the video, read through `endpoint`.
+    static func embedAddress(_ address: String, endpoint: TelegramEndpoint = .direct) -> String {
+        guard let url = URL(string: address), let telegram = TelegramEndpoint.split(url)?.telegram else { return address }
+        var components = URLComponents(url: telegram, resolvingAgainstBaseURL: false)
+        var items = components?.queryItems ?? []
         if !items.contains(where: { $0.name == "embed" }) { items.append(URLQueryItem(name: "embed", value: "1")) }
-        components.queryItems = items
-        return components.url?.absoluteString ?? address
+        components?.queryItems = items
+        guard let page = components?.url else { return address }
+        return endpoint.address(page).absoluteString
     }
 
     // MARK: - Public preview parsing
@@ -234,7 +244,7 @@ public enum TelegramSource {
             let href = HTMLText.name(match[1])
             let name = HTMLText.name(match[2].replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
             guard let url = URL(string: href), let host = url.host()?.lowercased() else { return nil }
-            if host == "t.me" || host == "telegram.me" || host == "telegram.dog" {
+            if TelegramEndpoint.hosts.contains(host) {
                 let parts = url.pathComponents.filter { $0 != "/" }
                 guard parts.count == 2, parts[0].lowercased() == channel.lowercased(), let id = Int(parts[1]) else { return nil }
                 // The post's own address is its date link, not an episode; its comment thread is.
