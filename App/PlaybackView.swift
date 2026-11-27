@@ -1578,7 +1578,7 @@ import IOKit.pwr_mgt
                 self.checkingPicture = false
                 self.restorePositionIfNeeded(item)
                 self.loading = self.pendingResume != nil || self.restoringPosition
-                if self.pendingResume == nil { self.player.play() }
+                if self.pendingResume == nil, !self.recoveryPause.consumeStayPaused() { self.player.play() }
                 return
             }
             self.detachItem(); self.observation = nil

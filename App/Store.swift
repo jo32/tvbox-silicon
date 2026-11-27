@@ -116,7 +116,9 @@ import TVCore
     /// A standalone full-screen player cover is already on screen: a watch page appearing underneath it (for example
     /// when folding iPhone Duo from its inner display to its outer display, #1967, #1528, #2103) must not steal
     /// playback from the cover or mount a second player underneath it.
-    var fullScreenPlayerPresented = false
+    /// Counted, not a flag: a cover replacing another can appear before the old one disappears (#1967).
+    var fullScreenPlayers = 0
+    var fullScreenPlayerPresented: Bool { fullScreenPlayers > 0 }
     func playsInWatchPage(_ channel: Channel?) -> Bool {
         guard !fullScreenPlayerPresented, let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
@@ -333,7 +335,7 @@ import TVCore
         playing = nil
         cancelEpisodeSelection(); cancelResume()
         nextAheadTask?.task.cancel(); nextAheadTask = nil; nextAhead = nil
-        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; fullScreenPlayerPresented = false; episodeError = nil
+        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; fullScreenPlayers = 0; episodeError = nil
         // The main profile's last changes go up before iCloud stops listening to it.
         if profile.isMain { cloudSync?.flushPending() }
         Profiles.shared.select(target)

@@ -87,6 +87,19 @@ struct PlaybackDropRecoveryTests {
         #expect(!keepPaused)
     }
 
+    @Test func playingAgainDropsAStalePause() {
+        // Paused, a reconnect noted it, then the viewer played from Picture in Picture's own button: the next
+        // reconnect must not keep the video paused.
+        var pause = PlaybackRecoveryPause()
+        pause.update(paused: true, at: 100)
+        pause.noteReconnect(currentlyPaused: true, fromFailure: false, at: 101)
+        #expect(pause.stayPaused)
+        pause.update(paused: false, at: 102)
+        #expect(!pause.stayPaused)
+        let keepPaused = pause.consumeStayPaused()
+        #expect(!keepPaused)
+    }
+
     @Test func explicitClearResumesPlayback() {
         var pause = PlaybackRecoveryPause()
         pause.update(paused: true, at: 10)

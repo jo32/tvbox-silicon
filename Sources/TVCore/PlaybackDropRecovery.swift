@@ -79,6 +79,9 @@ public struct PlaybackRecoveryPause: Sendable, Equatable {
             if pausedSince == nil { pausedSince = now }
         } else {
             pausedSince = nil
+            // Playing again, by whatever means (Picture in Picture's own button too): a reconnect noted while paused
+            // no longer holds, or the next one would stay paused against the viewer's play.
+            stayPaused = false
         }
     }
 

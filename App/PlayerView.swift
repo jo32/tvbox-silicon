@@ -194,7 +194,7 @@ struct PlaybackView: View {
         .onAppear {
             #if os(iOS)
             if watch == nil {
-                store.fullScreenPlayerPresented = true
+                store.fullScreenPlayers += 1
                 PlayerOrientation.setStandalonePlayer(true)
             }
             if let parked = FloatingPlayback.shared.take(session) {
@@ -263,7 +263,7 @@ struct PlaybackView: View {
             hideTask?.cancel(); store.cancelEpisodeSelection()
             #if os(iOS)
             if watch == nil {
-                store.fullScreenPlayerPresented = false
+                store.fullScreenPlayers = max(0, store.fullScreenPlayers - 1)
                 PlayerOrientation.setStandalonePlayer(false)
             }
             // Unfolding iPhone Duo replaces the watch page with the regular detail page: hand the live session over
