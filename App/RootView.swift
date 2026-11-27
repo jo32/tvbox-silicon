@@ -232,7 +232,8 @@ struct RootView: View {
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .musicNowPlaying(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 }), zoom: nowPlayingZoom)
-            .onChange(of: store.section) { _, section in
+            // `initial`: the launch page (#1673) can be a section under More before any change happens.
+            .onChange(of: store.section, initial: true) { _, section in
                 if phoneTabs && inMore.contains(section) {
                     moreSection = section; morePath = NavigationPath([section])
                     store.section = .more

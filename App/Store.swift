@@ -135,12 +135,17 @@ import TVCore
     static let nextAheadLength: Double = 10 * 60
     var section: AppSection = .home
     /// The page the app opens on, kept per profile; Watch Now when unset (#1673, #2008, #2246).
+    /// Stored, so the Settings picker shows a new choice at once (a value read from UserDefaults isn't observed).
     var launchSection: AppSection? {
-        get { AppSection(rawValue: defaults.string(forKey: "launchSection") ?? "") }
-        set {
-            if let value = newValue { defaults.set(value.rawValue, forKey: "launchSection") }
+        didSet {
+            if let value = launchSection { defaults.set(value.rawValue, forKey: "launchSection") }
             else { defaults.removeObject(forKey: "launchSection") }
         }
+    }
+    /// Where the app opens: the launch page, unless it is hidden now (Music before extras, Manga or Novels with no
+    /// list), which would open on a tab that isn't there.
+    private var openingSection: AppSection {
+        launchSection.flatMap { hiddenSections.contains($0) ? nil : $0 } ?? .home
     }
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
@@ -245,7 +250,7 @@ import TVCore
         playbackHistory = library.history
         profileFolder = library.folder
         // A saved launch page beats Watch Now; QA's forced section still overrides it later.
-        if let saved = AppSection(rawValue: library.defaults.string(forKey: "launchSection") ?? "") { section = saved }
+        launchSection = AppSection(rawValue: library.defaults.string(forKey: "launchSection") ?? "")
         pinnedSources = PinnedSources(defaults: library.playback)
         hiddenSources = HiddenSources(defaults: library.playback)
         hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
@@ -286,6 +291,8 @@ import TVCore
         MusicDownloadLibrary.shared.wake()
         setUpListening()
         if profile.isMain { setUpCloudSync() } else { cloudSync?.isSuspended = true }
+        // The launch page (#1673), now that every list that hides a section is read.
+        section = openingSection
     }
     /// Reads the open profile's subscription list and the saved copy of each, then merges them.
     private func loadSubscriptions(resetting: Bool) {
@@ -354,7 +361,8 @@ import TVCore
         // The new lists' revisions can match the old ones', so the cached rows go by hand.
         rememberSiteLists("")
         loadSubscriptions(resetting: true)
-        section = launchSection ?? .home
+        launchSection = AppSection(rawValue: defaults.string(forKey: "launchSection") ?? "")
+        section = openingSection
         if profile.isMain { setUpCloudSync() }
         cloudSync?.isSuspended = !profile.isMain
         Diagnostics.shared.record(.info, "profile", "opened \(profile.isMain ? "main" : "other") profile")

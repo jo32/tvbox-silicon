@@ -882,7 +882,7 @@ struct FormSettingsView: View {
                     .settingsAnchor(.collapseTabBar)
                 }
                 Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
-                    ForEach(AppSection.launchChoices) { Text($0.title).tag($0) }
+                    ForEach(AppSection.launchChoices.filter { !store.hiddenSections.contains($0) }) { Text($0.title).tag($0) }
                 } label: {
                     FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
                 }
@@ -904,7 +904,7 @@ struct FormSettingsView: View {
                 .accessibilityIdentifier("settings.colorTheme")
                 .settingsAnchor(.colorTheme)
                 Picker(selection: Binding(get: { store.launchSection ?? .home }, set: { store.launchSection = $0 })) {
-                    ForEach(AppSection.launchChoices) { Text($0.title).tag($0) }
+                    ForEach(AppSection.launchChoices.filter { !store.hiddenSections.contains($0) }) { Text($0.title).tag($0) }
                 } label: {
                     FormLabel(symbol: "house.fill", tint: .gray, title: L10n.text("Launch Page"))
                 }
