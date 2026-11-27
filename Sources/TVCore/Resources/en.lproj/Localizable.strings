@@ -622,6 +622,8 @@
 "Pinned" = "Pinned";
 "Pin source" = "Pin source";
 "Unpin source" = "Unpin source";
+"Pin to Top" = "Pin to Top";
+"Unpin" = "Unpin";
 "Pinned Group" = "Pinned Group";
 "Hide Source" = "Hide Source";
 "Open Subscription" = "Open Subscription";

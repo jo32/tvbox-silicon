@@ -621,6 +621,8 @@
 "Pinned" = "固定済み";
 "Pin source" = "ソースを固定";
 "Unpin source" = "固定を解除";
+"Pin to Top" = "トップに固定";
+"Unpin" = "固定を解除";
 "Pinned Group" = "固定";
 "Hide Source" = "ソースを隠す";
 "Open Subscription" = "元の配信設定を開く";
