@@ -147,6 +147,52 @@ struct PlaybackFailureTests {
         #expect(fallback.triedFlags.isEmpty && fallback.automaticSwitches == 0)
     }
 
+    @Test func singleEpisodeFilmWithDifferentLineNamesDoesNotLoopAndStopsAtBudget() {
+        // Two-line film: "HD中字" on Line A, "正片" on Line B. Switching A -> B and calling track(B)
+        // (as Store.playing didSet does) must keep A in triedFlags instead of looping A <-> B forever.
+        let twoLineEpisodes = [
+            Episode(id: "a1", name: "HD中字", address: "u1", flag: "Line A"),
+            Episode(id: "b1", name: "正片", address: "u2", flag: "Line B"),
+        ]
+        let twoLinePlaylist = EpisodePlaylist(twoLineEpisodes)
+        var twoLineFallback = PlaybackLineFallback()
+        let ctxA = context(flag: "Line A", name: "HD中字", id: "a1")
+        twoLineFallback.track(ctxA)
+        let firstSwitch = twoLineFallback.nextAutomatic(for: ctxA, candidates: twoLinePlaylist.alternates(for: ctxA))
+        #expect(firstSwitch?.flag == "Line B")
+
+        let ctxB = context(flag: "Line B", name: "正片", id: "b1")
+        twoLineFallback.track(ctxB)
+        #expect(twoLineFallback.triedFlags == ["Line A", "Line B"])
+        #expect(twoLineFallback.automaticSwitches == 1)
+        // Line B fails: Line A is already tried, so automatic fallback stops instead of switching back to A.
+        #expect(twoLineFallback.nextAutomatic(for: ctxB, candidates: twoLinePlaylist.alternates(for: ctxB)) == nil)
+
+        // Four-line film with distinct names on every line: stops after the automatic budget (2).
+        let fourLineEpisodes = [
+            Episode(id: "a1", name: "HD中字", address: "u1", flag: "Line A"),
+            Episode(id: "b1", name: "正片", address: "u2", flag: "Line B"),
+            Episode(id: "c1", name: "蓝光", address: "u3", flag: "Line C"),
+            Episode(id: "d1", name: "超清", address: "u4", flag: "Line D"),
+        ]
+        let fourLinePlaylist = EpisodePlaylist(fourLineEpisodes)
+        var fallback = PlaybackLineFallback()
+        var current = context(flag: "Line A", name: "HD中字", id: "a1")
+        fallback.track(current)
+        var visited = [current.episodeFlag]
+        for _ in 0..<10 {
+            guard let next = fallback.nextAutomatic(for: current, candidates: fourLinePlaylist.alternates(for: current)) else { break }
+            visited.append(next.flag)
+            current = context(flag: next.flag, name: next.name, id: next.id)
+            fallback.track(current)
+        }
+        #expect(visited == ["Line A", "Line B", "Line C"])
+        #expect(fallback.automaticSwitches == PlaybackLineFallback.limit)
+        #expect(fallback.triedFlags == ["Line A", "Line B", "Line C"])
+        // Manual switch still prefers the untried fourth line.
+        #expect(fallback.nextManual(for: current, candidates: fourLinePlaylist.alternates(for: current))?.flag == "Line D")
+    }
+
     @Test func detectsPluginLoopbackRefusalsAfterSuspension() {
         let local = URL(string: "http://127.0.0.1:19979/proxy?id=1")!
         let localhost = URL(string: "http://localhost:8080/video.m3u8")!

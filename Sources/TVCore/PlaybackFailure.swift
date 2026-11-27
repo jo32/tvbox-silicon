@@ -179,8 +179,15 @@ public struct PlaybackFailure: Equatable, Sendable {
 public struct PlaybackLineFallback: Sendable {
     public static let limit = 2
 
+    private struct PendingSwitch: Equatable, Sendable {
+        let videoScope: String
+        let episodeID: String
+        let flag: String
+    }
+
     private var videoScope: String?
     private var episodeKey: String?
+    private var pendingSwitch: PendingSwitch?
     public private(set) var triedFlags: Set<String> = []
     public private(set) var automaticSwitches = 0
 
@@ -189,16 +196,29 @@ public struct PlaybackLineFallback: Sendable {
     public mutating func reset() {
         videoScope = nil
         episodeKey = nil
+        pendingSwitch = nil
         triedFlags = []
         automaticSwitches = 0
     }
 
-    /// Tracks that `context` is the active episode/line. Switching to a different video or episode resets the budget.
+    /// Tracks that `context` is the active episode/line. Switching to a different video or episode resets the budget,
+    /// except when landing on the target chosen by `nextAutomatic` (e.g. a single-episode film whose lines use
+    /// different names such as "HD中字" and "正片").
     public mutating func track(_ context: PlaybackHistoryContext) {
         let key = Self.episodeKey(for: context)
+        if let pending = pendingSwitch,
+           pending.videoScope == context.id,
+           pending.episodeID == context.episodeID,
+           pending.flag == context.episodeFlag {
+            pendingSwitch = nil
+            episodeKey = key
+            triedFlags.insert(context.episodeFlag)
+            return
+        }
         if videoScope != context.id || episodeKey != key {
             videoScope = context.id
             episodeKey = key
+            pendingSwitch = nil
             triedFlags = [context.episodeFlag]
             automaticSwitches = 0
         } else {
@@ -210,10 +230,14 @@ public struct PlaybackLineFallback: Sendable {
     public mutating func nextAutomatic(for context: PlaybackHistoryContext, candidates: [Episode],
                                        allowed: (Episode) -> Bool = { _ in true }) -> Episode? {
         track(context)
-        guard automaticSwitches < Self.limit else { return nil }
-        guard let next = candidates.first(where: { !triedFlags.contains($0.flag) && allowed($0) }) else { return nil }
+        guard automaticSwitches < Self.limit else { pendingSwitch = nil; return nil }
+        guard let next = candidates.first(where: { !triedFlags.contains($0.flag) && allowed($0) }) else {
+            pendingSwitch = nil
+            return nil
+        }
         triedFlags.insert(next.flag)
         automaticSwitches += 1
+        pendingSwitch = PendingSwitch(videoScope: context.id, episodeID: next.id, flag: next.flag)
         return next
     }
 
