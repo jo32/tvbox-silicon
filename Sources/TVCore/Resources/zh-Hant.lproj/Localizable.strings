@@ -621,6 +621,8 @@
 "Pinned" = "已置頂";
 "Pin source" = "置頂來源";
 "Unpin source" = "取消置頂";
+"Pin to Top" = "置頂";
+"Unpin" = "取消置頂";
 "Pinned Group" = "置頂";
 "Hide Source" = "隱藏來源";
 "Open Subscription" = "開啟所屬訂閱";
