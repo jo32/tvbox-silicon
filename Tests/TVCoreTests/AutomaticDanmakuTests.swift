@@ -170,6 +170,10 @@ private actor DanmakuTestTransport {
     #expect(OfficialVideoPage.validated("https://www.iqiyi.com.evil.test/v_a.html") == nil)
     #expect(OfficialVideoPage.validated("https://cdn.example.com/video.m3u8?token=secret") == nil)
     #expect(OfficialVideoPage.validated("http://www.iqiyi.com/v_a.html?token=tracking")?.absoluteString == "https://www.iqiyi.com/v_a.html")
+    // Ordinary Bilibili video pages carry the same danmaku as bangumi episode pages (#2574).
+    #expect(OfficialVideoPage.validated("https://www.bilibili.com/video/BV1xx411c7mD")?.absoluteString == "https://www.bilibili.com/video/BV1xx411c7mD")
+    #expect(OfficialVideoPage.validated("https://www.bilibili.com/video/BV1xx411c7mD/?spm_id_from=333.788")?.absoluteString == "https://www.bilibili.com/video/BV1xx411c7mD/")
+    #expect(OfficialVideoPage.validated("https://www.bilibili.com/video/av123456") == nil)
     #expect(CatalogDanmakuMatcher.normalized("葬送的芙莉蓮") == CatalogDanmakuMatcher.normalized("葬送的芙莉莲"))
 }
 
