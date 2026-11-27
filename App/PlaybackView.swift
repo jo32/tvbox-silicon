@@ -567,7 +567,7 @@ import IOKit.pwr_mgt
         let summary = PlaybackFailure.describe(failure, httpStatus: status, host: host, upstream: upstream,
                                                isLoopback: loopback, refused: expired)
         let isDolbyVisionRefusal = Remux.isDolbyVision(url) && Self.refusedContent(failure)
-        if !isDolbyVisionRefusal, summary.allowsAutomaticLineSwitch, tryCatalogFallback(after: failure, channel: channel) { return }
+        if !isDolbyVisionRefusal, tryCatalogFallback(after: failure, channel: channel) { return }
         loading = false
         errorSymbol = isDolbyVisionRefusal ? "play.slash.fill" : summary.symbol
         errorDetails = summary.details
@@ -969,8 +969,9 @@ import IOKit.pwr_mgt
     }
 
     /// Tries the next safe line of the same catalog episode (bounded by `PlaybackLineFallback`), returning true if
-    /// a switch started (#2560).
+    /// a switch started (#2560). Offline failures affect every line and never trigger an automatic switch.
     private func tryCatalogFallback(after failure: Error?, channel: Channel) -> Bool {
+        guard PlaybackFailure.describe(failure).allowsAutomaticLineSwitch else { return false }
         guard let next = onFallbackLine?() else { return false }
         retrying(via: "catalog-line")
         detachItem(); observation = nil
@@ -1375,7 +1376,7 @@ import IOKit.pwr_mgt
                 if self.tryNextLine(after: error) { return }
                 let loopback = ["127.0.0.1", "localhost"].contains(channel.url.host() ?? "")
                 let summary = PlaybackFailure.describe(error, host: channel.url.host(), isLoopback: loopback)
-                if summary.allowsAutomaticLineSwitch, self.tryCatalogFallback(after: error, channel: channel) { return }
+                if self.tryCatalogFallback(after: error, channel: channel) { return }
                 self.errorSymbol = summary.symbol; self.errorDetails = summary.details
                 self.error = summary.message; self.loading = false; return
             }
@@ -1724,7 +1725,7 @@ import IOKit.pwr_mgt
                 let summary = PlaybackFailure.describe(failure, httpStatus: self.transfer.httpStatus ?? logStatus,
                                                        host: host, upstream: self.transfer.failure,
                                                        isLoopback: loopback, refused: refused)
-                if summary.allowsAutomaticLineSwitch, self.tryCatalogFallback(after: failure, channel: channel) { return }
+                if self.tryCatalogFallback(after: failure, channel: channel) { return }
                 self.errorSymbol = summary.symbol
                 self.errorDetails = summary.details
                 self.error = failure == nil ? L10n.text("Playback was interrupted.") : summary.message

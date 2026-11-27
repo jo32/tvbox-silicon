@@ -203,4 +203,15 @@ struct PlaybackFailureTests {
         #expect(!PlaybackFailure.isLoopbackRefusal(local, errorCode: nil))
         #expect(!PlaybackFailure.isLoopbackRefusal(remote, errorCode: NSURLErrorCannotConnectToHost))
     }
+
+    @Test func offlineGuardBlocksAutomaticLineSwitchFromRawErrorAlone() {
+        let directOffline = error(NSURLErrorDomain, NSURLErrorNotConnectedToInternet)
+        let nestedDataNotAllowed = error("AVFoundationErrorDomain", -11800,
+                                         underlying: error(NSURLErrorDomain, NSURLErrorDataNotAllowed))
+        #expect(!PlaybackFailure.describe(directOffline).allowsAutomaticLineSwitch)
+        #expect(!PlaybackFailure.describe(nestedDataNotAllowed).allowsAutomaticLineSwitch)
+        #expect(PlaybackFailure.describe(nil).allowsAutomaticLineSwitch)
+        #expect(PlaybackFailure.describe(error(NSURLErrorDomain, NSURLErrorCannotConnectToHost)).allowsAutomaticLineSwitch)
+        #expect(PlaybackFailure.describe(error("AVFoundationErrorDomain", -11828)).allowsAutomaticLineSwitch)
+    }
 }
