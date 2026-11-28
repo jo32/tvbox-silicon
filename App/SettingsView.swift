@@ -2094,7 +2094,7 @@ struct AddSubscriptionSheet: View {
 
 /// What Add from File offers: a subscription, an M3U / TXT live playlist, or one spider script.
 enum SubscriptionFile {
-    static let types: [UTType] = [.json, .pythonScript, .javaScript, .m3uPlaylist, .plainText]
+    static let types: [UTType] = [.json, .pythonScript, .javaScript, .m3uPlaylist, .plainText, .data]
 }
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
