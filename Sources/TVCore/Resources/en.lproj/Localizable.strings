@@ -2469,3 +2469,11 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";
 "Keep Controls Visible" = "Keep Controls Visible";
 "Count back from the end" = "Count back from the end";
+"Baidu Netdisk didn't return the share's file list. The link may have expired." = "Baidu Netdisk didn't return the share's file list. The link may have expired.";
+"This Baidu share has no video Yingxia can play." = "This Baidu share has no video Yingxia can play.";
+"Baidu Netdisk asks for a verification code for this share. Open the link in a browser first, then try again." = "Baidu Netdisk asks for a verification code for this share. Open the link in a browser first, then try again.";
+"Baidu Netdisk didn't accept this share's extraction code." = "Baidu Netdisk didn't accept this share's extraction code.";
+"Baidu Netdisk didn't return this share's files." = "Baidu Netdisk didn't return this share's files.";
+"Baidu couldn't save this share to your drive: %@" = "Baidu couldn't save this share to your drive: %@";
+"try again later" = "try again later";
+"Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line." = "Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line.";

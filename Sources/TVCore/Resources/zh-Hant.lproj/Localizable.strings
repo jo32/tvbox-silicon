@@ -2469,3 +2469,11 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片頭不填開始即從頭開始，片尾不填結束即到結尾。留空一段的時間表示不跳過該段，時間格式為 分:秒。";
 "Keep Controls Visible" = "始終顯示控制項";
 "Count back from the end" = "從結尾倒數";
+"Baidu Netdisk didn't return the share's file list. The link may have expired." = "百度網盤沒有回傳此分享的檔案清單，連結可能已失效。";
+"This Baidu share has no video Yingxia can play." = "這個百度分享裡沒有映匣可播放的影片。";
+"Baidu Netdisk asks for a verification code for this share. Open the link in a browser first, then try again." = "百度網盤要求對此分享進行安全驗證。請先在瀏覽器中開啟連結完成驗證，然後再試一次。";
+"Baidu Netdisk didn't accept this share's extraction code." = "百度網盤未接受此分享的提取碼。";
+"Baidu Netdisk didn't return this share's files." = "百度網盤沒有回傳此分享的檔案。";
+"Baidu couldn't save this share to your drive: %@" = "百度網盤無法將此分享轉存到你的網盤：%@";
+"try again later" = "請稍後重試";
+"Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line." = "請先在「網盤帳號」中登入百度網盤，再播放這條線路。";
