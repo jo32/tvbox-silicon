@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0120B7D5C3369E0579B5D973 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		01D530B7370C1CB5CFA657BE /* TVBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */; };
+		01E0A74FCCB0D27678D4CAE5 /* MediaTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2475103E66CAADAC4AE2C78D /* MediaTools.swift */; };
 		024BC7DE6E06F79B6511FC89 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
 		02F1FEC42DBA59F7E2E9411E /* AssistantEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0EB074352F279B1E04A784 /* AssistantEntry.swift */; };
 		03843072ECAC2CFBF3568416 /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
@@ -72,6 +73,7 @@
 		2492B8A78FE5DE90D1389ACE /* AppIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5194EB255D269658DD7A81E3 /* AppIcons.xcassets */; };
 		24A10F4DDF5D0BC9B37A66DB /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
 		255C64CDFFBEE99EEEA11AA6 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
+		25DAF71685A839038071FD4C /* SettingsTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B979996EA2BCFC6791F /* SettingsTools.swift */; };
 		26420BA4E7D0CA3BF0883AA7 /* AssistantActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E33D8D04D2A133EF74B3C4 /* AssistantActivity.swift */; };
 		26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
 		26E0EE22B1B47C4F48974EDC /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = BF1BA0E595482E98D5915EC8 /* Localizable.strings */; };
@@ -102,6 +104,7 @@
 		308A38681AA7812EF6DC4DFE /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
 		31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
 		3206DB0AD40F37CC31CD643F /* MusicAppleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C6028F85975A31B1BC1DDD /* MusicAppleViews.swift */; };
+		33341489662B564CD5B6572B /* AppTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AC8C059656D8F78B93B761F /* AppTools.swift */; };
 		338825790412D642115F2BD3 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		33FE607D53E0BFFF76041CA0 /* MangaReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C41063DF832120F89C7509A /* MangaReaderView.swift */; };
 		34679295741063A247FA3E48 /* VideoEnhancement.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */; };
@@ -121,6 +124,7 @@
 		395A40F940E605F6D0B70BFF /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = BF1BA0E595482E98D5915EC8 /* Localizable.strings */; };
 		3A22BAB93FEFE89FD385DB58 /* MusicPlaylistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */; };
 		3A6251EF1A83DCA0F38A1235 /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
+		3A7A01FD0245A67FFA05D3DF /* AgentToolsQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */; };
 		3AAEF47B755581ED6BE517CF /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
 		3ABC036DB97EAE1D5C4A76F5 /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
 		3AD83F67CC5F45C57E1021D3 /* MusicMacMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */; };
@@ -148,7 +152,9 @@
 		46F68199900EF21A30F76EAB /* NovelTypesetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */; };
 		46F7F61F8B890B4EABC32C70 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		4861B86C4B02394CE7FF3DC0 /* PythonHost in Resources */ = {isa = PBXBuildFile; fileRef = 0558AED26E6028C2881DD044 /* PythonHost */; };
+		4889C66DBE8C2DAEB4821551 /* SettingsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3BEBE02E8261CD7A093EE3 /* SettingsCatalog.swift */; };
 		49FAE12E9DA2ED063E9C4754 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
+		4AD33BC511A505CF68F16EA0 /* VideoTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ACE1F21020A202520B0CDC /* VideoTools.swift */; };
 		4B34C185D1E4BCC04927A562 /* NovelTypesetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */; };
 		4B5EB0D44B643E8439A44818 /* NovelQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF046FB7D8F99B3EC47C9069 /* NovelQA.swift */; };
 		4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
@@ -176,6 +182,7 @@
 		545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
 		545F29F3323EB776FED1A94E /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		54A96B89DA4D05725C0D0DB1 /* ColorThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */; };
+		54B2D06F67CEB56287404FA9 /* ScriptTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B3C85C16FB09801FBBD992 /* ScriptTools.swift */; };
 		556C5D64B9A97EFB038F0747 /* MusicDownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */; };
 		55C41E0E739A11AA44235092 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		56A6EE507B32FD9A832FB255 /* MusicNowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */; };
@@ -188,9 +195,11 @@
 		58C0162322E0B17F1652E0AD /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
 		598C9B1ACA758778E88E48D5 /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
+		5A35A93E4B49E93E47D2B329 /* SubscriptionTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365A964FC0498458DC21A262 /* SubscriptionTools.swift */; };
 		5A4FC0AD480850C4C4570694 /* PlayerChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4764F84335D39C05AED00CE9 /* PlayerChannels.swift */; };
 		5CAE176F68875F1B290E66AA /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
+		5CF54F3B8A7FCFDD6D1B1C46 /* AppTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AC8C059656D8F78B93B761F /* AppTools.swift */; };
 		5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		5E0A739AAF2AA786DBC9E023 /* MemberCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858B2841CFD277A56DB119C /* MemberCard.swift */; };
 		5F05B8FEB75498291DBE83CB /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 150E7485ED76FF29A84D7C1D /* TVCore */; };
@@ -206,6 +215,7 @@
 		6448A88D8C564A2130BC0E1C /* SubtitleStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */; };
 		66C02BCC212FB53FC37DBDB3 /* MobilePlayerKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */; };
 		67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
+		681294486ABCC5B8DE208916 /* LibraryTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */; };
 		68952BF47707079971D26F5A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
 		691EBFFF79A0F9406352E007 /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B787E6C42D1275FDCA1CB951 /* AccountStore.swift */; };
@@ -233,7 +243,9 @@
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		702A98ADFF112DDE2E511770 /* NovelCurlPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D31855DC36A1B684385C847 /* NovelCurlPager.swift */; };
 		708C9C339893A13DE74FE7F8 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
+		70B48A39092E072A62780B4B /* AppTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AC8C059656D8F78B93B761F /* AppTools.swift */; };
 		7142A1BCD94E8F10E0C623B5 /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
+		72147C7C2F3F0B6D2314D199 /* AgentToolsQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */; };
 		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
 		72448F6E6FFCC74EE5950C1A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		7283989DBA1B1F0E96A2C383 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
@@ -246,6 +258,7 @@
 		76E61A654D2CB475711A69A6 /* GatherMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F5A2CC425C9574421FAE57 /* GatherMark.swift */; };
 		78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
 		79933C37871103D9EDD0916B /* AssistantEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0EB074352F279B1E04A784 /* AssistantEntry.swift */; };
+		7A6E0DAE751BA456BBF19A40 /* SubscriptionTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365A964FC0498458DC21A262 /* SubscriptionTools.swift */; };
 		7BD36EB4555214FD392DAFEE /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		7C7B124A35FE1D0AA83DCE0B /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
@@ -255,9 +268,11 @@
 		7FB9AB1705559DD6C22EEFAE /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
 		7FBF6A9CDB139D618BC92504 /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		8086C0B4A304F8C22F048A3E /* AssistantActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E33D8D04D2A133EF74B3C4 /* AssistantActivity.swift */; };
+		80DAD72F097B33A812A6F847 /* VideoTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ACE1F21020A202520B0CDC /* VideoTools.swift */; };
 		80FEC451B80F610A45D9D139 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		8229B24F58423BB1D4B33A62 /* MusicPlaylistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */; };
 		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
+		82723219F951399A8607E408 /* LibraryTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		82933DAB592E786763C7D05B /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
 		82C0C95D669F59F144346401 /* LiveGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72830F1F2EF52362002EBA43 /* LiveGuide.swift */; };
@@ -270,12 +285,14 @@
 		858FA22A2D9276C2596DCED9 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
 		85C676366BE3A94345F69A67 /* PlaybackSleepFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D968C2040E542B4B7ADBE19 /* PlaybackSleepFade.swift */; };
 		862B4D7324AB9499E249FB15 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */; };
+		865394AAABB2DD52813EA8BC /* SettingsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3BEBE02E8261CD7A093EE3 /* SettingsCatalog.swift */; };
 		87B2F825565E0BAC988FC145 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		88369D34534D9AF1BC424875 /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */; };
 		8841F62611BD2311301226B8 /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
 		8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
+		8CE57D90E27A4326A9DDAEB8 /* SettingsTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B979996EA2BCFC6791F /* SettingsTools.swift */; };
 		8D679E06C395B1B0CE1CF457 /* MusicMacPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */; };
 		8DC762240D57D529EF917F2E /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
 		8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
@@ -292,6 +309,7 @@
 		923AFC544321F7D6A3FFB87E /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		930D2E53E04CBCD27E280EBD /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
 		94BDD59683DA9F1DA27A1E9B /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
+		9534B47F3A03859E20FAA1C1 /* MediaTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2475103E66CAADAC4AE2C78D /* MediaTools.swift */; };
 		95638C5F64B74B017FAB3FD7 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		95DBEFF5A38344018BDA9B97 /* TVPlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B482395E1DB3E0C2FF8CDC6 /* TVPlayerEpisodes.swift */; };
 		963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
@@ -327,8 +345,10 @@
 		A2D1248EED140C8F92416156 /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		A3112975513B2FFA614AE173 /* MusicAppleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C6028F85975A31B1BC1DDD /* MusicAppleViews.swift */; };
 		A36BCB45D899FBD447B78892 /* ProgrammeCatchupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEDDAC928E6A409C758FC823 /* ProgrammeCatchupView.swift */; };
+		A5E63AF1F7827350BD216E64 /* AgentNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0A4337B3C41F3EC6A8718 /* AgentNavigation.swift */; };
 		A6A01A74BB02107B9B37DF21 /* MangaQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0894F8B5758D4C02A76BCD8E /* MangaQA.swift */; };
 		A6A408E515895FEECABEE7E0 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 7383E296A9A1A224EE71FA94 /* Localizable.strings */; };
+		A6A581B41E8F355B10CF2B35 /* ScriptTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B3C85C16FB09801FBBD992 /* ScriptTools.swift */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		A9198AFD0F283D907F485E7F /* LivePluginsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */; };
@@ -395,6 +415,8 @@
 		CA31C0421630E2AD63674573 /* NovelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74141D324E35BE13394BC0C /* NovelView.swift */; };
 		CAA8462079A5E90B5AF54480 /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		CB40EB8463342F91C50AF39E /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
+		CB7B213A62876D06B4A452A1 /* MediaTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2475103E66CAADAC4AE2C78D /* MediaTools.swift */; };
+		CBDE414B498EDD055608760B /* SettingsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3BEBE02E8261CD7A093EE3 /* SettingsCatalog.swift */; };
 		CCB9CE2A4CFCFFC566D72366 /* PointsGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F4B05EFEA87ADFB35ACD57 /* PointsGuideView.swift */; };
 		CDC78CAFF04C2753B881F19A /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		CF87282F19A85C58083FC769 /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
@@ -402,8 +424,10 @@
 		D0DBC45A6CF92DB54117E0AC /* WebSniffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */; };
 		D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
 		D44F6CC2D66B18E2DABE56CD /* releases.json in Resources */ = {isa = PBXBuildFile; fileRef = 73945256FDDE0952A22BF98C /* releases.json */; };
+		D49ADFDBA6EF68256F8B500B /* SubscriptionTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365A964FC0498458DC21A262 /* SubscriptionTools.swift */; };
 		D4A131B02DE0A206E18B4F0A /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		D4D34F2AEEDF78BC5AB296C1 /* NovelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597A8F41A0CB8104B10C12EC /* NovelStore.swift */; };
+		D4F07F0BC7A8E9A4E21D96BA /* SettingsTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B979996EA2BCFC6791F /* SettingsTools.swift */; };
 		D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
 		D54D6BFE675267FF2D16FC49 /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		D5E6CDAD56F3272FD731DBDE /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
@@ -414,6 +438,7 @@
 		D7E748CE00CE922BAA68C022 /* DiscoverTVLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3D261D268813DF5C90B82 /* DiscoverTVLayout.swift */; };
 		D7EE47673EE419672D2347C5 /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		D8878E7A04E94E6A88CA4DB7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0E8559808CF7D11225EB30B /* Assets.xcassets */; };
+		D9325375021EF5D312B2A76F /* AgentToolsQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */; };
 		D9EDBCF433E81FCBFCB5172E /* AppAgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2F12721B869BDEF097E482F /* AppAgentTools.swift */; };
 		DA8C1C5A565A05C1E3370C26 /* NovelTypesetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */; };
 		DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
@@ -429,6 +454,7 @@
 		E0832AB8995164BECCE1DEDA /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
 		E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
+		E1CF944F141F4AE970FFB4D7 /* AgentNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0A4337B3C41F3EC6A8718 /* AgentNavigation.swift */; };
 		E325A2E05D1FC8E659899AF6 /* LivePluginQRSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */; };
 		E56EBB8E41D7FDB1702F20F2 /* DiscoverCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */; };
 		E5D5A7C6283C6370DF14ECC2 /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
@@ -442,6 +468,7 @@
 		E9F0900B56C80C647D87FD3E /* DanmakuSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */; };
 		EA59E4954399A7E5BC6C2348 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
+		EC3F1D531CADC187093B86A5 /* LibraryTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */; };
 		EC7C67386A7AD9F977E42224 /* LivePluginsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */; };
 		EC98CB9B46F6A9E8D0CF37F4 /* AssistantController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303316BEE41B7F28094EFB6A /* AssistantController.swift */; };
 		ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
@@ -457,11 +484,13 @@
 		F2F68C26F3FB2279B102CF52 /* BilibiliAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B684AAD2C1CD8AC3699FB446 /* BilibiliAccountView.swift */; };
 		F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		F418F8B8793AF0B489F83AB9 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
+		F4C6D6FEC3FA7757629E5EEE /* VideoTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ACE1F21020A202520B0CDC /* VideoTools.swift */; };
 		F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
 		F5F92EF7AFCA773D9FF85A8A /* OpenJDK-assembly-exception.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */; };
 		F619534F102FC9D165F900C9 /* NovelQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF046FB7D8F99B3EC47C9069 /* NovelQA.swift */; };
 		F74139021653CFA0E17CE123 /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */; };
 		F792BA02C02390291EEE4838 /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
+		F7E92EE20908289310205498 /* AgentNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0A4337B3C41F3EC6A8718 /* AgentNavigation.swift */; };
 		F845C8AC22D7E526F91FB1AB /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */; };
 		F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
 		F8FDE07CCDA81CE83CEAB4B9 /* BilibiliViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57363D217E83F0E69B2DF678 /* BilibiliViews.swift */; };
@@ -473,6 +502,7 @@
 		FBD490433241B703DEC0B46B /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
 		FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
+		FD25F1D829F1DCE41BC6F191 /* ScriptTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B3C85C16FB09801FBBD992 /* ScriptTools.swift */; };
 		FD9721B84A06B25F362AF291 /* AppleRuntime.m in Sources */ = {isa = PBXBuildFile; fileRef = FFE4BA19E4F4F2797D929A6F /* AppleRuntime.m */; };
 		FDA61F14FE9C263521D69DD7 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
@@ -496,6 +526,7 @@
 		08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Capstone-LLVM.txt"; sourceTree = "<group>"; };
 		08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayer.swift; sourceTree = "<group>"; };
 		0C0D362A48D8B9F9A3B8A537 /* NovelChapterList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelChapterList.swift; sourceTree = "<group>"; };
+		0EB30B979996EA2BCFC6791F /* SettingsTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTools.swift; sourceTree = "<group>"; };
 		0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DLNACast.swift; sourceTree = "<group>"; };
 		11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelTypesetter.swift; sourceTree = "<group>"; };
 		13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleTranslator.swift; sourceTree = "<group>"; };
@@ -506,6 +537,7 @@
 		226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayOn.swift; sourceTree = "<group>"; };
 		2278608DE7AE2FEA27EB51C9 /* TVBox-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TVBox-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		235375CC2420B76124FCEBC2 /* MusicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicView.swift; sourceTree = "<group>"; };
+		2475103E66CAADAC4AE2C78D /* MediaTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTools.swift; sourceTree = "<group>"; };
 		24E23B60A4EBB4CD636CDF1F /* PlaybackHistoryLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackHistoryLifecycle.swift; sourceTree = "<group>"; };
 		25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayerKeyboard.swift; sourceTree = "<group>"; };
 		26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuServiceSettingsView.swift; sourceTree = "<group>"; };
@@ -519,8 +551,10 @@
 		31D1816B8ED53D49478FD843 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackHistoryView.swift; sourceTree = "<group>"; };
 		356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSearchFilters.swift; sourceTree = "<group>"; };
+		365A964FC0498458DC21A262 /* SubscriptionTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionTools.swift; sourceTree = "<group>"; };
 		367AD12D73554C3C3667315D /* WebSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSignInView.swift; sourceTree = "<group>"; };
 		3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Keystone-LLVM.txt"; sourceTree = "<group>"; };
+		3AC8C059656D8F78B93B761F /* AppTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTools.swift; sourceTree = "<group>"; };
 		3C95AF876ECA5A35824263D7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3D31855DC36A1B684385C847 /* NovelCurlPager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelCurlPager.swift; sourceTree = "<group>"; };
 		3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacBrowse.swift; sourceTree = "<group>"; };
@@ -534,6 +568,7 @@
 		4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenJDK-assembly-exception.txt"; sourceTree = "<group>"; };
 		51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverPersonView.swift; sourceTree = "<group>"; };
 		5194EB255D269658DD7A81E3 /* AppIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AppIcons.xcassets; sourceTree = "<group>"; };
+		51ACE1F21020A202520B0CDC /* VideoTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTools.swift; sourceTree = "<group>"; };
 		51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverFollowing.swift; sourceTree = "<group>"; };
 		52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		54E33D8D04D2A133EF74B3C4 /* AssistantActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantActivity.swift; sourceTree = "<group>"; };
@@ -570,6 +605,7 @@
 		80C6028F85975A31B1BC1DDD /* MusicAppleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicAppleViews.swift; sourceTree = "<group>"; };
 		8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JNA-Apache2.txt"; sourceTree = "<group>"; };
 		846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverBrowseView.swift; sourceTree = "<group>"; };
+		88B3C85C16FB09801FBBD992 /* ScriptTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptTools.swift; sourceTree = "<group>"; };
 		8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVBoxApp.swift; sourceTree = "<group>"; };
 		8B842401113B0BDFA7B532B4 /* QALaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QALaunch.swift; sourceTree = "<group>"; };
 		8C41063DF832120F89C7509A /* MangaReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderView.swift; sourceTree = "<group>"; };
@@ -605,6 +641,7 @@
 		AB7347843C885A97DFE397DD /* DouyinAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinAccountView.swift; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorThemes.swift; sourceTree = "<group>"; };
+		B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolsQA.swift; sourceTree = "<group>"; };
 		B24C3A21F10F41307AF2937E /* MusicIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicIntents.swift; sourceTree = "<group>"; };
 		B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerViews.swift; sourceTree = "<group>"; };
 		B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailView.swift; sourceTree = "<group>"; };
@@ -618,6 +655,7 @@
 		B787E6C42D1275FDCA1CB951 /* AccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStore.swift; sourceTree = "<group>"; };
 		BB0EB074352F279B1E04A784 /* AssistantEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantEntry.swift; sourceTree = "<group>"; };
 		BB24E05B7991A6EC8248BB34 /* ScriptHost */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScriptHost; path = build/ScriptHost; sourceTree = SOURCE_ROOT; };
+		BB3BEBE02E8261CD7A093EE3 /* SettingsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCatalog.swift; sourceTree = "<group>"; };
 		BD71FD8B3E72803C426D91CC /* OpenJDK.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OpenJDK.txt; sourceTree = "<group>"; };
 		BF1BA0E595482E98D5915EC8 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVPlayer.swift; sourceTree = "<group>"; };
@@ -627,6 +665,7 @@
 		C3F4B05EFEA87ADFB35ACD57 /* PointsGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsGuideView.swift; sourceTree = "<group>"; };
 		C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginQRSignIn.swift; sourceTree = "<group>"; };
 		CD3EB3627A26DB28A92F4EEF /* NovelReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderView.swift; sourceTree = "<group>"; };
+		CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryTools.swift; sourceTree = "<group>"; };
 		CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveView.swift; sourceTree = "<group>"; };
 		D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleView.swift; sourceTree = "<group>"; };
 		D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliCastController.swift; sourceTree = "<group>"; };
@@ -637,6 +676,7 @@
 		DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacMiniPlayer.swift; sourceTree = "<group>"; };
 		E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliMark.swift; sourceTree = "<group>"; };
 		E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */ = {isa = PBXFileReference; lastKnownFileType = archive.jar; path = "runtime-probe.jar"; sourceTree = "<group>"; };
+		E1C0A4337B3C41F3EC6A8718 /* AgentNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNavigation.swift; sourceTree = "<group>"; };
 		E740CFD276F4B76892EB0AF1 /* ApplePython.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ApplePython.c; sourceTree = "<group>"; };
 		E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudQRLoginView.swift; sourceTree = "<group>"; };
 		E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Capstone.txt; sourceTree = "<group>"; };
@@ -883,7 +923,17 @@
 		79E74C111E1C6FB2BB59FABA /* Tools */ = {
 			isa = PBXGroup;
 			children = (
+				E1C0A4337B3C41F3EC6A8718 /* AgentNavigation.swift */,
+				B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */,
 				C2F12721B869BDEF097E482F /* AppAgentTools.swift */,
+				3AC8C059656D8F78B93B761F /* AppTools.swift */,
+				CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */,
+				2475103E66CAADAC4AE2C78D /* MediaTools.swift */,
+				88B3C85C16FB09801FBBD992 /* ScriptTools.swift */,
+				BB3BEBE02E8261CD7A093EE3 /* SettingsCatalog.swift */,
+				0EB30B979996EA2BCFC6791F /* SettingsTools.swift */,
+				365A964FC0498458DC21A262 /* SubscriptionTools.swift */,
+				51ACE1F21020A202520B0CDC /* VideoTools.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -1404,9 +1454,12 @@
 			files = (
 				691EBFFF79A0F9406352E007 /* AccountStore.swift in Sources */,
 				745C19C244FE3751F1D68087 /* AccountView.swift in Sources */,
+				F7E92EE20908289310205498 /* AgentNavigation.swift in Sources */,
+				72147C7C2F3F0B6D2314D199 /* AgentToolsQA.swift in Sources */,
 				8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */,
 				BD02A2029EF2EAB2BC329363 /* AppAgentTools.swift in Sources */,
 				B13EACE55DE94A531B1A4F60 /* AppIcons.swift in Sources */,
+				5CF54F3B8A7FCFDD6D1B1C46 /* AppTools.swift in Sources */,
 				0BAEA44063C146779B061BB1 /* ApplePython.c in Sources */,
 				36506AEA4D6F2E1541C1BCD1 /* AppleRuntime.m in Sources */,
 				26420BA4E7D0CA3BF0883AA7 /* AssistantActivity.swift in Sources */,
@@ -1455,6 +1508,7 @@
 				76E61A654D2CB475711A69A6 /* GatherMark.swift in Sources */,
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
 				1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */,
+				681294486ABCC5B8DE208916 /* LibraryTools.swift in Sources */,
 				2E2372AA323482FCF4B01156 /* LiveGuide.swift in Sources */,
 				12758A07284A42E827217426 /* LivePluginQRSignIn.swift in Sources */,
 				2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */,
@@ -1468,6 +1522,7 @@
 				A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */,
 				D7ABE3CCA68742E00CE3AB6D /* MangaStore.swift in Sources */,
 				2C6D239842DA86D6B4908569 /* MangaView.swift in Sources */,
+				01E0A74FCCB0D27678D4CAE5 /* MediaTools.swift in Sources */,
 				5E0A739AAF2AA786DBC9E023 /* MemberCard.swift in Sources */,
 				74CAE612DB09FB67343FE8B4 /* MobilePlayer.swift in Sources */,
 				A08A0C19F92F97F51356A06C /* MobilePlayerKeyboard.swift in Sources */,
@@ -1512,6 +1567,9 @@
 				DF010807CD40F2180FDE6793 /* QALaunch.swift in Sources */,
 				3BD1DFEF3A75B43935EB2185 /* RootView.swift in Sources */,
 				3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */,
+				54B2D06F67CEB56287404FA9 /* ScriptTools.swift in Sources */,
+				865394AAABB2DD52813EA8BC /* SettingsCatalog.swift in Sources */,
+				8CE57D90E27A4326A9DDAEB8 /* SettingsTools.swift in Sources */,
 				90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */,
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
 				9D7AEE4CC3B1DB143903F31A /* SleepTimer.swift in Sources */,
@@ -1519,6 +1577,7 @@
 				F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
 				8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */,
+				7A6E0DAE751BA456BBF19A40 /* SubscriptionTools.swift in Sources */,
 				982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */,
 				708C9C339893A13DE74FE7F8 /* SubtitleSourcesView.swift in Sources */,
 				6448A88D8C564A2130BC0E1C /* SubtitleStyleView.swift in Sources */,
@@ -1528,6 +1587,7 @@
 				BBFB3628886EBD871DD46499 /* TVPlayerEpisodes.swift in Sources */,
 				3917D120CB9602531FA0D44E /* Updates.swift in Sources */,
 				34679295741063A247FA3E48 /* VideoEnhancement.swift in Sources */,
+				80DAD72F097B33A812A6F847 /* VideoTools.swift in Sources */,
 				6BF1C12F7ABFECC33919BFE7 /* WatchNowPhone.swift in Sources */,
 				03843072ECAC2CFBF3568416 /* WatchNowTV.swift in Sources */,
 				B19F7759D04CE58A64304EF8 /* WebSignInView.swift in Sources */,
@@ -1542,9 +1602,12 @@
 			files = (
 				9D69B5E8A8694A2F7584D30F /* AccountStore.swift in Sources */,
 				542A434783119B1B927D6490 /* AccountView.swift in Sources */,
+				E1CF944F141F4AE970FFB4D7 /* AgentNavigation.swift in Sources */,
+				D9325375021EF5D312B2A76F /* AgentToolsQA.swift in Sources */,
 				D5E6CDAD56F3272FD731DBDE /* Announcements.swift in Sources */,
 				53326BA6822509A329722A59 /* AppAgentTools.swift in Sources */,
 				DBC8741A78FEBA10C325D08A /* AppIcons.swift in Sources */,
+				33341489662B564CD5B6572B /* AppTools.swift in Sources */,
 				8086C0B4A304F8C22F048A3E /* AssistantActivity.swift in Sources */,
 				C6667CE80EACB5DE42DD5743 /* AssistantController.swift in Sources */,
 				79933C37871103D9EDD0916B /* AssistantEntry.swift in Sources */,
@@ -1591,6 +1654,7 @@
 				2D5B8A96BCE9BA50EC670157 /* GatherMark.swift in Sources */,
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
 				14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */,
+				82723219F951399A8607E408 /* LibraryTools.swift in Sources */,
 				985050FA44CEC892F76F3424 /* LiveGuide.swift in Sources */,
 				E325A2E05D1FC8E659899AF6 /* LivePluginQRSignIn.swift in Sources */,
 				696980CEC13F77DBF7E8B7E8 /* LivePluginSignIn.swift in Sources */,
@@ -1604,6 +1668,7 @@
 				FF931676C5626AB647CDCF03 /* MangaSourcesView.swift in Sources */,
 				C205444953E700EF5D4FBFA4 /* MangaStore.swift in Sources */,
 				097AD9094FA7E5DAD5E5391A /* MangaView.swift in Sources */,
+				9534B47F3A03859E20FAA1C1 /* MediaTools.swift in Sources */,
 				3C61E485B73CBA13B9C441D3 /* MemberCard.swift in Sources */,
 				633726D6D289775DF1910809 /* MobilePlayer.swift in Sources */,
 				41947E313A2EF1F270864F02 /* MobilePlayerKeyboard.swift in Sources */,
@@ -1648,6 +1713,9 @@
 				0AF3C56A9798DD0C68EC63D8 /* QALaunch.swift in Sources */,
 				8F795717D0D0DC2F6996B47A /* RootView.swift in Sources */,
 				B5DCC83D47D5AEB70A55028D /* RuntimeView.swift in Sources */,
+				FD25F1D829F1DCE41BC6F191 /* ScriptTools.swift in Sources */,
+				4889C66DBE8C2DAEB4821551 /* SettingsCatalog.swift in Sources */,
+				D4F07F0BC7A8E9A4E21D96BA /* SettingsTools.swift in Sources */,
 				3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */,
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
 				FED79045E12FEA1B955DDEFD /* SleepTimer.swift in Sources */,
@@ -1655,6 +1723,7 @@
 				94BDD59683DA9F1DA27A1E9B /* StateViews.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
 				38BF027CC7866E805A20DDD1 /* StyledSubtitleOverlay.swift in Sources */,
+				D49ADFDBA6EF68256F8B500B /* SubscriptionTools.swift in Sources */,
 				68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */,
 				A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */,
 				9FD7B6E48A98DE1D6DDBC3E3 /* SubtitleStyleView.swift in Sources */,
@@ -1664,6 +1733,7 @@
 				6CB260D36D1F108ED3A0D1AD /* TVPlayerEpisodes.swift in Sources */,
 				13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */,
 				D0C9F46261DDBE305F183413 /* VideoEnhancement.swift in Sources */,
+				F4C6D6FEC3FA7757629E5EEE /* VideoTools.swift in Sources */,
 				DCDBDF4DC20083178A7B5778 /* WatchNowPhone.swift in Sources */,
 				3E10E4E62E4E47143AEA71B9 /* WatchNowTV.swift in Sources */,
 				5F2A9E2F9145EE979E5AA1F0 /* WebSignInView.swift in Sources */,
@@ -1678,9 +1748,12 @@
 			files = (
 				07F6CDD2F0D735A729ED4E0F /* AccountStore.swift in Sources */,
 				3EB6FA7B5433D71F572D0C16 /* AccountView.swift in Sources */,
+				A5E63AF1F7827350BD216E64 /* AgentNavigation.swift in Sources */,
+				3A7A01FD0245A67FFA05D3DF /* AgentToolsQA.swift in Sources */,
 				D54D6BFE675267FF2D16FC49 /* Announcements.swift in Sources */,
 				D9EDBCF433E81FCBFCB5172E /* AppAgentTools.swift in Sources */,
 				2FBFF2917B5B05512E63C964 /* AppIcons.swift in Sources */,
+				70B48A39092E072A62780B4B /* AppTools.swift in Sources */,
 				B7C3291A656E2548E80F1E4B /* ApplePython.c in Sources */,
 				FD9721B84A06B25F362AF291 /* AppleRuntime.m in Sources */,
 				9F5B26754927594BD8621BB7 /* AssistantActivity.swift in Sources */,
@@ -1729,6 +1802,7 @@
 				538A2EE66BFFC50E104AEFC4 /* GatherMark.swift in Sources */,
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
 				6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */,
+				EC3F1D531CADC187093B86A5 /* LibraryTools.swift in Sources */,
 				82C0C95D669F59F144346401 /* LiveGuide.swift in Sources */,
 				4F9DABA09098C4A53467C128 /* LivePluginQRSignIn.swift in Sources */,
 				4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */,
@@ -1742,6 +1816,7 @@
 				7BD36EB4555214FD392DAFEE /* MangaSourcesView.swift in Sources */,
 				C346F634AB0A855E298A759D /* MangaStore.swift in Sources */,
 				545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */,
+				CB7B213A62876D06B4A452A1 /* MediaTools.swift in Sources */,
 				275BDA8CFC2A2E03B4CEC397 /* MemberCard.swift in Sources */,
 				7F3C4D27F233572323FAA9A4 /* MobilePlayer.swift in Sources */,
 				66C02BCC212FB53FC37DBDB3 /* MobilePlayerKeyboard.swift in Sources */,
@@ -1786,6 +1861,9 @@
 				C715A188F36F0CC004231464 /* QALaunch.swift in Sources */,
 				BC4E3C9C3181FF25AA7E06F9 /* RootView.swift in Sources */,
 				D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */,
+				A6A581B41E8F355B10CF2B35 /* ScriptTools.swift in Sources */,
+				CBDE414B498EDD055608760B /* SettingsCatalog.swift in Sources */,
+				25DAF71685A839038071FD4C /* SettingsTools.swift in Sources */,
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
 				894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */,
@@ -1793,6 +1871,7 @@
 				1CAC69ACFB8224802F9BFF18 /* StateViews.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,
 				B016FE71931AD22C08C3CB2C /* StyledSubtitleOverlay.swift in Sources */,
+				5A35A93E4B49E93E47D2B329 /* SubscriptionTools.swift in Sources */,
 				5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */,
 				D7033713FFFA9C4778DDEB3D /* SubtitleSourcesView.swift in Sources */,
 				1DB2172EFCE0D3B8FE7DE93F /* SubtitleStyleView.swift in Sources */,
@@ -1802,6 +1881,7 @@
 				95DBEFF5A38344018BDA9B97 /* TVPlayerEpisodes.swift in Sources */,
 				090916F463B64788E8F69468 /* Updates.swift in Sources */,
 				C093CB1C1E82F6648ADBC51C /* VideoEnhancement.swift in Sources */,
+				4AD33BC511A505CF68F16EA0 /* VideoTools.swift in Sources */,
 				58345E4F9A5FDF757CFB320A /* WatchNowPhone.swift in Sources */,
 				20E6BB22E6777E0F2310897D /* WatchNowTV.swift in Sources */,
 				ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */,

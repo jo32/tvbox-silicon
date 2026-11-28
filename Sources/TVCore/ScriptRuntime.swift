@@ -10,7 +10,21 @@ public actor ScriptRuntime {
     public static var available: Bool { ScriptAssets.root != nil }
     private var sessions: [String: ScriptSession] = [:]
     private var recent: [String] = []
+    /// The script each session runs, by session key, so `forget` finds them.
+    private var scripts: [String: String] = [:]
     private static let maximumSessions = 10
+
+    /// Closes the sessions that run the script at `scriptURL`, so its next request loads the script again. Sessions
+    /// are kept by address, not content: the viewer's own file, edited in place (the assistant's `script_write`), kept
+    /// running its old code until the app restarted.
+    public func forget(scriptURL: URL) {
+        let address = scriptURL.absoluteString
+        for (key, script) in scripts where script == address {
+            sessions.removeValue(forKey: key)?.close()
+            recent.removeAll { $0 == key }
+            scripts[key] = nil
+        }
+    }
 
     public func request(site: Site, scriptURL: URL, params: [String: String], http: HTTPClient, origin: URL) async throws -> [String: JSONValue] {
         let started = ContinuousClock.now
@@ -43,10 +57,12 @@ public actor ScriptRuntime {
         let profile = ScriptAssets.profiles.appendingPathComponent(PluginChecksum.sha256(Data((site.key + "\n" + origin.absoluteString).utf8)), isDirectory: true)
         let session = try await ScriptSession.start(api: scriptURL.absoluteString, key: site.sourceKey, ext: ext, profile: profile, label: site.key)
         sessions[key] = session
+        scripts[key] = scriptURL.absoluteString
         recent.append(key)
         while recent.count > Self.maximumSessions {
             let evicted = recent.removeFirst()
             sessions.removeValue(forKey: evicted)?.close()
+            scripts[evicted] = nil
         }
         return session
     }
