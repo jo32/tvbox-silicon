@@ -4,7 +4,8 @@ import TVCore
 
 extension DoubanRating.Score {
     var label: String {
-        season == 1 ? L10n.text("Douban Season 1") : L10n.text("Douban")
+        if let season { return L10n.text("Douban Season %@", String(season)) }
+        return L10n.text("Douban")
     }
 
     var caption: String { "\(label) \(value.formatted(.number.precision(.fractionLength(1))))" }
@@ -16,13 +17,17 @@ struct CatalogRatingTitle: Hashable, Sendable {
     let name: String
     let originalName: String
     let year: Int?
+    let season: Int?
 
-    init(_ item: TMDBCatalog.Item) {
-        (id, type, name, originalName, year) = (item.id, item.mediaType, item.name, item.originalName, item.year)
+    init(_ item: TMDBCatalog.Item, season: Int? = nil, seasonYear: Int? = nil) {
+        (id, type, name, originalName) = (item.id, item.mediaType, item.name, item.originalName)
+        self.season = season
+        year = season == nil ? item.year : seasonYear
     }
 
     init(_ details: TMDBMatch.Details) {
         (id, type, name, originalName, year) = (details.id, details.mediaType, details.name, details.originalName, details.year)
+        season = nil
     }
 
     func doubanScore() async -> DoubanRating.Score? {
@@ -48,9 +53,14 @@ private actor CatalogRatingLookups {
         }
         guard !Task.isCancelled else { resumeNext(); return nil }
         if let existing = active[title] { resumeNext(); return await existing.value }
-        let task = Task {
-            await DoubanRating.score(tmdbID: title.id, mediaType: title.type, name: title.name,
-                                     originalName: title.originalName, year: title.year)
+        let task = Task<DoubanRating.Score?, Never> {
+            if let season = title.season {
+                guard let year = title.year else { return nil }
+                return await DoubanRating.seasonScore(tmdbID: title.id, name: title.name, originalName: title.originalName,
+                                                      season: season, year: year)
+            }
+            return await DoubanRating.score(tmdbID: title.id, mediaType: title.type, name: title.name,
+                                            originalName: title.originalName, year: title.year)
         }
         active[title] = task
         let score = await task.value

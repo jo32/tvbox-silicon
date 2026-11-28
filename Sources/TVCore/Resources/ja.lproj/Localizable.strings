@@ -1824,7 +1824,7 @@
 "Turn Off" = "オフにする";
 "Turn On" = "オンにする";
 "Douban" = "豆瓣";
-"Douban Season 1" = "豆瓣 シーズン1";
+"Douban Season %@" = "豆瓣 シーズン%@";
 "System Language" = "システム言語";
 "Restart Now" = "今すぐ再起動";
 "Restart Yingxia to use the new language." = "新しい言語は映匣を再起動すると反映されます。";

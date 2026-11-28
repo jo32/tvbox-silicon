@@ -48,4 +48,56 @@ import Testing
         let sequel = try JSONDecoder().decode(DoubanRating.Subject.self, from: Data(secondSeason.utf8))
         #expect(!sequel.matches(titles: ["marshals season 2"], year: 2026, mediaType: .tv))
     }
+
+    @Test func switchingSeasonsUsesSeparateScoresAndNeverFallsBackToAnotherSeason() async {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SeasonRatingProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let id = Int.random(in: 100_000_000..<Int.max)
+
+        for (number, expected) in [(1, 6.4), (2, 8.1)] {
+            let score = await DoubanRating.seasonScore(tmdbID: id, name: "法警小队", originalName: "Marshals",
+                                                       season: number, year: 2026, session: session)
+            #expect(score == DoubanRating.Score(value: expected, count: 123, season: number))
+        }
+        #expect(await DoubanRating.seasonScore(tmdbID: id, name: "法警小队", originalName: "Marshals",
+                                               season: 3, year: 2026, session: session) == nil)
+        #expect(await DoubanRating.seasonScore(tmdbID: id, name: "法警小队", originalName: "Marshals",
+                                               season: 2, year: 2025, session: session) == nil)
+        #expect(DoubanRating.cachedScore(tmdbID: id, mediaType: .tv) == nil)
+    }
+}
+
+private final class SeasonRatingProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let body: String
+        switch (url.host(), url.path()) {
+        case ("www.douban.com", "/j/search_suggest"):
+            body = #"""
+            {"cards":[{"type":"movie","url":"https://movie.douban.com/subject/1"},
+                      {"type":"movie","url":"https://movie.douban.com/subject/2"},
+                      {"type":"movie","url":"https://movie.douban.com/subject/3"}]}
+            """#
+        case ("m.douban.com", "/rexxar/api/v2/tv/1"):
+            body = #"{"title":"法警小队 第一季","type":"tv","year":"2026","rating":{"value":6.4,"count":123}}"#
+        case ("m.douban.com", "/rexxar/api/v2/tv/2"):
+            body = #"{"title":"法警小队 第二季","type":"tv","year":"2026","rating":{"value":8.1,"count":123}}"#
+        case ("m.douban.com", "/rexxar/api/v2/tv/3"):
+            body = #"{"title":"另一部剧 第二季","type":"tv","year":"2026","rating":{"value":9.0,"count":123}}"#
+        default:
+            client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
+            return
+        }
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

@@ -26,6 +26,26 @@ public enum DoubanRating {
         Cache.read("\(mediaType.rawValue)-\(tmdbID)")?.score
     }
 
+    /// The selected TV season has its own subject and cache entry, independent of the series score.
+    public static func seasonScore(tmdbID: Int, name: String, originalName: String, season: Int, year: Int,
+                                   session: URLSession = .shared) async -> Score? {
+        guard season > 0 else { return nil }
+        let key = "tv-\(tmdbID)-season-\(season)-\(year)"
+        if let cached = Cache.read(key)?.score { return cached }
+        let missKey = "search-\(key)-\(name)-\(originalName)"
+        if Cache.read(missKey) != nil { return nil }
+        do {
+            let score = try await searchScore(name: name, originalName: originalName, year: year, mediaType: .tv,
+                                              season: season, session: session)
+            try Task.checkCancellation()
+            Cache.write(score == nil ? missKey : key,
+                        Entry(score: score, date: Date(), lasts: (score == nil ? 1 : 2) * 86_400))
+            return score
+        } catch {
+            return nil
+        }
+    }
+
     public static func score(tmdbID: Int, mediaType: TMDBMatch.MediaType, name: String = "", originalName: String = "",
                              year: Int? = nil, session: URLSession = .shared) async -> Score? {
         let key = "\(mediaType.rawValue)-\(tmdbID)"
@@ -112,6 +132,17 @@ public enum DoubanRating {
             let bases = mediaType == .tv ? names.compactMap(DoubanRating.firstSeasonBase) : []
             return (names + (aka ?? []) + bases).contains { titles.contains(DoubanRating.titleKey($0)) }
         }
+
+        func matchesSeason(_ season: Int, titles: Set<String>, year: Int) -> Bool {
+            guard type == .tv, self.year == String(year) else { return false }
+            let names = [title, original_title].compactMap { $0 }
+            return names.contains { name in
+                let normalized = name.folding(options: .widthInsensitive, locale: nil)
+                    .replacingOccurrences(of: "兩", with: "两")
+                let parsed = SeasonTitles.parse(normalized)
+                return parsed.season == season && titles.contains(DoubanRating.titleKey(parsed.core))
+            }
+        }
     }
 
     private struct Suggestions: Decodable {
@@ -154,9 +185,17 @@ public enum DoubanRating {
     }
 
     private static func searchScore(name: String, originalName: String, year: Int, mediaType: TMDBMatch.MediaType,
-                                    session: URLSession) async throws -> Score? {
-        let queries = [name, originalName].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let titles = Set(queries.map(titleKey).filter { !$0.isEmpty })
+                                    season: Int? = nil, session: URLSession) async throws -> Score? {
+        var names = [name, originalName].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if season != nil { names = names.map { SeasonTitles.parse($0).core }.filter { !$0.isEmpty } }
+        let titles = Set(names.map(titleKey))
+        let queries = season.map { number in
+            names.map { name in
+                name.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "\(name) 第\(SeasonTitles.chinese(number) ?? String(number))季"
+                    : "\(name) Season \(number)"
+            } + names
+        } ?? names
         var searched: Set<String> = []
         var checked: Set<String> = []
         var firstSeasons: [Subject] = []
@@ -173,15 +212,22 @@ public enum DoubanRating {
             let candidates = suggestions.cards.filter { $0.year == nil || $0.year == year }
             for id in candidates.compactMap(\.subjectID).prefix(5) where checked.insert(id).inserted {
                 try Task.checkCancellation()
-                guard let subject = try await fetchSubject(id: id, mediaType: mediaType, session: session),
-                      subject.matches(titles: titles, year: year, mediaType: mediaType) else { continue }
+                guard let subject = try await fetchSubject(id: id, mediaType: mediaType, session: session) else { continue }
+                if let season {
+                    if subject.matchesSeason(season, titles: titles, year: year) { works.append(subject) }
+                    continue
+                }
+                guard subject.matches(titles: titles, year: year, mediaType: mediaType) else { continue }
                 if mediaType == .tv && subject.firstSeason {
                     firstSeasons.append(subject)
                 } else {
                     works.append(subject)
                 }
             }
-            if !works.isEmpty { return works.count == 1 ? works.first?.score : nil }
+            if !works.isEmpty {
+                guard works.count == 1, let score = works.first?.score else { return nil }
+                return season.map { Score(value: score.value, count: score.count, season: $0) } ?? score
+            }
         }
         return firstSeasons.count == 1 ? firstSeasons.first?.score : nil
     }

@@ -14,6 +14,7 @@ struct DiscoverDetailView: View {
     var doubanName: String? = nil
     @State private var model = DiscoverDetailModel()
     @State private var doubanScore: DoubanRating.Score?
+    @State private var seasonRating: (title: CatalogRatingTitle, score: DoubanRating.Score)?
     @State private var seasonNumber: Int?
     @State private var season: TMDBMatch.Season?
     @State private var loadingSeason = false
@@ -61,7 +62,28 @@ struct DiscoverDetailView: View {
     }
     #endif
 
+    private var seasonRatingTitle: CatalogRatingTitle? {
+        guard item.mediaType == .tv else { return nil }
+        #if os(iOS)
+        let current = displayedSeason
+        #else
+        let current = catalogSeason
+        #endif
+        guard let current else { return nil }
+        let seasonYear = seasons.first { $0.number == current }?.year
+            ?? (season?.number == current ? season?.year : nil)
+        return CatalogRatingTitle(followItem, season: current, seasonYear: seasonYear)
+    }
+
+    private var displayedDoubanScore: DoubanRating.Score? {
+        guard let title = seasonRatingTitle else { return doubanScore }
+        if let seasonRating, seasonRating.title == title { return seasonRating.score }
+        if title.season == 1, seasons.count == 1, doubanScore?.season == nil { return doubanScore }
+        return doubanScore?.season == title.season ? doubanScore : nil
+    }
+
     var body: some View {
+        let selectedRatingTitle = seasonRatingTitle
         page
         .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
         .onAppear { onScreen = true; startSources() }
@@ -71,6 +93,11 @@ struct DiscoverDetailView: View {
             doubanScore = nil
             let score = await CatalogRatingTitle(item).doubanScore()
             if !Task.isCancelled { doubanScore = score }
+        }
+        .task(id: selectedRatingTitle) {
+            guard let title = selectedRatingTitle else { return }
+            let score = await title.doubanScore()
+            if !Task.isCancelled { seasonRating = score.map { (title, $0) } }
         }
         .onChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
@@ -269,6 +296,7 @@ struct DiscoverDetailView: View {
     @ViewBuilder
     private func ratings(spacing: CGFloat, scoreSize: CGFloat, voteSize: CGFloat) -> some View {
         let tmdbRating = details?.rating ?? item.rating
+        let doubanScore = displayedDoubanScore
         if tmdbRating != nil || doubanScore != nil {
             HStack(spacing: 2 * spacing) {
                 if let tmdbRating {
