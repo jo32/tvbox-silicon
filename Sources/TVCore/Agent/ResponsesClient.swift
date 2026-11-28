@@ -7,6 +7,8 @@ public struct ResponsesClient: AgentModelClient {
     public let baseURL: URL
     private let authorization: AgentAuthorization
     private let session: URLSession
+    /// Set for Sign in with ChatGPT: a refused token then means the sign-in, not an API key.
+    var signsInWithChatGPT = false
 
     public init(baseURL: URL, session: URLSession = .shared, authorization: @escaping AgentAuthorization) {
         self.baseURL = baseURL; self.session = session; self.authorization = authorization
@@ -17,13 +19,21 @@ public struct ResponsesClient: AgentModelClient {
         let url = baseURL.appending(path: "responses")
         let authorization = authorization
         Diagnostics.shared.record(.info, "assistant", "responses request model=\(model) items=\(messages.count) tools=\(tools.count)")
-        return AgentHTTP.stream("responses", session: session, model: model,
-                                build: { try await AgentHTTP.request(url, body: body, authorization: authorization) },
-                                decoder: ResponsesDecoder())
+        let stream = AgentHTTP.stream("responses", session: session, model: model,
+                                      build: { try await AgentHTTP.request(url, body: body, authorization: authorization) },
+                                      decoder: ResponsesDecoder())
+        return signsInWithChatGPT ? AgentHTTP.mapFailures(stream, Self.chatGPTFailure) : stream
     }
 
     public func models() async throws -> [AgentModelInfo] {
-        try await AgentHTTP.models(base: baseURL, session: session, authorization: authorization)
+        do { return try await AgentHTTP.models(base: baseURL, session: session, authorization: authorization) }
+        catch { throw signsInWithChatGPT ? Self.chatGPTFailure(AgentFailures.failure(error)) : error }
+    }
+
+    @Sendable static func chatGPTFailure(_ failure: AgentFailure) -> AgentFailure {
+        guard failure.kind == .unauthorized, failure.code == nil || failure.code == "invalid_api_key" else { return failure }
+        return AgentFailure(.unauthorized, L10n.text("ChatGPT didn't accept this sign-in. Sign in with ChatGPT again in Settings › Assistant."),
+                            code: failure.code, status: failure.status)
     }
 
     /// The request body: the conversation as input items (messages, `function_call`s and their

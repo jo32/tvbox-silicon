@@ -2468,6 +2468,41 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";
 "Keep Controls Visible" = "Keep Controls Visible";
 "Count back from the end" = "Count back from the end";
+"I stopped after %@ tool steps. Send a message to let me go on." = "I stopped after %@ tool steps. Send a message to let me go on.";
+"Allow the assistant to use %@?" = "Allow the assistant to use %@?";
+"The server's answer couldn't be read." = "The server's answer couldn't be read.";
+"Stopped." = "Stopped.";
+"Couldn't reach the assistant's server. Check your connection and try again." = "Couldn't reach the assistant's server. Check your connection and try again.";
+"You've reached your ChatGPT plan's usage limit. See chatgpt.com/settings/usage, or use an API key meanwhile." = "You've reached your ChatGPT plan's usage limit. See chatgpt.com/settings/usage, or use an API key meanwhile.";
+"Your ChatGPT plan can't be used here. You can use an API key instead." = "Your ChatGPT plan can't be used here. You can use an API key instead.";
+"ChatGPT couldn't check your plan right now. Try again in a moment." = "ChatGPT couldn't check your plan right now. Try again in a moment.";
+"This model or feature isn't available with your ChatGPT plan. Try another model." = "This model or feature isn't available with your ChatGPT plan. Try another model.";
+"ChatGPT didn't accept this sign-in. Sign in with ChatGPT again in Settings › Assistant." = "ChatGPT didn't accept this sign-in. Sign in with ChatGPT again in Settings › Assistant.";
+"The server refused the API key. Check it in Settings › Assistant." = "The server refused the API key. Check it in Settings › Assistant.";
+"Your API account has no credit left. Check its billing page." = "Your API account has no credit left. Check its billing page.";
+"Too many requests. Wait a moment and try again." = "Too many requests. Wait a moment and try again.";
+"This model isn't available. Pick another one in Settings › Assistant." = "This model isn't available. Pick another one in Settings › Assistant.";
+"The conversation is too long for this model. Clear it and start again." = "The conversation is too long for this model. Clear it and start again.";
+"Access was refused: %@" = "Access was refused: %@";
+"Access was refused." = "Access was refused.";
+"The server doesn't offer this. Check the address and the API type in Settings › Assistant." = "The server doesn't offer this. Check the address and the API type in Settings › Assistant.";
+"The service is unavailable right now. Try again in a moment." = "The service is unavailable right now. Try again in a moment.";
+"The server refused the request: %@" = "The server refused the request: %@";
+"The server had a problem (%@). Try again in a moment." = "The server had a problem (%@). Try again in a moment.";
+"Add an API key or sign in with ChatGPT in Settings › Assistant." = "Add an API key or sign in with ChatGPT in Settings › Assistant.";
+"Sign in with ChatGPT isn't available on Apple TV. Use an API key instead." = "Sign in with ChatGPT isn't available on Apple TV. Use an API key instead.";
+"The answer stopped before it finished. Try again." = "The answer stopped before it finished. Try again.";
+"The answer was cut short (%@)." = "The answer was cut short (%@).";
+"Sign-in was cancelled." = "Sign-in was cancelled.";
+"Sign-in didn't finish. Try again." = "Sign-in didn't finish. Try again.";
+"ChatGPT plan usage wasn't allowed for Yingxia. Sign in again and allow it, or use an API key." = "ChatGPT plan usage wasn't allowed for Yingxia. Sign in again and allow it, or use an API key.";
+"Your ChatGPT sign-in has ended. Sign in again in Settings › Assistant." = "Your ChatGPT sign-in has ended. Sign in again in Settings › Assistant.";
+"The sign-in couldn't be verified. Try again." = "The sign-in couldn't be verified. Try again.";
+"Sign-in can't hear back from the browser: port 1455 on this device is busy. Close other apps signing in to ChatGPT and try again." = "Sign-in can't hear back from the browser: port 1455 on this device is busy. Close other apps signing in to ChatGPT and try again.";
+"This sign-in link is out of date. Go back to Yingxia and try again." = "This sign-in link is out of date. Go back to Yingxia and try again.";
+"Signed in. You can return to Yingxia." = "Signed in. You can return to Yingxia.";
+"Sign-in didn't finish. You can return to Yingxia." = "Sign-in didn't finish. You can return to Yingxia.";
+
 
 /* The assistant (App/Agent). */
 "Assistant" = "Assistant";

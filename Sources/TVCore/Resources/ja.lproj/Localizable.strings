@@ -2468,6 +2468,41 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
 "Keep Controls Visible" = "コントロールを常に表示";
 "Count back from the end" = "終わりから数える";
+"I stopped after %@ tool steps. Send a message to let me go on." = "%@ 回の操作を続けたので、いったん止めました。続けるにはメッセージを送ってください。";
+"Allow the assistant to use %@?" = "アシスタントに「%@」の使用を許可しますか？";
+"The server's answer couldn't be read." = "サーバの応答を読み取れませんでした。";
+"Stopped." = "停止しました。";
+"Couldn't reach the assistant's server. Check your connection and try again." = "アシスタントのサーバに接続できません。接続を確認してもう一度お試しください。";
+"You've reached your ChatGPT plan's usage limit. See chatgpt.com/settings/usage, or use an API key meanwhile." = "ChatGPT プランの利用上限に達しました。chatgpt.com/settings/usage を確認するか、当面は API キーを使ってください。";
+"Your ChatGPT plan can't be used here. You can use an API key instead." = "ご利用の ChatGPT プランはここでは使えません。代わりに API キーを使えます。";
+"ChatGPT couldn't check your plan right now. Try again in a moment." = "ChatGPT がいまプランを確認できません。少し待ってもう一度お試しください。";
+"This model or feature isn't available with your ChatGPT plan. Try another model." = "このモデルまたは機能は ChatGPT プランでは使えません。別のモデルをお試しください。";
+"ChatGPT didn't accept this sign-in. Sign in with ChatGPT again in Settings › Assistant." = "ChatGPT がこのサインインを受け付けませんでした。設定 › アシスタント で ChatGPT にもう一度サインインしてください。";
+"The server refused the API key. Check it in Settings › Assistant." = "サーバが API キーを拒否しました。設定 › アシスタント で確認してください。";
+"Your API account has no credit left. Check its billing page." = "API アカウントのクレジットが残っていません。請求ページを確認してください。";
+"Too many requests. Wait a moment and try again." = "リクエストが多すぎます。少し待ってもう一度お試しください。";
+"This model isn't available. Pick another one in Settings › Assistant." = "このモデルは使えません。設定 › アシスタント で別のモデルを選んでください。";
+"The conversation is too long for this model. Clear it and start again." = "会話がこのモデルには長すぎます。消去して最初からやり直してください。";
+"Access was refused: %@" = "アクセスが拒否されました：%@";
+"Access was refused." = "アクセスが拒否されました。";
+"The server doesn't offer this. Check the address and the API type in Settings › Assistant." = "サーバはこの機能を提供していません。設定 › アシスタント でアドレスと API の種類を確認してください。";
+"The service is unavailable right now. Try again in a moment." = "現在サービスを利用できません。少し待ってもう一度お試しください。";
+"The server refused the request: %@" = "サーバがリクエストを拒否しました：%@";
+"The server had a problem (%@). Try again in a moment." = "サーバで問題が発生しました（%@）。少し待ってもう一度お試しください。";
+"Add an API key or sign in with ChatGPT in Settings › Assistant." = "設定 › アシスタント で API キーを追加するか、ChatGPT でサインインしてください。";
+"Sign in with ChatGPT isn't available on Apple TV. Use an API key instead." = "Apple TV では ChatGPT でサインインできません。代わりに API キーを使ってください。";
+"The answer stopped before it finished. Try again." = "回答が途中で途切れました。もう一度お試しください。";
+"The answer was cut short (%@)." = "回答が途中で打ち切られました（%@）。";
+"Sign-in was cancelled." = "サインインをキャンセルしました。";
+"Sign-in didn't finish. Try again." = "サインインが完了しませんでした。もう一度お試しください。";
+"ChatGPT plan usage wasn't allowed for Yingxia. Sign in again and allow it, or use an API key." = "映匣に ChatGPT プランの利用が許可されていません。もう一度サインインして許可するか、API キーを使ってください。";
+"Your ChatGPT sign-in has ended. Sign in again in Settings › Assistant." = "ChatGPT のサインインの有効期限が切れました。設定 › アシスタント でもう一度サインインしてください。";
+"The sign-in couldn't be verified. Try again." = "サインインを確認できませんでした。もう一度お試しください。";
+"Sign-in can't hear back from the browser: port 1455 on this device is busy. Close other apps signing in to ChatGPT and try again." = "ブラウザからの応答を受け取れません：このデバイスのポート 1455 が使用中です。ChatGPT にサインイン中のほかの App を閉じてから、もう一度お試しください。";
+"This sign-in link is out of date. Go back to Yingxia and try again." = "このサインインリンクは古くなっています。映匣に戻ってもう一度お試しください。";
+"Signed in. You can return to Yingxia." = "サインインしました。映匣に戻れます。";
+"Sign-in didn't finish. You can return to Yingxia." = "サインインが完了しませんでした。映匣に戻れます。";
+
 
 /* The assistant (App/Agent). */
 "Assistant" = "アシスタント";

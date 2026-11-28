@@ -49,8 +49,11 @@ struct SSEParser {
     static func events(in text: String) -> [SSEEvent] {
         var parser = SSEParser()
         var events: [SSEEvent] = []
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            if let event = parser.feed(line.hasSuffix("\r") ? String(line.dropLast()) : String(line)) { events.append(event) }
+        // By scalars: "\r\n" is one Character, so a Character split would miss its "\n".
+        for line in text.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(String.UnicodeScalarView(line))
+            if line.hasSuffix("\r") { line.removeLast() }
+            if let event = parser.feed(line) { events.append(event) }
         }
         if let event = parser.flush() { events.append(event) }
         return events
@@ -186,7 +189,27 @@ enum AgentHTTP {
         return ranked.map { AgentModelInfo(id: $0, name: $0) }
     }
 
+    /// `stream` with its failures passed through `transform`.
+    static func mapFailures(_ stream: AsyncThrowingStream<AgentEvent, Error>, _ transform: @escaping @Sendable (AgentFailure) -> AgentFailure) -> AsyncThrowingStream<AgentEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in stream { continuation.yield(event) }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: transform(AgentFailures.failure(error))) }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     static func elapsed(_ started: Date) -> String { String(format: "%.2fs", Date().timeIntervalSince(started)) }
+}
+
+extension AgentFailure {
+    /// A page that helps with this failure: the ChatGPT plan's usage page for its usage limit.
+    public var helpURL: URL? {
+        code == "subscription_sharing_usage_limit_exceeded" ? URL(string: "https://chatgpt.com/settings/usage") : nil
+    }
 }
 
 /// The viewer-facing failures: HTTP statuses and OpenAI's error codes, with what to do about each.

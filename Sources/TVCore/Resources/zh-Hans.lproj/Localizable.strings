@@ -2468,6 +2468,41 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片头不填开始即从头开始，片尾不填结束即到结尾。留空一段的时间表示不跳过该段，时间格式为 分:秒。";
 "Keep Controls Visible" = "始终显示控件";
 "Count back from the end" = "从结尾倒数";
+"I stopped after %@ tool steps. Send a message to let me go on." = "已连续执行 %@ 步操作，先停在这里。发送消息即可让我继续。";
+"Allow the assistant to use %@?" = "允许助手使用“%@”吗？";
+"The server's answer couldn't be read." = "无法读取服务器的回复。";
+"Stopped." = "已停止。";
+"Couldn't reach the assistant's server. Check your connection and try again." = "无法连接助手的服务器。请检查网络后重试。";
+"You've reached your ChatGPT plan's usage limit. See chatgpt.com/settings/usage, or use an API key meanwhile." = "你已用完 ChatGPT 套餐的用量额度。请查看 chatgpt.com/settings/usage，或暂时改用 API 密钥。";
+"Your ChatGPT plan can't be used here. You can use an API key instead." = "你的 ChatGPT 套餐无法在这里使用。可以改用 API 密钥。";
+"ChatGPT couldn't check your plan right now. Try again in a moment." = "ChatGPT 暂时无法查询你的套餐。请稍后重试。";
+"This model or feature isn't available with your ChatGPT plan. Try another model." = "你的 ChatGPT 套餐不支持此模型或功能。请换一个模型。";
+"ChatGPT didn't accept this sign-in. Sign in with ChatGPT again in Settings › Assistant." = "ChatGPT 未接受此次登录。请在 设置 › 助手 中重新使用 ChatGPT 登录。";
+"The server refused the API key. Check it in Settings › Assistant." = "服务器拒绝了这个 API 密钥。请在 设置 › 助手 中检查。";
+"Your API account has no credit left. Check its billing page." = "你的 API 账户余额不足。请查看它的账单页面。";
+"Too many requests. Wait a moment and try again." = "请求过于频繁。请稍等片刻再试。";
+"This model isn't available. Pick another one in Settings › Assistant." = "此模型不可用。请在 设置 › 助手 中选择其他模型。";
+"The conversation is too long for this model. Clear it and start again." = "对话太长，超出了此模型的限制。请清除对话后重新开始。";
+"Access was refused: %@" = "访问被拒绝：%@";
+"Access was refused." = "访问被拒绝。";
+"The server doesn't offer this. Check the address and the API type in Settings › Assistant." = "服务器不提供此功能。请在 设置 › 助手 中检查地址和 API 类型。";
+"The service is unavailable right now. Try again in a moment." = "服务暂时不可用。请稍后重试。";
+"The server refused the request: %@" = "服务器拒绝了请求：%@";
+"The server had a problem (%@). Try again in a moment." = "服务器出现问题（%@）。请稍后重试。";
+"Add an API key or sign in with ChatGPT in Settings › Assistant." = "请在 设置 › 助手 中添加 API 密钥或使用 ChatGPT 登录。";
+"Sign in with ChatGPT isn't available on Apple TV. Use an API key instead." = "Apple TV 不支持使用 ChatGPT 登录。请改用 API 密钥。";
+"The answer stopped before it finished. Try again." = "回答中途中断了。请重试。";
+"The answer was cut short (%@)." = "回答被截断了（%@）。";
+"Sign-in was cancelled." = "已取消登录。";
+"Sign-in didn't finish. Try again." = "登录未完成。请重试。";
+"ChatGPT plan usage wasn't allowed for Yingxia. Sign in again and allow it, or use an API key." = "未允许映匣使用 ChatGPT 套餐额度。请重新登录并允许，或改用 API 密钥。";
+"Your ChatGPT sign-in has ended. Sign in again in Settings › Assistant." = "ChatGPT 登录已失效。请在 设置 › 助手 中重新登录。";
+"The sign-in couldn't be verified. Try again." = "无法验证此次登录。请重试。";
+"Sign-in can't hear back from the browser: port 1455 on this device is busy. Close other apps signing in to ChatGPT and try again." = "登录无法收到浏览器的回应：本设备的 1455 端口被占用。请关闭其他正在登录 ChatGPT 的应用后重试。";
+"This sign-in link is out of date. Go back to Yingxia and try again." = "此登录链接已失效。请返回映匣重试。";
+"Signed in. You can return to Yingxia." = "已登录。现在可以返回映匣了。";
+"Sign-in didn't finish. You can return to Yingxia." = "登录未完成。可以返回映匣了。";
+
 
 /* The assistant (App/Agent). */
 "Assistant" = "助手";

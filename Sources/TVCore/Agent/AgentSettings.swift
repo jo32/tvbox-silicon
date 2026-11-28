@@ -135,9 +135,11 @@ public enum AgentClients {
             #if os(tvOS)
             throw AgentFailure(.unsupported, L10n.text("Sign in with ChatGPT isn't available on Apple TV. Use an API key instead."))
             #else
-            return ResponsesClient(baseURL: APIKeyConnection.openAI.baseURL, session: session) {
+            var client = ResponsesClient(baseURL: APIKeyConnection.openAI.baseURL, session: session) {
                 try await ChatGPTSignIn.shared.accessToken()
             }
+            client.signsInWithChatGPT = true
+            return client
             #endif
         }
     }
