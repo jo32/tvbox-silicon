@@ -121,6 +121,10 @@ import Security
             } else {
                 guard let issued else { throw AgentFailure(.invalidResponse, L10n.text("Sign-in didn't finish. Try again."), code: "registration_incomplete") }
                 client = issued
+                // Saved before the code is exchanged, as OpenAI asks: if the exchange fails, the next attempt signs in to
+                // this registration instead of registering the app again.
+                defaults.set(issued, forKey: Self.clientIDKey)
+                Diagnostics.shared.record(.info, "assistant", "signin registered")
             }
             let tokens = try await tokenRequest(discovery.token, ["grant_type": "authorization_code", "client_id": client, "code": code,
                                                                   "code_verifier": verifier, "redirect_uri": redirect, "resource": endpoints.resource])
@@ -129,7 +133,6 @@ import Security
             }
             let keys = try await loadKeys(discovery.jwks)
             let claims = try Self.verifyIDToken(idToken, issuer: discovery.issuer, clientID: client, nonce: nonce, now: now(), keys: keys)
-            if saved == nil { defaults.set(client, forKey: Self.clientIDKey) }
             let scopes = (tokens.scope ?? answer["scope"] ?? "").split(separator: " ").map(String.init)
             let record = Credentials(email: claims["email"]?.string ?? "", subject: claims["sub"]?.string ?? "", clientID: client,
                                      idToken: idToken, accessToken: tokens.accessToken, refreshToken: refresh,
@@ -333,6 +336,9 @@ import Security
         let json = try? JSONDecoder().decode(JSONValue.self, from: data)
         guard status == 200, let json, let access = json["access_token"]?.string else {
             let code = json?["error"]?.string ?? json?[path: "error", "code"]?.string
+            // OpenAI's own sentence for a refusal (e.g. why a code was invalid_grant); it carries no secret.
+            let reason = json?["error_description"]?.string ?? json?[path: "error", "message"]?.string
+            Diagnostics.shared.record(.warning, "assistant", "token status=\(status) code=\(code ?? "-") reason=\((reason ?? "-").prefix(200))")
             let failure = AgentFailures.failure(status: status, body: data)
             if status == 400 || status == 401 {
                 throw AgentFailure(.unauthorized, L10n.text("Sign-in didn't finish. Try again."), code: code ?? failure.code, status: status)
