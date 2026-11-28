@@ -130,7 +130,8 @@ struct SubtitlePreview: View {
                         Rectangle().fill(Brand.amber).frame(width: 1.5, height: size.height).offset(x: size.width / 2 - 0.75)
                     }
                 }
-                SubtitleLines(lines: Self.sample, style: shown, letters: size.height * shown.size / 100, oneLine: true)
+                // Converted like the player's lines (#2725), so choosing Traditional or Simplified shows in the preview.
+                SubtitleLines(lines: shown.script.convert(Self.sample), style: shown, letters: size.height * shown.size / 100, oneLine: true)
                     .contentShape(Rectangle())
                     #if !os(tvOS)
                     .gesture(drag(in: size), including: draggable ? .all : .none)
