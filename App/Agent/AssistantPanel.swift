@@ -22,15 +22,56 @@ struct AssistantPanel: View {
     @Environment(AssistantController.self) private var assistant
     /// A close button in the header (iPhone, iPad, Mac).
     var closes = true
+    #if os(macOS)
+    /// The panel's width, so its title in the toolbar can reach across to the panel's leading edge.
+    @State private var width: CGFloat = 380
+    #endif
     var body: some View {
         @Bindable var assistant = assistant
         VStack(spacing: 0) {
+            #if !os(macOS)
             AssistantHeader(closes: closes)
             Divider().opacity(0.5)
+            #endif
             AssistantTranscript()
             AssistantComposer()
         }
         .background { Backdrop() }
+        #if os(macOS)
+        // The Mac's header is the window toolbar over the panel, so it's one line with the window's buttons (a header
+        // of its own made a second row under the toolbar, and one moved up into the toolbar's band was blurred by it).
+        // The toolbar's sparkles hides while the panel is open (`AssistantEntry`); this close button takes its place.
+        .toolbar {
+            if assistant.isOpen {
+                ToolbarItem(placement: .automatic) {
+                    // The toolbar packs items to the trailing edge: the title takes the width the two buttons leave,
+                    // so it starts where the panel does, as the header does on iPhone and iPad.
+                    Label(L10n.text("Assistant"), systemImage: "sparkles").labelStyle(.titleAndIcon)
+                        .font(.headline)
+                        .frame(width: max(80, width - 124), alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                .withoutGlassCapsule()
+                ToolbarItem(placement: .automatic) {
+                    AssistantMoreMenu { Image(systemName: "ellipsis") }
+                        .menuIndicator(.hidden)
+                        .help(L10n.text("More"))
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button { assistant.setOpen(false) } label: { Label(L10n.text("Close Assistant"), systemImage: "xmark") }
+                        .keyboardShortcut(.cancelAction)
+                        .help(L10n.text("Assistant (⇧⌘A)"))
+                }
+            }
+        }
+        .background {
+            // ⇧⌘A still closes it while the toolbar's sparkles, which carries the shortcut, is hidden.
+            Button("") { assistant.setOpen(false) }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        #endif
         #if !os(tvOS)
         .sheet(isPresented: $assistant.showsSettings, onDismiss: { assistant.prepare() }) {
             NavigationStack {
@@ -47,6 +88,22 @@ struct AssistantPanel: View {
     }
 }
 
+/// Clear Conversation and Assistant Settings.
+private struct AssistantMoreMenu<Icon: View>: View {
+    @Environment(AssistantController.self) private var assistant
+    @ViewBuilder let icon: () -> Icon
+    var body: some View {
+        Menu {
+            Button(role: .destructive) { assistant.clear() } label: { Label(L10n.text("Clear Conversation"), systemImage: "trash") }
+                .disabled(assistant.messages.isEmpty)
+            Button { assistant.showsSettings = true } label: { Label(L10n.text("Assistant Settings"), systemImage: "gearshape") }
+        } label: {
+            icon()
+        }
+        .accessibilityLabel(L10n.text("More"))
+    }
+}
+
 private struct AssistantHeader: View {
     @Environment(AssistantController.self) private var assistant
     let closes: Bool
@@ -59,16 +116,9 @@ private struct AssistantHeader: View {
             }
             .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            Menu {
-                Button(role: .destructive) { assistant.clear() } label: { Label(L10n.text("Clear Conversation"), systemImage: "trash") }
-                    .disabled(assistant.messages.isEmpty)
-                Button { assistant.showsSettings = true } label: { Label(L10n.text("Assistant Settings"), systemImage: "gearshape") }
-            } label: {
-                headerIcon("ellipsis")
-            }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel(L10n.text("More"))
+            AssistantMoreMenu { headerIcon("ellipsis") }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+                .fixedSize()
             if closes {
                 Button { assistant.setOpen(false) } label: { headerIcon("xmark") }
                     .buttonStyle(.plain)

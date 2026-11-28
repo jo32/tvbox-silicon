@@ -1792,3 +1792,16 @@ extension Color {
         #endif
     }
 }
+
+#if !os(tvOS)
+extension ToolbarContent {
+    /// A toolbar item without OS 26's shared glass capsule, e.g. a title among buttons. Before OS 26 items have none.
+    @ToolbarContentBuilder func withoutGlassCapsule() -> some ToolbarContent {
+        if #available(macOS 26, iOS 26, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
+    }
+}
+#endif

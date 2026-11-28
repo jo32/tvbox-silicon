@@ -18,6 +18,11 @@ private struct AssistantEntry: ViewModifier {
     let section: AppSection
     @Environment(AssistantController.self) private var assistant
     @AppStorage(AgentSettings.enabledKey) private var enabled = false
+    #if os(macOS)
+    private let isMac = true
+    #else
+    private let isMac = false
+    #endif
     func body(content: Content) -> some View {
         content
             // A page pushed over it, another tab or a player hides it: the swipe is only taken while it shows.
@@ -40,7 +45,8 @@ private struct AssistantEntry: ViewModifier {
             }
             #else
             .toolbar {
-                if enabled {
+                // On the Mac the open panel's own header, up in this band, has the close button instead.
+                if enabled && !(isMac && assistant.isOpen) {
                     ToolbarItem(placement: .primaryAction) { AssistantToolbarButton() }
                 }
             }
