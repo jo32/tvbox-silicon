@@ -49,8 +49,11 @@ struct SSEParser {
     static func events(in text: String) -> [SSEEvent] {
         var parser = SSEParser()
         var events: [SSEEvent] = []
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            if let event = parser.feed(line.hasSuffix("\r") ? String(line.dropLast()) : String(line)) { events.append(event) }
+        // By scalars: "\r\n" is one Character, so a Character split would miss its "\n".
+        for line in text.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(String.UnicodeScalarView(line))
+            if line.hasSuffix("\r") { line.removeLast() }
+            if let event = parser.feed(line) { events.append(event) }
         }
         if let event = parser.flush() { events.append(event) }
         return events
