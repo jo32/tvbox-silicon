@@ -375,8 +375,12 @@ struct ConfigCenterView: View {
         }
         guard let page, var current = webView.url.flatMap({ URLComponents(url: $0, resolvingAgainstBaseURL: false) }),
               current.host == fresh.host() else {
-            page = fresh
-            webView.load(URLRequest(url: fresh))
+            // The first open, or the viewer left the bundle's pages for a drive's sign-in: coming back from
+            // another app must not throw that page away, so only a reload (or the first open) starts from
+            // the address again (#2591). The bundle's address is still tracked for the next open.
+            let first = page == nil
+            self.page = fresh
+            if reload || first { webView.load(URLRequest(url: fresh)) }
             return
         }
         // A page the address redirected to (Wex's, #360) is served elsewhere: Refresh starts from the address again.
