@@ -289,11 +289,13 @@ import TVCore
         return status(channel, session, store)
     }
 
-    private static func status(_ channel: Channel, _ session: PlaybackSession?, _ store: Store) -> JSONValue {
+    static func status(_ channel: Channel, _ session: PlaybackSession?, _ store: Store) -> JSONValue {
         let history = channel.historyContext
         var fields: [String: JSONValue?] = [
             "title": .str(history?.videoName ?? channel.name), "episode": .text(history?.episodeName),
             "line": .text(history?.episodeFlag), "source": .text(history?.sourceName),
+            // A live channel's group in its playlist.
+            "group": history == nil ? .text(channel.group) : nil,
         ]
         if let session {
             fields["paused"] = .bool(session.paused)
@@ -316,6 +318,7 @@ import TVCore
             }
         }
         fields["has_next_episode"] = .bool(store.nextEpisode(after: channel) != nil || store.nextFile(after: channel) != nil)
+        fields["has_previous_episode"] = .bool(store.previousEpisode(before: channel) != nil || store.previousFile(before: channel) != nil)
         return .obj(fields)
     }
 

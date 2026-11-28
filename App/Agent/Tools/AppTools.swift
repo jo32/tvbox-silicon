@@ -48,24 +48,8 @@ import TVCore
 
     private static func state(_ context: AgentToolContext) -> JSONValue {
         let store = context.store
-        var playing: JSONValue?
-        if let channel = store.playing {
-            let session = PlaybackSession.current
-            let context = channel.historyContext
-            playing = .obj([
-                "title": .str(context?.videoName ?? channel.name),
-                "episode": .text(context?.episodeName),
-                "line": .text(context?.episodeFlag),
-                "source": .text(context?.sourceName ?? channel.group),
-                "live": .bool(session?.isLive ?? (channel.historyContext == nil)),
-                "position": session.map { .num($0.position) },
-                "duration": session.flatMap { $0.duration > 0 ? .num($0.duration) : nil },
-                "paused": session.map { .bool($0.paused) },
-                "speed": session.map { .num(Double($0.player.defaultRate)) },
-                "has_next_episode": .bool(store.nextEpisode(after: channel) != nil || store.nextFile(after: channel) != nil),
-                "has_previous_episode": .bool(store.previousEpisode(before: channel) != nil || store.previousFile(before: channel) != nil),
-            ])
-        }
+        // What plays, as player_control's status tells it.
+        let playing = store.playing.map { VideoTools.status($0, PlaybackSession.current, store) }
         var music: JSONValue?
         if let track = store.music.track, context.isAvailable(.music) {
             music = .obj(["title": .str(track.title), "artists": .text(track.artists.joined(separator: ", ")), "album": .text(track.album)])
