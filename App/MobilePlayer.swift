@@ -58,6 +58,44 @@ struct MobilePlayerView: View {
     @State private var showsSkip = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
+    /// The player menus' structure, frozen when a menu opens: a track, quality or comment arriving while the
+    /// menu is open rebuilds its list and throws the scroll back to the top (#2567, #2571). Cleared when the
+    /// menu closes, so the next open reads the live values again.
+    @State private var menuFreeze: PlayerMenuFreeze?
+    /// The danmaku style values, frozen the same way; writes pass through to the live model.
+    @State private var frozenFontSize = DanmakuStyle.standardFontSize
+    @State private var frozenOpacity = DanmakuStyle.standardOpacity
+    /// What the menus show, as it was when the menu opened.
+    private struct PlayerMenuFreeze {
+        var danmakuEmpty: Bool
+        var qualities: Bool
+        var audioChoices: Bool
+        var trackAudio: Bool
+        var subtitleDelay: Bool
+        var speed: Bool
+        var skips: Bool
+    }
+    private func freezeMenus() {
+        menuFreeze = PlayerMenuFreeze(
+            danmakuEmpty: session.danmaku.isEmpty,
+            qualities: session.qualities.count > 1,
+            audioChoices: session.audioChoices.count > 1,
+            trackAudio: (tracks.audio?.options.count ?? 0) > 1,
+            subtitleDelay: session.externalSubtitles.selected == nil && !(tracks.legible?.options.isEmpty ?? true),
+            speed: !session.isLive && !session.hasTimeline,
+            skips: session.canSkip && !session.isLive)
+        frozenFontSize = session.catalogDanmaku.fontSize
+        frozenOpacity = session.catalogDanmaku.opacity
+    }
+    /// The danmaku style values as frozen, writing through to the live model; live values while no menu is open.
+    private var frozenStyleFontSize: Binding<Double> {
+        Binding(get: { menuFreeze == nil ? session.catalogDanmaku.fontSize : frozenFontSize },
+                set: { frozenFontSize = $0; session.catalogDanmaku.fontSize = $0 })
+    }
+    private var frozenStyleOpacity: Binding<Double> {
+        Binding(get: { menuFreeze == nil ? session.catalogDanmaku.opacity : frozenOpacity },
+                set: { frozenOpacity = $0; session.catalogDanmaku.opacity = $0 })
+    }
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
@@ -857,15 +895,19 @@ struct MobilePlayerView: View {
                 .accessibilityIdentifier("player.pip")
             }
             Menu {
-                Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
-                Button { showsDanmakuSettings = true } label: { Label(L10n.text("Danmaku Settings…"), systemImage: "slider.horizontal.3") }
-                Picker(selection: $danmakuArea) {
-                    ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
-                } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
-                .pickerStyle(.menu)
-                DanmakuStylePickers(model: session.catalogDanmaku)
-                Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
-                    .disabled(session.danmaku.isEmpty)
+                Group {
+                    Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
+                    Button { showsDanmakuSettings = true } label: { Label(L10n.text("Danmaku Settings…"), systemImage: "slider.horizontal.3") }
+                    Picker(selection: $danmakuArea) {
+                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+                    .pickerStyle(.menu)
+                    DanmakuStyleSnapshotPickers(fontSize: frozenStyleFontSize, opacity: frozenStyleOpacity)
+                    Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
+                        .disabled(menuFreeze?.danmakuEmpty ?? session.danmaku.isEmpty)
+                }
+                .onAppear { freezeMenus() }
+                .onDisappear { menuFreeze = nil }
             } label: {
                 // A wide, tall mark: a size down it sits level with AirPlay and the options beside it.
                 // A text bubble, filled while comments show: the state at a glance. Here no subtitles bubble sits beside it.
@@ -874,6 +916,7 @@ struct MobilePlayerView: View {
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))
             .accessibilityIdentifier("player.danmakuMenu")
+            .simultaneousGesture(TapGesture().onEnded { freezeMenus() })
             // Turns the picture even with Portrait Orientation Lock on, the way the system's own rotation can't.
             // Only on a phone-sized screen: iPhone Duo's inner display (regular both ways) ignores orientations.
             if !inline, PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact {
@@ -897,9 +940,10 @@ struct MobilePlayerView: View {
     /// The picture, sound and subtitle settings in one menu: what AVKit's ⋯ menu held, and the stream's quality.
     private var optionsMenu: some View {
         Menu {
+            Group {
             // What the catalog's own ⋯ menu held, one button fewer (on a watch page the page has them).
             if !inline { Section { CatalogPlaybackItems(channel: channel, session: session) } }
-            if session.qualities.count > 1 { Menu(L10n.text("Quality")) { QualityPicker(session: session) } }
+            if menuFreeze?.qualities ?? session.qualities.count > 1 { Menu(L10n.text("Quality")) { QualityPicker(session: session) } }
             if pictureSwitches {
                 Section(L10n.text("Picture")) {
                     if VideoEnhancement.canSmooth { Toggle(L10n.text("Smooth Motion (60 fps)"), isOn: $smoothsVideo) }
@@ -908,14 +952,14 @@ struct MobilePlayerView: View {
             }
             // A file whose sound tracks AVFoundation offers no complete choice between (#428, #1694), else the
             // item's audible media selection group.
-            if session.audioChoices.count > 1 {
+            if menuFreeze?.audioChoices ?? session.audioChoices.count > 1 {
                 Menu(L10n.text("Audio")) {
                     Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
                         ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
                     }
                     .pickerStyle(.inline)
                 }
-            } else if let audio = tracks.audio, audio.options.count > 1 {
+            } else if (menuFreeze?.trackAudio ?? (tracks.audio?.options.count ?? 0) > 1), let audio = tracks.audio {
                 Menu(L10n.text("Audio")) {
                     Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { if let option = $0 { session.chooseAudioTrack(option, in: audio.group) } })) {
                         ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
@@ -931,7 +975,7 @@ struct MobilePlayerView: View {
                                      searchOnline: { searchesSubtitles = true })
                 if session.playsDriveCopy { Text(L10n.text(ExternalSubtitles.driveCopyNote)) }
             }
-            if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
+            if menuFreeze?.subtitleDelay ?? (session.externalSubtitles.selected == nil && !(tracks.legible?.options.isEmpty ?? true)) {
                 // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
                 Menu(L10n.text("Subtitle Delay")) {
                     Text(SubtitleDelay.title(session.subtitles.delay))
@@ -949,7 +993,7 @@ struct MobilePlayerView: View {
                 }
             }
             // With a seek bar the speed has its own button beside it (`speedButton`).
-            if !session.isLive, !session.hasTimeline {
+            if menuFreeze?.speed ?? (!session.isLive && !session.hasTimeline) {
                 Menu(L10n.text("Playback Speed")) {
                     Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
                         ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
@@ -958,7 +1002,7 @@ struct MobilePlayerView: View {
                 }
             }
             // A series' intro and outro (#1488), here with the player's other settings, on the video page too.
-            if session.canSkip, !session.isLive {
+            if menuFreeze?.skips ?? (session.canSkip && !session.isLive) {
                 SkipTimesMenuButton(session: session) { showsSkip = true }
                 Toggle(L10n.text("Look Up Intro and Outro Times Online"), isOn: Binding(get: { session.looksUpSkipsOnline }, set: { session.looksUpSkipsOnline = $0 }))
             }
@@ -978,6 +1022,9 @@ struct MobilePlayerView: View {
                 Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus)
                 if showsStatus { Toggle(L10n.text("Battery Percentage"), isOn: $batteryPercentage) }
             }
+            }
+            .onAppear { freezeMenus() }
+            .onDisappear { menuFreeze = nil }
         } label: {
             Image(systemName: "gearshape").font(.playerGlyph).frame(width: 24, height: 24)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
@@ -985,6 +1032,7 @@ struct MobilePlayerView: View {
         .chromeButton()
         .accessibilityLabel(L10n.text("Settings"))
         .accessibilityIdentifier("player.options")
+        .simultaneousGesture(TapGesture().onEnded { freezeMenus() })
     }
 
     private static let speeds: [Float] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
