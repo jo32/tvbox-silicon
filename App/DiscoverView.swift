@@ -234,6 +234,20 @@ struct DiscoverView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing).focusSection()
                 .padding(.top, 50)
         }
+        #elseif os(iOS)
+        // Search sits inside the page, about a third of the way down the screen, rather than tucked in the
+        // toolbar's top-right corner: reachable one-handed and plainly visible (#2596).
+        .overlay(alignment: .topTrailing) {
+            GeometryReader { space in
+                Button { searchShown = true } label: {
+                    Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold))
+                        .frame(width: 48, height: 48).glassSurface(.regular, in: Circle())
+                }
+                .accessibilityLabel(L10n.text("Search Catalog"))
+                .accessibilityIdentifier("discover.home.search")
+                .position(x: space.size.width - 44, y: space.size.height / 3)
+            }
+        }
         #else
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
