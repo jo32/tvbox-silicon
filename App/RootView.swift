@@ -121,8 +121,13 @@ struct RootView: View {
                 // section change collapsed the sidebar while the new page was still a placeholder.
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
+                    // A page the assistant opened, for the section on screen.
+                    .agentPages(accepts: { $0 == store.section }) { detailPath.append($0) }
                     .overlay { ThemedTitleBand() }
             }
+            // The assistant's inspector belongs to the window, beside every page: on the detail stack it was only
+            // drawn beside the root page, and with it open the stack stopped showing pages pushed past the second.
+            .assistantHost()
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .onChange(of: store.hidesSidebar) { _, hide in
                 if hide { columnsBefore = columns }
@@ -149,7 +154,7 @@ struct RootView: View {
             #else
             // The system tab bar on every size class: iOS 26 floats it over content and
             // collapses extra sections into More, which a hand-built bar imitated poorly.
-            platformTabs
+            platformTabs.assistantHost()
             #endif
         }
         .onChange(of: store.section) { _, section in
@@ -318,7 +323,19 @@ struct RootView: View {
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
             .environment(\.openRoute, moreStack.opener)
-        } else { RouteStack { content(item).tvDefaultControls() } }
+            .agentPages(accepts: { $0 == .more || inMoreTab.contains($0) }) { moreStack.path.append($0) }
+        } else { RouteStack(section: item) { content(item).tvDefaultControls() } }
+    }
+
+    /// The sections the More tab shows, whose pages the assistant opens on its stack.
+    private var inMoreTab: [AppSection] {
+        #if os(iOS)
+        phoneTabs ? inMore : []
+        #elseif os(tvOS)
+        tvMore
+        #else
+        []
+        #endif
     }
 
     #if os(tvOS)
@@ -380,6 +397,16 @@ struct RootView: View {
 struct SectionPage: View {
     let section: AppSection
     var body: some View {
+        #if os(macOS)
+        // The Mac's panel opens beside any page, so every page has the toolbar's sparkles. No page draws a toolbar band:
+        // its buttons float over the page, as on Discover. Watch Now and Discover set their own, for their heroes.
+        if section == .home || section == .discover { page.assistantEntry(section) }
+        else { page.assistantEntry(section).bandlessToolbar() }
+        #else
+        if section == .home || section == .discover { page.assistantEntry(section) } else { page }
+        #endif
+    }
+    @ViewBuilder private var page: some View {
         switch section {
         case .home: HomeView()
         case .discover: DiscoverView()
@@ -628,12 +655,15 @@ extension EnvironmentValues {
 /// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
 private struct RouteStack<Root: View>: View {
     @State private var stack = RoutePath()
+    /// The tab's section, whose pages the assistant opens here (`agentPages`).
+    private let section: AppSection
     private let root: Root
-    init(@ViewBuilder root: () -> Root) { self.root = root() }
+    init(section: AppSection, @ViewBuilder root: () -> Root) { self.section = section; self.root = root() }
     var body: some View {
         @Bindable var stack = stack
         NavigationStack(path: $stack.path) { root.routeDestinations() }
             .environment(\.openRoute, stack.opener)
+            .agentPages(accepts: { [section] in $0 == section }) { stack.path.append($0) }
     }
 }
 
@@ -658,7 +688,7 @@ extension View {
         #if os(macOS) || os(tvOS)
         modifier(MacRouteDestinations())
         #else
-        navigationDestination(for: Route.self) { $0.build() }
+        navigationDestination(for: Route.self) { $0.build().assistantPushedPage() }
         #endif
     }
 }
@@ -670,7 +700,7 @@ private struct MacRouteDestinations: ViewModifier {
     @Environment(\.openRoute) private var openRoute
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute) }
+        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute).assistantPushedPage() }
         #else
         content.navigationDestination(for: Route.self) { $0.build().environment(\.openRoute, openRoute) }
         #endif

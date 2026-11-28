@@ -552,6 +552,7 @@ struct FormSettingsView: View {
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage("app.appearance") private var appearance = "system"
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
+    @AppStorage(AgentSettings.enabledKey) private var assistantOn = false
     #if os(macOS)
     @State private var choosesFile = false
     #endif
@@ -567,6 +568,7 @@ struct FormSettingsView: View {
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(MacPlayerWindowSize.key) private var playerWindowSize = MacPlayerWindowSize.keep.rawValue
+    @State private var startSpeed = PlaybackSpeed.load()
     @State private var skipsIntros = false
     @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
     /// The language picked here, "" for the system's.
@@ -868,6 +870,11 @@ struct FormSettingsView: View {
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
                     .settingsAnchor(.watchNow)
+                FormLink(symbol: "sparkles", tint: Brand.cyan, title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) {
+                    AssistantSettingsView()
+                }
+                .accessibilityIdentifier("settings.assistant")
+                .settingsAnchor(.assistant)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
@@ -917,6 +924,11 @@ struct FormSettingsView: View {
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
                     .settingsAnchor(.watchNow)
+                FormLink(symbol: "sparkles", tint: Brand.cyan, title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) {
+                    AssistantSettingsView()
+                }
+                .accessibilityIdentifier("settings.assistant")
+                .settingsAnchor(.assistant)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
@@ -983,6 +995,16 @@ struct FormSettingsView: View {
                 }
                 .settingsSwitch()
                 .settingsAnchor(.showVideoInfo)
+                // The speed every new title starts at, as on iPhone and iPad (the player's own menu changes this title's).
+                Picker(selection: Binding(get: { startSpeed }, set: { startSpeed = $0; PlaybackSpeed.save($0) })) {
+                    ForEach(PlaybackSpeed.speeds, id: \.self) { Text(PlaybackSpeed.speedLabel($0)).tag($0) }
+                } label: {
+                    FormLabel(symbol: "speedometer", tint: .orange, title: L10n.text("Start Speed"),
+                              subtitle: L10n.text("Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes."))
+                }
+                .onAppear { startSpeed = PlaybackSpeed.load() }
+                .accessibilityIdentifier("settings.playbackSpeed")
+                .settingsAnchor(.startSpeed)
                 Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
                                           set: { playerWindowSize = $0.rawValue })) {
                     ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -1191,6 +1213,12 @@ struct FormSettingsView: View {
                 jumpRequest = nil
             }
         }
+        // A row the assistant opened (`settings_open`), as a search result opens it.
+        .onChange(of: store.agentSettingsAnchor, initial: true) { _, anchor in
+            guard let anchor else { return }
+            store.agentSettingsAnchor = nil
+            jumpRequest = SettingsJumpRequest(anchor: anchor)
+        }
         #if DEBUG
         // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
         .task {
@@ -1215,7 +1243,7 @@ struct FormSettingsView: View {
         }
         }
         .settingsForm(L10n.text("Settings"))
-        .searchable(text: $searchQuery, isPresented: $searching, prompt: Text(L10n.text("Search settings")))
+        .pageSearchable(text: $searchQuery, isPresented: $searching, prompt: L10n.text("Search settings"))
         .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
         .sheet(isPresented: $editingLive) { LiveSourcesEditor() }
         // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed
@@ -1361,6 +1389,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case profiles
     case iCloudSync
     case watchNow
+    case assistant
     case appIcon
     case colorTheme
     case appearance
@@ -1376,6 +1405,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case bilibiliCast
     case playOn
     case showVideoInfo
+    case startSpeed
     case playerWindowSize
     case skipIntroOutro
     case subtitleStyle
@@ -1410,6 +1440,23 @@ private enum SettingsSearchTarget: Hashable, Sendable {
         #endif
         default: return "settings.search \(self)"
         }
+    }
+}
+
+/// A Settings row's anchor by the name of its search target (`"playOn"`, `"iCloudSync"`), for the assistant's
+/// `settings_open` (App/Agent/Tools/SettingsCatalog.swift); nil for a name with no row.
+enum SettingsRowAnchor {
+    static func named(_ name: String) -> String? {
+        let targets: [SettingsSearchTarget] = [
+            .account, .feedback, .telegram, .hiddenSources, .hiddenLive, .arrangeSubscriptions, .removeSubscriptions,
+            .addSubscription, .livePlugins, .comicSources, .bookSources, .bilibili, .douyin, .cloudDrive, .profiles,
+            .iCloudSync, .watchNow, .appIcon, .colorTheme, .appearance, .playback, .playURL, .editTabBar, .launchPage,
+            .tabBarLabels, .collapseTabBar, .language, .showDanmaku, .danmakuSettings, .bilibiliCast, .playOn,
+            .showVideoInfo, .startSpeed, .playerWindowSize, .skipIntroOutro, .subtitleStyle, .subtitleSources, .sharperPicture,
+            .smoothMotion, .localCache, .jarRuntime, .diagnostics, .privacy, .errorReports, .tmdbLookup,
+            .softwareUpdate, .autoInstallUpdates, .releaseNotes, .licenses,
+        ]
+        return targets.first { "\($0)" == name }?.anchor
     }
 }
 
@@ -1664,6 +1711,8 @@ private extension FormSettingsView {
 
         add(.watchNow, title: L10n.text("Watch Now"), section: secGeneral,
             keywords: ["home", "watch now", "recommendations", "首页", "推荐", "立即观看"])
+        add(.assistant, title: L10n.text("Assistant"), section: secGeneral, subtitle: L10n.text(assistantOn ? "On" : "Off"),
+            keywords: ["assistant", "ai", "chatgpt", "openai", "gpt", "chat", "api key", "model", "助手", "智能", "人工智能", "聊天", "助理", "アシスタント"])
         if AppIcons.isAvailable {
             add(.appIcon, title: L10n.text("App Icon"), section: secGeneral, subtitle: AppIcons.shared.title,
                 keywords: ["icon", "logo", "图标"])
@@ -1708,6 +1757,8 @@ private extension FormSettingsView {
             keywords: ["play on", "handoff", "cast", "dlna", "接力", "投屏", "设备"])
         add(.showVideoInfo, title: L10n.text("Show Video Info"), section: secPlayback, subtitle: SettingsNote.playbackInfo,
             keywords: ["info", "fps", "bitrate", "codec", "resolution", "信息", "码率", "帧率", "分辨率"])
+        add(.startSpeed, title: L10n.text("Start Speed"), section: secPlayback,
+            keywords: ["speed", "playback speed", "rate", "倍速", "速度", "播放速度"])
         add(.playerWindowSize, title: L10n.text("Default Window Size"), section: secPlayback,
             keywords: ["window", "size", "default", "resize", "窗口", "大小", "默认尺寸"])
         add(.skipIntroOutro, title: L10n.text("Automatically skip intro and outro"), section: secPlayback, subtitle: SettingsNote.introOutro,
@@ -2757,6 +2808,7 @@ struct TVSettingsView: View {
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     @State private var skipsIntros = false
     @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
+    @AppStorage(AgentSettings.enabledKey) private var assistantOn = false
 
     var body: some View {
         TVSettingsLayout {
@@ -2805,6 +2857,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                TVSettingsLink(title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) { AssistantSettingsView() }
                 TVSettingsLink(title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                 TVSettingsLink(title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) { ColorThemeSettingsView() }
             }

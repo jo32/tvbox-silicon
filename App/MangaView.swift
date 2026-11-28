@@ -458,7 +458,7 @@ struct MangaSearchView: View {
         }
         .background { Backdrop() }
         .catalogSearchable(text: $query, prompt: L10n.text("Comic title or author"))
-        .onSubmit(of: .search) { submitted = query.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .onSearchSubmit { submitted = query.trimmingCharacters(in: .whitespacesAndNewlines) }
         #if os(tvOS)
         // The tvOS keyboard has no return key that submits: search as the text settles.
         .task(id: query) {

@@ -301,7 +301,7 @@ struct NovelSearchView: View {
         }
         .background { Backdrop() }
         .catalogSearchable(text: $query, prompt: L10n.text("Title or author"))
-        .onSubmit(of: .search) { submit(query) }
+        .onSearchSubmit { submit(query) }
         // Emptied, the field ends the search, and the page and the next visit start empty: the words used to come back
         // whenever the page opened again (#1841).
         .onChange(of: query) { _, text in

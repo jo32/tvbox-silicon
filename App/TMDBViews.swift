@@ -746,9 +746,9 @@ struct TMDBPicker: View {
                 }
             }
             #if !os(tvOS)
-            .searchable(text: $query, prompt: L10n.text("Search TMDB"))
+            .pageSearchable(text: $query, prompt: L10n.text("Search TMDB"))
             #endif
-            .onSubmit(of: .search) { Task { await search() } }
+            .onSearchSubmit { Task { await search() } }
             .overlay { if searching { ProgressView() } }
             .navigationTitle(L10n.text("Not This Title?"))
             #if os(iOS)

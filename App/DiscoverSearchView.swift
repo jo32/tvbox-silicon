@@ -21,6 +21,15 @@ struct DiscoverSearchView: View {
     private var request: DiscoverSearchRequest { .init(keyword: keyword, feed: feed, filter: filter, revision: revision) }
     private let sections: [DiscoverFilterSection] = [.type, .genres, .years, .sort, .platform, .language, .region, .keywords]
 
+    /// A page this search pushed: the assistant's sparkles in its toolbar, as on any pushed page.
+    @ViewBuilder private func pushed(_ page: some View) -> some View {
+        #if os(tvOS)
+        page
+        #else
+        page.assistantPushedPage()
+        #endif
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             GeometryReader { geometry in
@@ -70,8 +79,8 @@ struct DiscoverSearchView: View {
             .toolbar(.hidden, for: .navigationBar)
             #endif
             .routeDestinations()
-            .navigationDestination(for: TMDBCatalog.Item.self) { DiscoverDetailView(item: $0) }
-            .navigationDestination(for: TMDBCatalog.SearchPerson.self) { DiscoverPersonView(id: $0.id, name: $0.name, profile: $0.profile) }
+            .navigationDestination(for: TMDBCatalog.Item.self) { pushed(DiscoverDetailView(item: $0)) }
+            .navigationDestination(for: TMDBCatalog.SearchPerson.self) { pushed(DiscoverPersonView(id: $0.id, name: $0.name, profile: $0.profile)) }
         }
         .environment(\.openRoute, RouteOpener { path.append($0) })
         .tint(.primary)
@@ -455,8 +464,8 @@ struct DiscoverMacSearchView: View {
         }
         .background { DiscoverSearchAtmosphere() }
         .navigationTitle(L10n.text("Search Catalog"))
-        .searchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: Text(L10n.text("Search")))
-        .onSubmit(of: .search) { model.remember(keyword) }
+        .pageSearchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: L10n.text("Search"))
+        .onSearchSubmit { model.remember(keyword) }
         .onChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

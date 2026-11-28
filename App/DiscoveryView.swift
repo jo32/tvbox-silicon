@@ -112,7 +112,7 @@ struct GlobalSearchView: View {
             // the Mac. Only Return or the keyboard's Search key searches; clearing the field goes back to the recent searches.
             .catalogSearchable(text: $model.draft, prompt: L10n.text("Search videos"))
             .searchFieldFocused($inputFocused)
-            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            .onSearchSubmit { if let config = store.subscription { submit(config) } }
             .onChange(of: model.draft) { _, draft in if draft.isEmpty && !model.keyword.isEmpty { model.reset() } }
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
@@ -285,7 +285,7 @@ struct GlobalSearchView: View {
                 }
             }
             .task(id: model.draft) { await suggest(model.draft) }
-            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            .onSearchSubmit { if let config = store.subscription { submit(config) } }
             .screenBackdrop()
         }
     }

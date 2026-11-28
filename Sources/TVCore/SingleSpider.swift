@@ -93,6 +93,21 @@ public enum ImportedFiles {
 
     public static func isImported(_ address: String) -> Bool { URL(string: address)?.host()?.lowercased() == host }
 
+    /// The names of the files here, sorted (the assistant's script tools, App/Agent/Tools).
+    public static func names() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.filter { !$0.hasPrefix(".") }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    /// The copy named `name`, straight in the folder; nil for a name that would reach outside it.
+    public static func file(named name: String) -> URL? {
+        guard !name.isEmpty, !name.hasPrefix("."), !name.contains("/"), !name.contains("\\") else { return nil }
+        return directory.appending(path: name)
+    }
+
+    /// The address a subscription or source uses for the copy named `name`.
+    public static func address(named name: String) -> URL { address(name) }
+
     static func address(_ name: String) -> URL {
         var components = URLComponents()
         components.scheme = "https"; components.host = host; components.path = "/" + name

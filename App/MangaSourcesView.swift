@@ -232,7 +232,7 @@ struct MangaRepositoryView: View {
                     }
                 }
                     #if !os(tvOS)
-                    .searchable(text: $filter, prompt: Text(L10n.text("Filter comic sources")))
+                    .pageSearchable(text: $filter, prompt: L10n.text("Filter comic sources"))
                     #endif
             } else if entries != nil {
                 EmptyResults(symbol: "tray", title: L10n.text("This list has no sources."))

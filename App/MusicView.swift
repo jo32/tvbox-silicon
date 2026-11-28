@@ -97,7 +97,7 @@ struct MusicView: View {
             search.search(text, kind: Self.searchKind)
             #endif
         }
-        .onSubmit(of: .search) {
+        .onSearchSubmit {
             autoPlayQuery = search.kind == .songs || search.kind == .top ? query.trimmingCharacters(in: .whitespacesAndNewlines) : nil
             remember(query)
             search.search(query, kind: Self.searchKind, immediately: true); playDirectHitIfReady()

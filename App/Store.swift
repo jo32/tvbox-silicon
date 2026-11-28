@@ -149,6 +149,11 @@ import TVCore
     /// is resolved 30 seconds before its end for the queue, as before.
     static let nextAheadLength: Double = 10 * 60
     var section: AppSection = .home
+    /// A page the assistant opened, waiting for its section's stack to push it (App/Agent/Tools/AgentNavigation.swift).
+    var agentPage: AgentPageRequest?
+    /// A Settings row the assistant opened (`settings_open`): Settings scrolls to it and highlights it, as a search
+    /// result does.
+    var agentSettingsAnchor: String?
     /// The page the app opens on, kept per profile; Watch Now when unset (#1673, #2008, #2246).
     /// Stored, so the Settings picker shows a new choice at once (a value read from UserDefaults isn't observed).
     var launchSection: AppSection? {

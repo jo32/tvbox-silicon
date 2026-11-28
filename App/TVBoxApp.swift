@@ -10,6 +10,8 @@ import TVCore
     #endif
     @State private var updates = Updates()
     @State private var announcements = Announcements()
+    /// The assistant (App/Agent), shown on Watch Now and Discover once turned on in Settings.
+    @State private var assistant = AssistantController()
     #if os(iOS)
     /// An Apple TV's Douyin code, scanned with the Camera.
     @State private var douyinHandoff: DouyinHandoff.Link?
@@ -155,7 +157,7 @@ import TVCore
                 #endif
                 // Outside every modifier above, so the import and Douyin sheets get them too: on RootView alone, a
                 // yingxia://import link stopped the app ("No Observable object of type Store found", TestFlight 49-51).
-                .environment(store).environment(updates).environment(announcements)
+                .environment(store).environment(updates).environment(announcements).environment(assistant)
         }
         #if os(macOS)
         .defaultSize(width: 1240, height: 820)

@@ -1392,7 +1392,7 @@ struct SiteView: View {
                     query = value
                     if value.isEmpty && !browser.query.isEmpty { startRequest { await home() } }
                 }), prompt: L10n.text("Search videos"), endsWhenIdle: true)
-                .onSubmit(of: .search) { startRequest { await search() } }
+                .onSearchSubmit { startRequest { await search() } }
             }
         }
         .onDisappear { requestTask?.cancel(); browser.cancel() }
