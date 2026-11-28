@@ -246,6 +246,10 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     private weak var enhancer: VideoEnhancer?
     private var observation: NSKeyValueObservation?
     private var applying: Task<Void, Never>?
+    /// The manager the criteria went to: the controller has left its window by the time it goes away (#2691).
+    private var manager: AVDisplayManager?
+    /// Gone with its player view: the enhancer's and the item's late news change nothing.
+    private var closed = false
 
     init(controller: AVPlayerViewController, player: AVPlayer, enhancer: VideoEnhancer) {
         self.controller = controller
@@ -259,12 +263,19 @@ private protocol EnhancementEngine: AnyObject, Sendable {
 
     /// Back to the TV's own mode when the player goes away, as AVKit does after full-screen playback.
     func reset() {
+        closed = true
+        if DisplayCriteria.qa {
+            Diagnostics.shared.record(.info, "player", "qa display keeper closed inWindow=\(controller?.view.window != nil) asked=\(manager != nil)")
+        }
         applying?.cancel()
         observation = nil
-        controller?.view.window?.avDisplayManager.preferredDisplayCriteria = nil
+        // Its own mode, on the manager it asked: one that a newer player view asked for since stays.
+        if let asked = manager ?? controller?.view.window?.avDisplayManager { DisplayCriteria.withdraw(on: asked, by: self) }
+        manager = nil
     }
 
     private func apply() {
+        guard !closed else { return }
         applying?.cancel()
         // Smoothing: the rate the frames are drawn at. Otherwise the video's own criteria, as AVKit would.
         let request = enhancer?.displayRequest
@@ -277,9 +288,12 @@ private protocol EnhancementEngine: AnyObject, Sendable {
             if criteria == nil, HDRDisplay.requested != nil { return }
             // The controller joins its window a moment after it is made.
             for _ in 0..<20 {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled, let self, !self.closed else { return }
                 if let manager = self.controller?.view.window?.avDisplayManager {
-                    manager.preferredDisplayCriteria = criteria
+                    // A new window: the old one's request is taken back first.
+                    if let old = self.manager, old !== manager { DisplayCriteria.withdraw(on: old, by: self) }
+                    self.manager = manager
+                    DisplayCriteria.prefer(criteria, on: manager, by: self)
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(250))
