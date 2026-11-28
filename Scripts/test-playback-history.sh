@@ -95,6 +95,7 @@ $MAC_DEPENDENCIES
     sources:
       - path: ../../AppTests/PlaybackHistoryTests.swift
       - path: ../../AppTests/SubtitlePlaybackTests.swift
+      - path: ../../AppTests/DiscoverSearchNameTests.swift
       - path: subtitles.mkv
         buildPhase: resources
       - path: reordered.mkv
