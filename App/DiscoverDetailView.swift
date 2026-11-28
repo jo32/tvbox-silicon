@@ -16,6 +16,7 @@ struct DiscoverDetailView: View {
     @State private var seasonFailed = false
     @State private var onScreen = false
     @State private var overviewShown = false
+    @State private var seasonsShown = false
     @State private var trailerShown = false
     @State private var searchShown = false
     @State private var still: DiscoverStill?
@@ -40,6 +41,13 @@ struct DiscoverDetailView: View {
     private var dark: Bool { model.paint?.isDark ?? true }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
     private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
+    #if os(iOS)
+    private var displayedSeason: Int? {
+        if let seasonNumber { return seasonNumber }
+        if let chosen = sources?.chosen { return SeasonTitles.parse(chosen.video.name).season ?? 1 }
+        return catalogSeason
+    }
+    #endif
 
     var body: some View {
         page
@@ -82,6 +90,16 @@ struct DiscoverDetailView: View {
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
             }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
         }
+        #if os(iOS)
+        // Hosted on the detail page itself rather than inside DiscoverSourceEpisodes or VideoDetailView, so source
+        // search updates, a match arriving, or detail loading never dismiss the season list while scrolling (#2464).
+        .sheet(isPresented: $seasonsShown) {
+            DiscoverSeasonPicker(seasons: seasons, current: displayedSeason) { seasonNumber = $0 }
+                .foregroundStyle(Color.primary)
+                .environment(\.colorScheme, appColorScheme)
+                .preferredColorScheme(appColorScheme)
+        }
+        #endif
         #if os(tvOS)
         // Full-screen pages, as the TV presents things: the iPhone's sheets froze the TV app when they opened.
         .fullScreenCover(item: $episode) { selection in tvEpisodeScreen(selection.value) }
@@ -138,7 +156,7 @@ struct DiscoverDetailView: View {
             let coverHeight = width < 600 ? width * 1.5 : min(760, width * 0.7)
             ZStack(alignment: .top) {
                 DiscoverDetailBackground(model: model, width: width, height: coverHeight,
-                                         active: onScreen && scenePhase == .active && !trailerShown && !searchShown && still == nil && !overviewShown)
+                                         active: onScreen && scenePhase == .active && !trailerShown && !searchShown && still == nil && !overviewShown && !seasonsShown)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 30) {
                         identity(width: width)
@@ -348,6 +366,12 @@ struct DiscoverDetailView: View {
         #if os(macOS)
         DiscoverMacSeasonButton(title: title, seasons: seasons, current: current, appColorScheme: appColorScheme) { seasonNumber = $0 }
             .accessibilityIdentifier("discover.detail.season")
+        #elseif os(iOS)
+        Button { seasonsShown = true } label: {
+            EpisodeDropdownLabel(title: title).fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("discover.detail.season")
         #else
         Menu {
             ForEach(seasons, id: \.number) { value in
@@ -356,21 +380,12 @@ struct DiscoverDetailView: View {
                 }
             }
         } label: {
-            #if os(tvOS)
             HStack(spacing: 5) {
                 Text(title)
                 Image(systemName: "chevron.down").font(.caption.weight(.semibold))
             }
-            #else
-            EpisodeDropdownLabel(title: title, tapRoom: false).fixedSize()
-            #endif
         }
-        #if os(tvOS)
         .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
-        #else
-        .buttonStyle(.plain)
-        .frame(minHeight: 44)
-        #endif
         .accessibilityIdentifier("discover.detail.season")
         #endif
     }
@@ -617,7 +632,7 @@ private struct DiscoverMacSeasonButton: View {
         .buttonStyle(.plain)
         .popover(isPresented: $showingSeasons) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(seasons, id: \.number) { season in
                         Button {
                             showingSeasons = false
@@ -641,6 +656,77 @@ private struct DiscoverMacSeasonButton: View {
             .foregroundStyle(.primary)
             .preferredColorScheme(appColorScheme)
         }
+    }
+}
+#endif
+
+#if os(iOS)
+/// Season list for Discover's detail page (#2464): a SwiftUI Menu eagerly instantiates every season on each update
+/// and dismisses or resets back to the first season while scrolling long series such as 百家讲坛 (500+ seasons) or
+/// when source search updates the section underneath. A List sheet virtualizes rows and stays open across updates.
+private struct DiscoverSeasonPicker: View {
+    let seasons: [TMDBMatch.SeasonSummary]
+    let current: Int?
+    let choose: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                List(seasons, id: \.number) { season in
+                    let selected = season.number == current
+                    Button {
+                        choose(season.number)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(season.name)
+                                    .font(.body)
+                                let detail = Self.detail(for: season)
+                                if !detail.isEmpty {
+                                    Text(detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if selected {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Brand.accent)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .id(season.number)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("discover.detail.season.\(season.number)")
+                }
+                .listStyle(.insetGrouped)
+                .task {
+                    if let current, current != seasons.first?.number, seasons.contains(where: { $0.number == current }) {
+                        proxy.scrollTo(current, anchor: .center)
+                    }
+                }
+            }
+            .navigationTitle(L10n.text("Seasons"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
+        }
+        .foregroundStyle(.primary)
+        .tint(.accentColor)
+        .presentationDetents(seasons.count > 12 ? [.large] : [.medium, .large])
+        .presentationBackground(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private static func detail(for season: TMDBMatch.SeasonSummary) -> String {
+        var parts: [String] = []
+        if let year = season.year { parts.append(String(year)) }
+        if season.episodeCount > 0 { parts.append(L10n.text("%@ Episodes", String(season.episodeCount))) }
+        return parts.joined(separator: " · ")
     }
 }
 #endif
@@ -811,9 +897,7 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 12) {
                         heading
-                        if let message = sources.search.resultLimitMessage {
-                            Text(message).font(.footnote).foregroundStyle(.secondary)
-                        }
+                        DiscoverSourceSearchLimit(search: sources.search)
                         if sources.finished {
                             Text(L10n.text(selectedSeason == nil ? "None of your sources has this title." : "None of your sources has this season."))
                                 .font(.subheadline).foregroundStyle(.secondary)
@@ -829,7 +913,8 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                             #endif
                             .accessibilityIdentifier("discover.sources.search")
                         } else {
-                            searchProgress.accessibilityIdentifier("discover.sources.searching")
+                            DiscoverSourceSearchProgress(search: sources.search)
+                                .accessibilityIdentifier("discover.sources.searching")
                         }
                     }
                     .padding(.horizontal, horizontalInset)
@@ -870,9 +955,22 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
     private var heading: some View {
         Text(L10n.text("Episodes")).font(.title3.weight(.semibold))
     }
+}
 
-    @ViewBuilder private var searchProgress: some View {
-        let search = sources.search
+/// Isolated from `DiscoverSourceEpisodes` so each source answering only redraws the progress bar, not the catalog
+/// episodes and season control below it (#2464).
+private struct DiscoverSourceSearchLimit: View {
+    let search: SearchModel
+    var body: some View {
+        if let message = search.resultLimitMessage {
+            Text(message).font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct DiscoverSourceSearchProgress: View {
+    let search: SearchModel
+    var body: some View {
         if search.total > 0 {
             ProgressView(value: Double(search.completed), total: Double(search.total)) {
                 Text(L10n.text("Searching for sources…")).font(.subheadline)
