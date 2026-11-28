@@ -280,3 +280,44 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(saved.map(\.context.videoID) == ["quit"])
     #expect(saved.first?.position == 40)
 }
+
+@Test func dedupKeyFoldsTheSameTitleUnderCosmeticallyDifferentOrigins() {
+    func key(_ string: String, video: String = "v", source: String = "s") -> String {
+        PlaybackHistoryContext(origin: URL(string: string)!, sourceKey: source, sourceName: "S",
+            videoID: video, videoName: "T", episodeID: "e", episodeName: "E", episodeFlag: "f").dedupKey
+    }
+    // Tail slash, a fragment and a query are decoration (#2064); host case is not.
+    #expect(key("https://Example.com/sub.json") == key("https://example.com/sub.json/"))
+    #expect(key("https://example.com/sub.json") == key("https://example.com/sub.json?v=1"))
+    #expect(key("https://example.com/sub.json") == key("https://example.com/sub.json#top"))
+    #expect(key("https://example.com/sub.json", video: "v") == key("https://example.com/sub.json", video: "v", source: "s"))
+    // Different video or source still differs.
+    #expect(key("https://example.com/sub.json", video: "v") != key("https://example.com/sub.json", video: "other"))
+    #expect(key("https://example.com/sub.json", source: "s") != key("https://example.com/sub.json", source: "other"))
+}
+
+@Test @MainActor func playbackHistoryClosesNearDuplicatesWhenRecordingOrAdopting() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let history = PlaybackHistory(file: file)
+    // The same title under two cosmetically different origins (a second device saved the address with a tail slash).
+    let a = PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "s", sourceName: "S",
+        videoID: "v", videoName: "T", episodeID: "e", episodeName: "E", episodeFlag: "f")
+    let b = PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json/")!, sourceKey: "s", sourceName: "S",
+        videoID: "v", videoName: "T", episodeID: "e", episodeName: "E", episodeFlag: "f")
+    #expect(a.id != b.id, "cosmetic origin differences still give different exact ids")
+    #expect(a.dedupKey == b.dedupKey)
+    history.record(a, position: 60, duration: 600, now: Date(timeIntervalSince1970: 10))
+    history.record(b, position: 120, duration: 600, now: Date(timeIntervalSince1970: 20))
+    // The near-duplicate folded into one line, kept at the newer position.
+    #expect(history.entries.count == 1)
+    #expect(history.entries.first?.position == 120)
+    // Adopting a copy that carries both near-duplicate lines keeps only the newest of them.
+    history.adopt([
+        PlaybackHistoryEntry(context: a, position: 5, duration: 600, updatedAt: Date(timeIntervalSince1970: 30)),
+        PlaybackHistoryEntry(context: b, position: 80, duration: 600, updatedAt: Date(timeIntervalSince1970: 40))
+    ])
+    #expect(history.entries.count == 1)
+    #expect(history.entries.first?.position == 80)
+    #expect(await history.flushPersistence())
+}
