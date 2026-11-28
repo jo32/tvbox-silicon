@@ -38,6 +38,10 @@ public enum AgentSettings {
     public static var offersChatGPTSignIn: Bool {
         #if os(tvOS)
         false
+        #elseif DEBUG
+        // Development builds offer it unless turned off; TestFlight and App Store builds only once it's turned on
+        // (Docs/agent.md, "Eligibility").
+        UserDefaults.standard.object(forKey: chatGPTSignInKey) as? Bool ?? true
         #else
         UserDefaults.standard.bool(forKey: chatGPTSignInKey)
         #endif

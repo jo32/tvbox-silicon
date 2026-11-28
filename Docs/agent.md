@@ -49,7 +49,8 @@ never is (passwords, cookies, keys, tokens), and that the provider's own terms a
 
 OpenAI offers plan usage to open-source and locally run apps; paid or hosted apps are asked to use the interest
 form first. Yingxia is open source but ships through the App Store and TestFlight, so the ChatGPT sign-in stays
-behind `assistant.chatGPTSignIn` (off) until the owner confirms. API keys work everywhere.
+behind `assistant.chatGPTSignIn` (off in TestFlight and App Store builds, on by default in development builds) until
+the owner confirms. API keys work everywhere.
 
 ## Tools (App/Agent/Tools)
 
