@@ -2466,3 +2466,5 @@
 "The outro must start before it ends." = "エンディングの開始は終了より前にしてください。";
 "Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip." = "TheIntroDB、IntroDB、TheOtherDB でこのエピソードのオープニングとエンディングを調べます。これらのサービスには再生中の作品が伝わります。見つかった時間は下の空欄に入り、保存するまでは「スキップ」ボタンを表示するだけです。";
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
+"Keep Controls Visible" = "コントロールを常に表示";
+"Count back from the end" = "終わりから数える";
