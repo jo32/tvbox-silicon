@@ -33,6 +33,8 @@ final class RemuxSession: @unchecked Sendable {
     static let ahead: Int64 = 60_000_000
     let id = UUID().uuidString.lowercased()
     let source: RemuxSource
+    /// What the plan is made for; nil for this device (`device()`). Tests name one: a Mac's display decides HDR.
+    private let device: RemuxPlan.Device?
     private(set) var plan: RemuxPlan!
     private(set) var master = ""
     /// The master playlist's picture attributes (`RemuxPlan.variantSummary`), for a failure report.
@@ -92,13 +94,17 @@ final class RemuxSession: @unchecked Sendable {
     private let budget: Int
     /// Segments given up part-way for another one AVPlayer asked for.
     private(set) var abandoned = 0
+    /// Whether a segment couldn't be made because its Dolby Vision 5 picture couldn't be reshaped to SDR.
+    var dolbyVisionFailed: Bool { condition.withLock { reshapeFailed } }
+    private var reshapeFailed = false
     /// Reads of the source that failed in a row; only the FFmpeg thread reads.
     private var readFailures = FailureStreak(threshold: 3, base: 1, ceiling: 8)
 
     private struct Key: Hashable { var track: Int, segment: Int }
 
-    init(source: RemuxSource) {
+    init(source: RemuxSource, device: RemuxPlan.Device? = nil) {
         self.source = source
+        self.device = device
         budget = Int(min(max(ProcessInfo.processInfo.physicalMemory / 24, 96 << 20), 384 << 20))
     }
 
@@ -329,7 +335,7 @@ final class RemuxSession: @unchecked Sendable {
                 _ = tvm_keyframes(input, video, &keyframes, count)
             }
         }
-        let device = Self.device()
+        let device = device ?? Self.device()
         guard let plan = RemuxPlan.make(streams: streams, keyframes: keyframes, start: tvm_start_time(input), duration: tvm_duration(input),
                                         size: source.length, device: device) else {
             throw TVError.unsupported(L10n.text("This media cannot be played. Try another channel or source."))
@@ -463,6 +469,7 @@ final class RemuxSession: @unchecked Sendable {
         condition.lock()
         let gaveWay = abandon || closed
         if status < 0, abandon, !closed { abandoned += 1 }
+        if status == TVM_ERROR_DOLBY_VISION { reshapeFailed = true }
         producing = nil
         for (track, segment) in writing {
             let key = Key(track: track, segment: index)
@@ -609,6 +616,7 @@ final class RemuxSession: @unchecked Sendable {
                                       av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
                                       hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                                       hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
+        device.dolbyVision = device.hdr && !Remux.refusesDolbyVision
         device.bitmapSubtitles = tvm_bitmap_available("hdmv_pgs_subtitle") != 0
         #if !os(macOS)
         device.deinterlace = true

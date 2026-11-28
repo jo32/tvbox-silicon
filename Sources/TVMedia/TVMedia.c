@@ -54,7 +54,8 @@ void tvm_set_log(TVMLogFunction log) {
 static int fail(char *error, int size, int code, const char *what) {
     if (error && size > 0) {
         char reason[AV_ERROR_MAX_STRING_SIZE] = {0};
-        av_strerror(code, reason, sizeof reason);
+        if (code == TVM_ERROR_DOLBY_VISION) snprintf(reason, sizeof reason, "Dolby Vision 5 picture not reshaped");
+        else av_strerror(code, reason, sizeof reason);
         snprintf(error, size, "%s: %s", what, reason);
     }
     return code;
@@ -393,6 +394,11 @@ typedef struct Track {
     /// at ~15 ms a frame on an A15, too slow for 50 fps.
     VTPixelTransferSessionRef shrink;
     CVPixelBufferPoolRef shrinkPool;
+    /// Dolby Vision 5: its stream's configuration says profile 5. Such a picture is reshaped on the GPU into BT.2020 PQ
+    /// at the encoder's size (`tvm_compose`, from `composedPool`), then mapped to SDR like HDR10 (`map_picture`).
+    int profile5;
+    TVMComposer *composer;
+    CVPixelBufferPoolRef composedPool;
     /// A tone-mapped picture over 30 fps that converts slower than it plays is made at half its rate (every other
     /// frame) from the next segment on (`TVMInput.halveVideo`): the SDR stand-in only has to keep up.
     int halve, parity;
@@ -430,7 +436,7 @@ typedef struct Track {
     int started, ended;
     /// Where a converted video segment's time went (microseconds), for the log.
     int64_t usDecode, usMap, usEncode;
-    int frames, hwDecoded;
+    int frames, hwDecoded, reshaped;
 } Track;
 
 struct TVMCursor {
@@ -626,26 +632,132 @@ static VTPixelTransferSessionRef tone_map_session(void) {
     return session;
 }
 
-/// A pool of pictures at the encoder's size in the source's own pixel format, for shrinking before the mapping.
-static CVPixelBufferPoolRef shrink_pool(CVPixelBufferRef source, size_t width, size_t height) {
+/// A pool of IOSurface pictures (which Metal also reads and writes) of this pixel format and size.
+static CVPixelBufferPoolRef picture_pool(OSType format, size_t width, size_t height) {
     CVPixelBufferPoolRef pool = NULL;
     CFNumberRef w = CFNumberCreate(NULL, kCFNumberSInt64Type, &(int64_t){(int64_t)width});
     CFNumberRef h = CFNumberCreate(NULL, kCFNumberSInt64Type, &(int64_t){(int64_t)height});
-    CFNumberRef f = CFNumberCreate(NULL, kCFNumberSInt32Type, &(int32_t){(int32_t)CVPixelBufferGetPixelFormatType(source)});
+    CFNumberRef f = CFNumberCreate(NULL, kCFNumberSInt32Type, &(int32_t){(int32_t)format});
     CFDictionaryRef surface = CFDictionaryCreate(NULL, NULL, NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    const void *keys[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferIOSurfacePropertiesKey};
-    const void *values[] = {w, h, f, surface};
-    CFDictionaryRef attributes = CFDictionaryCreate(NULL, keys, values, 4, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    const void *keys[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferIOSurfacePropertiesKey,
+                          kCVPixelBufferMetalCompatibilityKey};
+    const void *values[] = {w, h, f, surface, kCFBooleanTrue};
+    CFDictionaryRef attributes = CFDictionaryCreate(NULL, keys, values, 5, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     if (CVPixelBufferPoolCreate(NULL, NULL, attributes, &pool) != kCVReturnSuccess) pool = NULL;
     CFRelease(attributes); CFRelease(surface); CFRelease(w); CFRelease(h); CFRelease(f);
     return pool;
 }
 
+/// A pool of pictures at the encoder's size in the source's own pixel format, for shrinking before the mapping.
+static CVPixelBufferPoolRef shrink_pool(CVPixelBufferRef source, size_t width, size_t height) {
+    return picture_pool(CVPixelBufferGetPixelFormatType(source), width, height);
+}
+
+// MARK: Dolby Vision 5
+
+/// The frame's Dolby Vision 5 mapping (`TVMReshaping`), from the metadata FFmpeg's decoder read from its RPU, as
+/// libplacebo takes it (pl_map_dovi_metadata and pl_shader_decode_color, LGPL-2.1). Returns 1 for a profile 5 picture
+/// (its stream's configuration says so, or the RPU does: profile 0 metadata on a full-range picture), else 0.
+static int dovi_mapping(const AVFrame *frame, int profile5, TVMReshaping *out) {
+    const AVFrameSideData *data = frame ? av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA) : NULL;
+    if (!data) return 0;
+    const AVDOVIMetadata *metadata = (const AVDOVIMetadata *)data->data;
+    const AVDOVIRpuDataHeader *header = av_dovi_get_header(metadata);
+    if (!profile5 && (header->vdr_rpu_profile != 0 || !header->bl_video_full_range_flag)) return 0;
+    if (!out) return 1;
+    const AVDOVIDataMapping *mapping = av_dovi_get_mapping(metadata);
+    const AVDOVIColorMetadata *color = av_dovi_get_color(metadata);
+    memset(out, 0, sizeof *out);
+    // Pivots are codes of the base layer; coefficients are fixed point.
+    float sample = ldexpf(1, -header->bl_bit_depth), unit = ldexpf(1, -header->coef_log2_denom);
+    for (int c = 0; c < 3; c++) {
+        const AVDOVIReshapingCurve *curve = &mapping->curves[c];
+        int pivots = FFMIN(curve->num_pivots, AV_DOVI_MAX_PIECES + 1);
+        out->pieces[c] = pivots >= 2 ? pivots - 1 : 0;
+        for (int i = 0; i < pivots; i++) out->pivots[c][i] = curve->pivots[i] * sample;
+        for (int i = 0; i < out->pieces[c]; i++) {
+            if (curve->mapping_idc[i] == AV_DOVI_MAPPING_MMR) {
+                out->method[c][i] = 1;
+                out->order[c][i] = FFMIN(FFMAX(curve->mmr_order[i], 1), 3);
+                out->mmrConstant[c][i] = curve->mmr_constant[i] * unit;
+                for (int j = 0; j < out->order[c][i]; j++)
+                    for (int k = 0; k < 7; k++) out->mmr[c][i][j][k] = curve->mmr_coef[i][j][k] * unit;
+            } else {
+                for (int k = 0; k <= FFMIN(curve->poly_order[i], 2); k++) out->poly[c][i][k] = curve->poly_coef[i][k] * unit;
+            }
+        }
+    }
+    for (int i = 0; i < 3; i++) out->offset[i] = av_q2d(color->ycc_to_rgb_offset[i]);
+    for (int i = 0; i < 9; i++) out->toLMS[i] = av_q2d(color->ycc_to_rgb_matrix[i]);
+    // Dolby's LMS is BT.2020-referred Hunt-Pointer-Estevez LMS after the RPU's own matrix; this is its way back to RGB.
+    static const double hpe[9] = {3.064396767855625, -2.165961226711146, 0.1015574148869036,
+                                  -0.65613130540261551, 1.7855694129834121, -0.12943951030147041,
+                                  0.017360633500538487, -0.047244531564539943, 1.0298894699757705};
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            double sum = 0;
+            for (int k = 0; k < 3; k++) sum += hpe[i * 3 + k] * av_q2d(color->rgb_to_lms_matrix[k * 3 + j]);
+            out->toRGB[i * 3 + j] = (float)sum;
+        }
+    }
+    return 1;
+}
+
+/// Tags a composed picture for VideoToolbox's tone mapping, which then maps it as it does HDR10. (It reads no
+/// mastering display: a 4000-nit one made the same picture as none.)
+static void tag_composed(CVPixelBufferRef buffer) {
+    CVBufferSetAttachment(buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_2020, kCVAttachmentMode_ShouldPropagate);
+    CVBufferSetAttachment(buffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ, kCVAttachmentMode_ShouldPropagate);
+    CVBufferSetAttachment(buffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_2020, kCVAttachmentMode_ShouldPropagate);
+}
+
+/// The first frame's mapping, for tests: decoded on the CPU from the start of the input.
+int tvm_dovi_first(TVMInput *input, int index, TVMReshaping *out) {
+    if (!input || index < 0 || index >= (int)input->format->nb_streams) return AVERROR(EINVAL);
+    AVStream *st = input->format->streams[index];
+    const AVCodec *codec = avcodec_find_decoder(st->codecpar->codec_id);
+    AVCodecContext *decoder = codec ? avcodec_alloc_context3(codec) : NULL;
+    AVPacket *packet = av_packet_alloc();
+    AVFrame *frame = av_frame_alloc();
+    const AVPacketSideData *conf = av_packet_side_data_get(st->codecpar->coded_side_data, st->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+    int profile5 = conf && ((const AVDOVIDecoderConfigurationRecord *)conf->data)->dv_profile == 5, found = AVERROR(ENOENT);
+    av_seek_frame(input->format, -1, 0, AVSEEK_FLAG_BACKWARD);
+    if (decoder && packet && frame && avcodec_parameters_to_context(decoder, st->codecpar) >= 0 && avcodec_open2(decoder, codec, NULL) >= 0) {
+        for (int count = 0; count < 300 && found < 0 && av_read_frame(input->format, packet) >= 0; count++) {
+            int sent = packet->stream_index == index ? avcodec_send_packet(decoder, packet) : 0;
+            av_packet_unref(packet);
+            if (sent < 0 && sent != AVERROR(EAGAIN)) break;
+            while (found < 0 && avcodec_receive_frame(decoder, frame) >= 0) {
+                if (dovi_mapping(frame, profile5, out)) found = 0;
+                av_frame_unref(frame);
+            }
+        }
+    }
+    av_frame_free(&frame); av_packet_free(&packet); avcodec_free_context(&decoder);
+    return found;
+}
+
 /// Shrinks `source` in its own colors when `pool` is given (no destination color keys), then maps it to SDR BT.709 at
-/// the smaller size: the mapping costs by the pixel. The sessions are made on first use.
+/// the smaller size: the mapping costs by the pixel. A Dolby Vision 5 picture (`dovi`) is instead reshaped on the GPU
+/// into BT.2020 PQ at the target's size, in a picture of `composed`, and mapped from there. The sessions and the
+/// composer are made on first use.
 static int map_picture(VTPixelTransferSessionRef *transfer, VTPixelTransferSessionRef *shrink, CVPixelBufferPoolRef pool,
+                       TVMComposer **composer, CVPixelBufferPoolRef composed, const TVMReshaping *dovi,
                        CVPixelBufferRef source, CVPixelBufferRef target) {
     if (!*transfer && !(*transfer = tone_map_session())) return AVERROR_EXTERNAL;
+    if (dovi) {
+        CVPixelBufferRef picture = NULL;
+        if (!composed || (!*composer && !(*composer = tvm_composer_create()))) return AVERROR(ENOSYS);
+        if (CVPixelBufferPoolCreatePixelBuffer(NULL, composed, &picture) != kCVReturnSuccess) return AVERROR(ENOMEM);
+        OSStatus result = -1;
+        if (tvm_compose(*composer, dovi, source, picture) == 0) {
+            tag_composed(picture);
+            result = VTPixelTransferSessionTransferImage(*transfer, picture, target);
+        }
+        CVPixelBufferRelease(picture);
+        if (result != noErr) av_log(NULL, AV_LOG_WARNING, "dolby vision mapping failed: %d\n", (int)result);
+        return result == noErr ? 0 : AVERROR_EXTERNAL;
+    }
     CVPixelBufferRef shrunk = NULL;
     if (pool && (CVPixelBufferGetWidth(source) != CVPixelBufferGetWidth(target) || CVPixelBufferGetHeight(source) != CVPixelBufferGetHeight(target))) {
         if (!*shrink && VTPixelTransferSessionCreate(kCFAllocatorDefault, shrink) != noErr) *shrink = NULL;
@@ -682,6 +794,9 @@ struct Mapper {
     MapJob jobs[MAP_DEPTH];
     int head, count;
     CVPixelBufferPoolRef pool;
+    /// Dolby Vision 5 (`Track.profile5`, or the frames' own metadata says so): pictures composed at the target's size.
+    int profile5;
+    CVPixelBufferPoolRef composed;
     /// Time the workers spent mapping this segment, microseconds.
     int64_t usBusy;
 };
@@ -689,6 +804,8 @@ struct Mapper {
 static void *map_worker(void *opaque) {
     Mapper *mapper = ((MapWorker *)opaque)->mapper;
     VTPixelTransferSessionRef transfer = NULL, shrink = NULL;
+    TVMComposer *composer = NULL;
+    TVMReshaping dovi;
     pthread_mutex_lock(&mapper->lock);
     for (;;) {
         MapJob *job = NULL;
@@ -702,10 +819,13 @@ static void *map_worker(void *opaque) {
             continue;
         }
         job->state = JOB_WORKING;
-        CVPixelBufferPoolRef pool = mapper->pool;
+        CVPixelBufferPoolRef pool = mapper->pool, composed = mapper->composed;
+        int profile5 = mapper->profile5;
         pthread_mutex_unlock(&mapper->lock);
         int64_t began = av_gettime_relative();
-        int status = map_picture(&transfer, &shrink, pool, (CVPixelBufferRef)job->source->data[3], (CVPixelBufferRef)job->target->data[3]);
+        int reshaped = dovi_mapping(job->source, profile5, &dovi);
+        int status = map_picture(&transfer, &shrink, pool, &composer, composed, reshaped ? &dovi : NULL,
+                                 (CVPixelBufferRef)job->source->data[3], (CVPixelBufferRef)job->target->data[3]);
         int64_t spent = av_gettime_relative() - began;
         pthread_mutex_lock(&mapper->lock);
         job->state = status < 0 ? JOB_FAILED : JOB_DONE;
@@ -715,6 +835,7 @@ static void *map_worker(void *opaque) {
     pthread_mutex_unlock(&mapper->lock);
     if (transfer) { VTPixelTransferSessionInvalidate(transfer); CFRelease(transfer); }
     if (shrink) { VTPixelTransferSessionInvalidate(shrink); CFRelease(shrink); }
+    tvm_composer_free(composer);
     return NULL;
 }
 
@@ -760,6 +881,7 @@ static void mapper_free(Mapper **pointer) {
     pthread_mutex_unlock(&mapper->lock);
     for (int i = 0; i < mapper->running; i++) pthread_join(mapper->threads[i], NULL);
     if (mapper->pool) CVPixelBufferPoolRelease(mapper->pool);
+    if (mapper->composed) CVPixelBufferPoolRelease(mapper->composed);
     pthread_cond_destroy(&mapper->changed);
     pthread_mutex_destroy(&mapper->lock);
     av_freep(pointer);
@@ -769,8 +891,12 @@ static void mapper_free(Mapper **pointer) {
 static int transfer_picture(Track *track, const AVFrame *frame, AVFrame *out) {
     CVPixelBufferRef source = (CVPixelBufferRef)frame->data[3], target = (CVPixelBufferRef)out->data[3];
     if (av_vt_pixbuf_set_attachments(NULL, source, frame) < 0 || av_vt_pixbuf_set_attachments(NULL, target, out) < 0) return AVERROR_EXTERNAL;
-    if (!track->shrinkPool) track->shrinkPool = shrink_pool(source, CVPixelBufferGetWidth(target), CVPixelBufferGetHeight(target));
-    return map_picture(&track->transfer, &track->shrink, track->shrinkPool, source, target);
+    TVMReshaping dovi;
+    int reshaped = dovi_mapping(frame, track->profile5, &dovi);
+    if (reshaped && !track->composedPool)
+        track->composedPool = picture_pool(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, CVPixelBufferGetWidth(target), CVPixelBufferGetHeight(target));
+    if (!reshaped && !track->shrinkPool) track->shrinkPool = shrink_pool(source, CVPixelBufferGetWidth(target), CVPixelBufferGetHeight(target));
+    return map_picture(&track->transfer, &track->shrink, track->shrinkPool, &track->composer, track->composedPool, reshaped ? &dovi : NULL, source, target);
 }
 
 static int open_decoder(Track *track) {
@@ -781,6 +907,8 @@ static int open_decoder(Track *track) {
     int status = avcodec_parameters_to_context(decoder, track->in->codecpar);
     if (status < 0) { avcodec_free_context(&decoder); return status; }
     decoder->pkt_timebase = track->in->time_base;
+    const AVPacketSideData *dovi = av_packet_side_data_get(track->in->codecpar->coded_side_data, track->in->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+    track->profile5 = dovi && dovi->size >= sizeof(AVDOVIDecoderConfigurationRecord) && ((const AVDOVIDecoderConfigurationRecord *)dovi->data)->dv_profile == 5;
     decoder->thread_count = 0;
     decoder->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     // A picture tone mapped on the media engine is decoded there too; FFmpeg decodes it itself when it can't.
@@ -1006,6 +1134,8 @@ void tvm_cursor_free(TVMCursor *cursor) {
         if (track->transfer) { VTPixelTransferSessionInvalidate(track->transfer); CFRelease(track->transfer); }
         if (track->shrink) { VTPixelTransferSessionInvalidate(track->shrink); CFRelease(track->shrink); }
         if (track->shrinkPool) CVPixelBufferPoolRelease(track->shrinkPool);
+        if (track->composedPool) CVPixelBufferPoolRelease(track->composedPool);
+        tvm_composer_free(track->composer);
         mapper_free(&track->mapper);
         av_buffer_unref(&track->hwFrames);
         av_buffer_unref(&track->hwDevice);
@@ -1252,6 +1382,9 @@ static int tone_map_software(Track *track, const AVFrame *frame, enum AVPixelFor
 /// HDR to SDR without the media engine, into the VideoToolbox picture `target`: a pixel transfer that failed.
 static int map_software(Track *track, const AVFrame *frame, AVFrame *target) {
     int status;
+    // Dolby Vision 5 is only reshaped on the GPU: in software it would come out green and purple. The segment fails,
+    // and the player says the video can't play here.
+    if (dovi_mapping(frame, track->profile5, NULL)) return TVM_ERROR_DOLBY_VISION;
     const AVFrame *source = frame;
     if (frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
         if (!track->downloaded && !(track->downloaded = av_frame_alloc())) return AVERROR(ENOMEM);
@@ -1324,14 +1457,18 @@ static int mapper_queue(TVMCursor *cursor, Track *track, const AVFrame *frame, i
     if (av_vt_pixbuf_set_attachments(NULL, in, frame) < 0 || av_vt_pixbuf_set_attachments(NULL, out, target) < 0) {
         av_frame_free(&source); av_frame_free(&target); return AVERROR_EXTERNAL;
     }
+    int reshaped = dovi_mapping(frame, track->profile5, NULL);
     pthread_mutex_lock(&mapper->lock);
-    int needsPool = !mapper->pool;
+    int needsPool = !mapper->pool, needsComposed = reshaped && !mapper->composed;
+    mapper->profile5 = track->profile5;
     pthread_mutex_unlock(&mapper->lock);
-    if (needsPool) {
-        // Made before the first job: the workers read it without making it.
-        CVPixelBufferPoolRef pool = shrink_pool(in, CVPixelBufferGetWidth(out), CVPixelBufferGetHeight(out));
+    if (needsPool || needsComposed) {
+        // Made before the first job: the workers read them without making them.
+        CVPixelBufferPoolRef pool = needsPool ? shrink_pool(in, CVPixelBufferGetWidth(out), CVPixelBufferGetHeight(out)) : NULL;
+        CVPixelBufferPoolRef composed = needsComposed ? picture_pool(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, CVPixelBufferGetWidth(out), CVPixelBufferGetHeight(out)) : NULL;
         pthread_mutex_lock(&mapper->lock);
         if (!mapper->pool) mapper->pool = pool; else if (pool) CVPixelBufferPoolRelease(pool);
+        if (!mapper->composed) mapper->composed = composed; else if (composed) CVPixelBufferPoolRelease(composed);
         pthread_mutex_unlock(&mapper->lock);
     }
     // Room in the queue: the finished pictures at its head go to the encoder (waiting for the head when it is full).
@@ -1364,6 +1501,11 @@ static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     int64_t began = av_gettime_relative();
     track->frames++;
     if (frame->format == AV_PIX_FMT_VIDEOTOOLBOX) track->hwDecoded++;
+    if (track->spec.toneMap && dovi_mapping(frame, track->profile5, NULL)) {
+        // Reshaped on the GPU from the decoder's own pictures; decoded in software, it can't be.
+        if (frame->format != AV_PIX_FMT_VIDEOTOOLBOX || !track->hwFrames) return TVM_ERROR_DOLBY_VISION;
+        track->reshaped++;
+    }
     if (track->spec.toneMap && track->hwFrames && frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
         int64_t pts = av_rescale_q(frame->best_effort_timestamp, track->in->time_base, encoder->time_base);
         if (track->lastFramePts != AV_NOPTS_VALUE && pts <= track->lastFramePts) pts = track->lastFramePts + 1;
@@ -1839,7 +1981,7 @@ int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint
     for (int i = 0; i < cursor->count; i++) {
         Track *track = &cursor->tracks[i];
         track->usDecode = track->usMap = track->usEncode = 0;
-        track->frames = track->hwDecoded = 0;
+        track->frames = track->hwDecoded = track->reshaped = 0;
         if (track->mapper) { pthread_mutex_lock(&track->mapper->lock); track->mapper->usBusy = 0; pthread_mutex_unlock(&track->mapper->lock); }
     }
     for (int i = 0; i < cursor->count; i++) {
@@ -1923,10 +2065,10 @@ int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint
         // Seconds of picture against seconds of work (the download's waits left out).
         double made = fps > 0 ? track->frames * (track->halve ? 2 : 1) / fps : 0;
         double spent = (av_gettime_relative() - segmentBegan - cursor->usRead) / 1e6;
-        av_log(NULL, AV_LOG_WARNING, "convert frames=%d hw=%d read=%lld decode=%lld wait=%lld busy=%lld encode=%lld ms in=%dx%d %s fps=%.2f halve=%d speed=%.2f toneMap=%d out=%dx%d\n",
+        av_log(NULL, AV_LOG_WARNING, "convert frames=%d hw=%d read=%lld decode=%lld wait=%lld busy=%lld encode=%lld ms in=%dx%d %s fps=%.2f halve=%d speed=%.2f toneMap=%d dovi=%d out=%dx%d\n",
                track->frames, track->hwDecoded, (long long)(cursor->usRead / 1000), (long long)(track->usDecode / 1000),
                (long long)(track->usMap / 1000), (long long)(busy / 1000), (long long)(track->usEncode / 1000), par->width, par->height,
-               av_get_pix_fmt_name(par->format) ?: "-", fps, track->halve, spent > 0 ? made / spent : 0, track->spec.toneMap, track->spec.width, track->spec.height);
+               av_get_pix_fmt_name(par->format) ?: "-", fps, track->halve, spent > 0 ? made / spent : 0, track->spec.toneMap, track->reshaped, track->spec.width, track->spec.height);
         // Too slow to keep up at full rate: half the rate from the next segment on, for this file.
         if (track->spec.toneMap && !track->halve && fps > 31 && made > 1 && made < spent * 1.15) {
             cursor->input->halveVideo = 1;

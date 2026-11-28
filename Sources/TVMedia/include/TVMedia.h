@@ -148,6 +148,44 @@ int tvm_cursor_init(TVMCursor *cursor, int track, void *context, TVMWriteFunctio
 int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint8_t *active, void *context,
                        TVMWriteFunction write, TVMCueFunction cue, char *error, int errorSize);
 
+// MARK: Dolby Vision 5 to SDR
+
+/// What `tvm_cursor_segment` returns when a Dolby Vision 5 picture couldn't be reshaped to SDR: it was decoded in
+/// software, or the GPU failed.
+#define TVM_ERROR_DOLBY_VISION (-0x35564f44)
+
+/// How a Dolby Vision 5 picture becomes BT.2020 PQ. Profile 5 codes its picture in Dolby's own IPT-PQ-c2, which each
+/// frame's metadata (the RPU) reshapes first; shown as YCbCr it is green and purple. Samples are their code divided by
+/// 2^bit depth. The steps are libplacebo's (src/shaders/colorspace.c, LGPL-2.1).
+typedef struct {
+    /// Per component: how many pieces its curve has (0 keeps the component as it is) and where they begin and end.
+    int pieces[3];
+    float pivots[3][9];
+    /// Per piece: 0 a polynomial (`poly`, x^0 to x^2), 1 a regression on all three components (`mmr`, of `order` 1-3).
+    int method[3][8], order[3][8];
+    float poly[3][8][3];
+    float mmrConstant[3][8];
+    float mmr[3][8][3][7];
+    /// The reshaped samples less `offset`, by `toLMS` (row by row): PQ-coded LMS. Linear LMS by `toRGB`: linear BT.2020.
+    float offset[3], toLMS[9], toRGB[9];
+} TVMReshaping;
+
+/// A pixel of a Dolby Vision 5 picture (Y, then the two chroma samples) as BT.2020 R'G'B', PQ-coded from 0 to 1: what
+/// `tvm_compose` makes on the GPU, on the CPU.
+void tvm_dovi_pixel(const TVMReshaping *mapping, const float ycc[3], float rgb[3]);
+/// The mapping of the first frame of stream `index` that carries Dolby Vision 5 metadata, decoded on the CPU from the
+/// start of the input. Returns 0, or a negative value when none does within its first packets.
+int tvm_dovi_first(TVMInput *input, int index, TVMReshaping *out);
+
+/// Maps decoded Dolby Vision 5 pictures on the GPU (Metal); one per thread.
+typedef struct TVMComposer TVMComposer;
+TVMComposer *tvm_composer_create(void);
+void tvm_composer_free(TVMComposer *composer);
+/// Maps `source` (a CVPixelBufferRef: a decoded Dolby Vision 5 picture, 4:2:0 in two planes) into `target` (a
+/// CVPixelBufferRef in `x420`: 10-bit 4:2:0 YCbCr in limited range) as BT.2020 PQ, scaled to the target's size.
+/// Returns 0, or a negative value.
+int tvm_compose(TVMComposer *composer, const TVMReshaping *mapping, void *source, void *target);
+
 /// Opens a local file for reading, as `tvm_open` would with a reader over it.
 TVMInput *tvm_open_file(const char *path, char *error, int errorSize);
 
