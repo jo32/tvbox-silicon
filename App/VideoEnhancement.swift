@@ -23,12 +23,13 @@ enum VideoEnhancement {
     /// Both notes, for a settings group that explains its switches underneath.
     static var note: String { [canUpscale ? upscaleNote : nil, canSmooth ? smoothNote : nil].compactMap { $0 }.joined(separator: " ") }
 
-    /// Whether this device can upscale: OS 26 on a real device (the Simulator has no processors).
+    /// Whether this device can upscale: OS 26 on a real device (the Simulator has no processors), unless the scaler
+    /// failed every size it was started at on this system before (`EnhancementHealth`): the switch then isn't offered.
     static let canUpscale: Bool = {
         #if targetEnvironment(simulator)
         return false
         #else
-        if #available(macOS 26, iOS 26, tvOS 26, *) { return VTLowLatencySuperResolutionScalerConfiguration.isSupported }
+        if #available(macOS 26, iOS 26, tvOS 26, *) { return VTLowLatencySuperResolutionScalerConfiguration.isSupported && usable(.scale) }
         return false
         #endif
     }()
@@ -37,10 +38,33 @@ enum VideoEnhancement {
         #if targetEnvironment(simulator)
         return false
         #else
-        if #available(macOS 26, iOS 26, tvOS 26, *) { return VTLowLatencyFrameInterpolationConfiguration.isSupported }
+        if #available(macOS 26, iOS 26, tvOS 26, *) { return VTLowLatencyFrameInterpolationConfiguration.isSupported && usable(.smooth) }
         return false
         #endif
     }()
+
+    /// What the processors turned out able to do on this device and system, shared by every player and kept across
+    /// launches: an A13 iPad started both for every video and size, and both failed their first frames each time (#2737).
+    static let health = OSAllocatedUnfairLock(initialState: EnhancementHealth.load(system: ProcessInfo.processInfo.operatingSystemVersionString))
+
+    static func usable(_ kind: EnhancementHealth.Kind) -> Bool { health.withLock { $0.usable(kind) } }
+
+    /// A processor of `kind` got through frames: its later failures are a size's, never the device's.
+    static func worked(_ kind: EnhancementHealth.Kind) {
+        let saved: EnhancementHealth? = health.withLock { health in
+            guard !health.hasWorked(kind) else { return nil }
+            health.worked(kind)
+            return health
+        }
+        saved?.save()
+    }
+
+    /// A size of `kind` failed before getting through frames. True when that leaves the kind off on this device.
+    static func failedAtOnce(_ configuration: String, kind: EnhancementHealth.Kind) -> Bool {
+        let (unusable, saved) = health.withLock { health in (health.failedAtOnce(configuration, kind: kind), health) }
+        saved.save()
+        return unusable
+    }
 }
 
 struct VideoEnhancementOptions: Equatable, Sendable {
@@ -148,8 +172,11 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     private func refresh() {
         guard let engine, let player else { return }
         let defaults = UserDefaults.standard
-        var next = VideoEnhancementOptions(upscale: VideoEnhancement.canUpscale && defaults.bool(forKey: VideoEnhancement.upscaleKey),
-                                           smooth: VideoEnhancement.canSmooth && defaults.bool(forKey: VideoEnhancement.smoothKey),
+        // A kind found unusable during this run is off from then on: no frames pulled for it, no output on the item.
+        var next = VideoEnhancementOptions(upscale: VideoEnhancement.canUpscale && defaults.bool(forKey: VideoEnhancement.upscaleKey)
+                                               && VideoEnhancement.usable(.scale),
+                                           smooth: VideoEnhancement.canSmooth && defaults.bool(forKey: VideoEnhancement.smoothKey)
+                                               && VideoEnhancement.usable(.smooth),
                                            target: displaySize)
         if !allowed(player) { next.upscale = false; next.smooth = false }
         #if DEBUG
@@ -896,27 +923,34 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         if scaler?.key != scaleKey { scaler = nil }
         if interpolator?.key != smoothKey { interpolator = nil }
         if let scaleKey, let factor, scaler == nil {
-            start(scaleKey) {
+            start(scaleKey, kind: .scale) {
                 let configuration = VTLowLatencySuperResolutionScalerConfiguration(frameWidth: width, frameHeight: height, scaleFactor: factor)
                 guard configuration.supportedPixelFormats.contains(format) else { throw StageError.format }
-                return try Stage(key: scaleKey, configuration: configuration, destination: configuration.destinationPixelBufferAttributes, source: (width, height),
-                                 width: Int((Float(width) * factor).rounded()), height: Int((Float(height) * factor).rounded()), format: format)
+                return try Stage(key: scaleKey, kind: .scale, configuration: configuration, destination: configuration.destinationPixelBufferAttributes,
+                                 source: (width, height), width: Int((Float(width) * factor).rounded()), height: Int((Float(height) * factor).rounded()),
+                                 format: format)
             }
         }
         if let smoothKey, interpolator == nil {
-            start(smoothKey) {
+            start(smoothKey, kind: .smooth) {
                 // Two: exact phases come back at about an eighth of a frame either way, and three cost ~5 ms more a frame (M1 Pro).
                 guard let configuration = VTLowLatencyFrameInterpolationConfiguration(frameWidth: work.width, frameHeight: work.height, numberOfInterpolatedFrames: 2)
                 else { throw StageError.unsupported }
                 guard configuration.supportedPixelFormats.contains(format) else { throw StageError.format }
-                return try Stage(key: smoothKey, configuration: configuration, destination: configuration.destinationPixelBufferAttributes, source: work,
-                                 width: work.width, height: work.height, format: format)
+                return try Stage(key: smoothKey, kind: .smooth, configuration: configuration, destination: configuration.destinationPixelBufferAttributes,
+                                 source: work, width: work.width, height: work.height, format: format)
             }
         }
     }
 
-    private func start(_ key: String, make: @escaping @Sendable () throws -> Stage) {
+    private func start(_ key: String, kind: EnhancementHealth.Kind, make: @escaping @Sendable () throws -> Stage) {
         guard !refused.contains(key), !starting.contains(key) else { return }
+        // A size that failed its first frames before (this run or an earlier one) would load its model only to fail again.
+        if VideoEnhancement.health.withLock({ $0.refused(key, kind: kind) }) {
+            refused.insert(key)
+            note("\(key) skipped: it failed at once on this device before")
+            return
+        }
         starting.insert(key)
         setup.async { [weak self] in
             let began = CACurrentMediaTime()
@@ -947,7 +981,10 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         refused.insert(stage.key)
         if scaler === stage { scaler = nil }
         if interpolator === stage { interpolator = nil }
-        note("\(stage.key) dropped after repeated failures")
+        note("\(stage.key) dropped after repeated failures (\(stage.successes) worked; \(stage.lastError ?? "no buffer"))")
+        // Failing from the start (more failures than frames through) is the device refusing this size, not a busy moment.
+        guard stage.successes < stage.failures, VideoEnhancement.failedAtOnce(stage.key, kind: stage.kind) else { return }
+        note("\(stage.kind.rawValue) failed at once at \(EnhancementHealth.limit) sizes: left off on this device until the system is updated")
     }
 
     /// When the work takes most of a frame's time, the device can't keep up: give up upscaling first, then smoothing.
@@ -1200,15 +1237,20 @@ private final class StillRegions: @unchecked Sendable {
 @available(macOS 26, iOS 26, tvOS 26, *)
 private final class Stage: @unchecked Sendable {
     let key: String
+    let kind: EnhancementHealth.Kind
     var failures = 0
+    /// Requests that came back processed, and why the latest one didn't.
+    private(set) var successes = 0
+    private(set) var lastError: String?
     /// The size of the frames it takes.
     let source: (width: Int, height: Int)
     private let processor = VTFrameProcessor()
     private let pool: CVPixelBufferPool
 
-    init(key: String, configuration: any VTFrameProcessorConfiguration, destination: [String: Any], source: (width: Int, height: Int),
-         width: Int, height: Int, format: OSType) throws {
+    init(key: String, kind: EnhancementHealth.Kind, configuration: any VTFrameProcessorConfiguration, destination: [String: Any],
+         source: (width: Int, height: Int), width: Int, height: Int, format: OSType) throws {
         self.key = key
+        self.kind = kind
         self.source = source
         var attributes = destination
         attributes[kCVPixelBufferWidthKey as String] = width
@@ -1240,8 +1282,12 @@ private final class Stage: @unchecked Sendable {
             outcome.error = error
             done.signal()
         }
-        guard done.wait(timeout: .now() + 0.5) == .success else { return false }
-        return outcome.error == nil
+        guard done.wait(timeout: .now() + 0.5) == .success else { lastError = "timed out"; return false }
+        if let error = outcome.error { lastError = Diagnostics.describe(error); return false }
+        successes += 1
+        // Some seconds of frames through: this kind works here.
+        if successes == 120 { VideoEnhancement.worked(kind) }
+        return true
     }
 
     private final class Outcome: @unchecked Sendable { var error: Error? }
