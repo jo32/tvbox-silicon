@@ -14,12 +14,26 @@ public enum UngroupedAudio {
     }
 
     /// Leaves only one enabled sound track playing when the item plays more than one at once; true when it switched
-    /// any off. Keeps `preferred` when it is among the enabled tracks, otherwise the first enabled track.
-    @MainActor @discardableResult public static func playOne(_ item: AVPlayerItem, keeping preferred: CMPersistentTrackID? = nil) -> Bool {
+    /// any off. Keeps `preferred` when it is among the enabled tracks, otherwise the first enabled track; never one of
+    /// `unplayable` (`PlayableSound`) while one that decodes plays too: a TrueHD dub before an AAC one was all it kept.
+    @MainActor @discardableResult public static func playOne(_ item: AVPlayerItem, keeping preferred: CMPersistentTrackID? = nil,
+                                                             avoiding unplayable: Set<CMPersistentTrackID> = []) -> Bool {
         let playing = audio(item).filter(\.isEnabled)
         guard playing.count > 1 else { return false }
-        let kept = preferred.flatMap { id in playing.first { $0.assetTrack?.trackID == id } } ?? playing.first
+        let decodes = { (track: AVPlayerItemTrack) in track.assetTrack.map { !unplayable.contains($0.trackID) } ?? true }
+        let kept = preferred.flatMap { id in playing.first { $0.assetTrack?.trackID == id && decodes($0) } }
+            ?? playing.first(where: decodes) ?? playing.first
         for track in playing where track !== kept { track.isEnabled = false }
+        return true
+    }
+
+    /// Plays the first track that decodes in place of the ones playing when none of those does; true when it switched.
+    @MainActor @discardableResult public static func playDecodable(_ item: AVPlayerItem, avoiding unplayable: Set<CMPersistentTrackID>) -> Bool {
+        guard !unplayable.isEmpty else { return false }
+        let tracks = audio(item).compactMap { track in track.assetTrack.map { (enabled: track.isEnabled, id: $0.trackID) } }
+        guard let index = PlayableSound.replacement(playing: tracks.map(\.enabled), decodes: tracks.map { !unplayable.contains($0.id) })
+        else { return false }
+        play(tracks[index].id, in: item)
         return true
     }
 

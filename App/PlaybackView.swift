@@ -16,6 +16,36 @@ import IOKit.pwr_mgt
         return Float(min(1, max(0, defaults.double(forKey: "playerVolume"))))
     }
 
+    /// Where the sound goes, for the diagnostics log: the kinds of output (`BluetoothA2DPOutput`, `Headphones`), never
+    /// their names, which can name their owner.
+    nonisolated static func audioRoute() -> String {
+        #if os(macOS)
+        "-"
+        #else
+        AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType.rawValue).joined(separator: "+")
+        #endif
+    }
+    #if !os(macOS)
+    /// The output changing while a video plays (a Bluetooth speaker joining or leaving, headphones), for reports of
+    /// sound that stopped or came out too loud (#1991, #1426). Registered once, for every player.
+    private static let routeLog: NSObjectProtocol = NotificationCenter.default.addObserver(
+        forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
+        let reason = (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+        let name: String
+        switch reason {
+        case .newDeviceAvailable: name = "new device"
+        case .oldDeviceUnavailable: name = "device gone"
+        case .categoryChange: name = "category"
+        case .override: name = "override"
+        case .wakeFromSleep: name = "wake"
+        case .noSuitableRouteForCategory: name = "no route"
+        case .routeConfigurationChange: name = "configuration"
+        default: name = "other"
+        }
+        Diagnostics.shared.record(.info, "player", "audio route \(name) outputs=\(audioRoute())")
+    }
+    #endif
+
     /// Upscaling and 60 fps smoothing, drawn over AVKit's picture when switched on in Settings.
     let enhancer: VideoEnhancer
     let catalogDanmaku = CatalogDanmakuModel()
@@ -441,6 +471,8 @@ import IOKit.pwr_mgt
     /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
     private(set) var audioChoices: [UngroupedAudio.Choice] = []
     private(set) var audioChoice: CMPersistentTrackID?
+    /// Those of the tracks that nothing here decodes (TrueHD in an MP4, `PlayableSound`): never the one kept playing.
+    @ObservationIgnored private var ungroupedUnplayable: Set<CMPersistentTrackID> = []
     /// The item has subtitle tracks of its own (shown in AVKit's Subtitles menu, not with the subtitle files).
     var hasOwnSubtitles: Bool { mediaTracks.legible?.options.isEmpty == false }
     /// A live stream: played at the live edge, without scrubbing.
@@ -1231,6 +1263,9 @@ import IOKit.pwr_mgt
     private var generation = UUID()
     init() {
         let player = AVQueuePlayer()
+        #if !os(macOS)
+        _ = Self.routeLog
+        #endif
         player.volume = PlaybackSession.storedVolume()
         volume = player.volume
         // An episode ends paused on its last frame; only a queued next episode makes the queue move on.
@@ -1468,6 +1503,8 @@ import IOKit.pwr_mgt
         guard let choice = AudioChoice.preference(for: scope) else { return false }
         guard let tracks, let index = choice.match(tracks.descriptions, in: scope) else { return false }
         let option = tracks.options[index]
+        // Not a dub nothing here decodes (TrueHD in an MP4): that one would play silence (`PlayableSound`).
+        guard option.isPlayable else { return false }
         if item.currentMediaSelection.selectedMediaOption(in: tracks.group) != option {
             item.select(option, in: tracks.group)
         }
@@ -1774,6 +1811,58 @@ import IOKit.pwr_mgt
         }
     }
 
+    /// What AVPlayer can hear in a file it plays by itself (`PlayableSound`), for the diagnostics log: a dub that decodes
+    /// in place of one that doesn't, and a file with no sound that decodes repackaged with its sound converted.
+    private func followSound(_ sound: PlayableSound.Check, item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) async {
+        let level = player.isMuted ? " muted" : player.volume < 1 ? " volume=\(player.volume)" : ""
+        Diagnostics.shared.record(sound.verdict == .plays ? .info : .warning, "player",
+                                  "audio codec=\(sound.summary) \(sound.verdict) route=\(Self.audioRoute())\(level)")
+        ungroupedUnplayable = sound.ungroupedUnplayable
+        if sound.verdict == .switched, !audioChoices.isEmpty { audioChoice = UngroupedAudio.playing(item) }
+        // An audio-only file is never silent for want of sound it lacks.
+        guard sound.needsConverting, (try? await item.asset.loadTracks(withMediaType: .video))?.isEmpty == false,
+              generation == active, self.item === item else { return }
+        repackageSound(item, channel: channel, url: url, generation: active)
+    }
+
+    /// A picture without sound AVPlayer decodes: DTS or MPEG audio in an MP4, which AVFoundation doesn't even list, or
+    /// TrueHD (#1774, #2119). It played silently for good. The repackager converts such sound to AAC
+    /// (`RemuxPlan.audioTrack`), so once it has found sound in the file, the file opens again through it where it was.
+    /// The picture plays on meanwhile, and a file with no sound at all plays on as it is.
+    private func repackageSound(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
+        Diagnostics.shared.record(.warning, "player", "no sound decodes; repackaging host=\(url.host() ?? "-")")
+        preparation = Task { [weak self] in
+            // A drive's stream (or a decrypting one) is the one AVPlayer still reads: a look that finds no sound leaves it open.
+            var shared: SharedRemuxSource?
+            let source: RemuxSource?
+            if url.scheme == CloudStreams.scheme { shared = await CloudStreams.remuxSource(for: url).map(SharedRemuxSource.init); source = shared }
+            else if url.scheme == CENCStreams.scheme { shared = await CENCStreams.remuxSource(for: url).map(SharedRemuxSource.init); source = shared }
+            else if url.isFileURL { source = try? Remux.fileSource(url) }
+            else { source = try? await Remux.httpSource(url, headers: channel.headers) }
+            var remuxed: URL?
+            if let source { remuxed = try? await Self.remux(source, channel: channel) }
+            guard let self, self.generation == active, !Task.isCancelled, self.item === item, let remuxed, Remux.hasSound(remuxed) else {
+                if let remuxed {
+                    if !Remux.hasSound(remuxed) { Diagnostics.shared.record(.info, "player", "no sound in the file; plays on as it is") }
+                    Remux.stop(remuxed)
+                }
+                return
+            }
+            shared?.adopt()
+            // Stop the silent picture and wait for the repackaged file, where it was.
+            let position = self.player.currentTime().seconds
+            self.player.pause(); self.loading = true; self.showsPicture = false; self.pictureReadiness.reset()
+            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 {
+                self.pendingResume = position
+                self.exactResume = true
+            }
+            self.detachItem(); self.observation = nil
+            self.configure(channel, url: remuxed, generation: active)
+            self.externalSubtitles.playing(remuxed)
+            self.automatic = remuxed
+        }
+    }
+
     /// HLS whose MPEG-TS segments carry HEVC plays its sound alone: AVPlayer drops that picture without an error (#292).
     /// An item that plays sound without a picture opens again repackaged (`HLSRemux`) where it was; a stream that can't
     /// be repackaged plays on as it is. A presentation size doesn't count as a picture (1280x720 for a 4K channel whose
@@ -1888,7 +1977,7 @@ import IOKit.pwr_mgt
     private func syncAudioTracks(_ item: AVPlayerItem, generation activeGeneration: UUID, force: Bool = false) {
         // Only where the file's own selection group doesn't cover its tracks: elsewhere AVFoundation picks the track,
         // and a moment of two enabled tracks in a rendition switch mustn't silence the viewer's choice.
-        if force || !audioChoices.isEmpty, UngroupedAudio.playOne(item, keeping: audioChoice) {
+        if force || !audioChoices.isEmpty, UngroupedAudio.playOne(item, keeping: audioChoice, avoiding: ungroupedUnplayable) {
             Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing one")
         }
         let ids = UngroupedAudio.trackIDs(item)
@@ -1898,12 +1987,16 @@ import IOKit.pwr_mgt
             let choices = await UngroupedAudio.choices(item)
             // The newest list only: tracks can change again while an older one loads.
             guard let self, self.generation == activeGeneration, self.item === item, self.observedAudioTracks == ids else { return }
-            if !choices.isEmpty, UngroupedAudio.playOne(item, keeping: self.audioChoice) {
+            if !choices.isEmpty, UngroupedAudio.playOne(item, keeping: self.audioChoice, avoiding: self.ungroupedUnplayable) {
                 Diagnostics.shared.record(.info, "player", "ungrouped audio tracks arrived late; playing one")
             }
             self.audioChoices = choices
-            self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
             if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
+            // Tracks that came after the sound was checked: one that decodes, not a remembered dub that doesn't.
+            if UngroupedAudio.playDecodable(item, avoiding: self.ungroupedUnplayable) {
+                Diagnostics.shared.record(.info, "player", "audio track that decodes chosen")
+            }
+            self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
         }
         if !force, item.status == .readyToPlay {
             Task { [weak self] in
@@ -1920,7 +2013,7 @@ import IOKit.pwr_mgt
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil; observedAudioTracks = []; liveReadyAt = nil
+        audioChoices = []; audioChoice = nil; observedAudioTracks = []; ungroupedUnplayable = []; liveReadyAt = nil
         mediaTracks.follow(item)
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         tracksObservation = item.observe(\.tracks, options: [.initial, .new]) { [weak self] item, _ in
@@ -1970,8 +2063,12 @@ import IOKit.pwr_mgt
                         guard let self, self.generation == activeGeneration, self.item === item, self.checkingPicture else { return }
                         // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
                         // jump to the saved position and play this item's sound with no picture until then (#515).
-                        if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady(); self.revealAudioIfPlaying() }
+                        if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration); return }
+                        self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady(); self.revealAudioIfPlaying()
+                        // The repackaged file converts its sound as well; this one is checked once its picture plays as it is.
+                        let sound = await PlayableSound.check(item)
+                        guard self.generation == activeGeneration, self.item === item else { return }
+                        await self.followSound(sound, item: item, channel: channel, url: url, generation: activeGeneration)
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
@@ -2701,6 +2798,8 @@ extension PlaybackSession {
                             } else if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
                                 _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
                             }
+                            // A dub that decodes, before it plays; one with no such sound is repackaged once it plays.
+                            if self.upcoming?.item === queued { _ = await PlayableSound.check(queued) }
                         }
                         if let intro, intro.enabled, intro.introEnd > 0, intro.introStart == 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
@@ -2771,7 +2870,7 @@ extension PlaybackSession {
         saveHistory(completed: !skipsToUpcoming, item: item)
         skipsToUpcoming = false
         let channel = upcoming.channel
-        Diagnostics.shared.record(.info, "player", "advance name=\(channel.name) ready=\(upcoming.item.status == .readyToPlay)")
+        Diagnostics.shared.record(.info, "player", "advance name=\(channel.name) ready=\(upcoming.item.status == .readyToPlay) route=\(Self.audioRoute())")
         // Let go of the finished episode's stream; the queued one's becomes the session's.
         if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }

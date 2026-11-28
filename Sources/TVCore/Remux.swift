@@ -88,6 +88,9 @@ public enum Remux {
     /// Whether `url` is served by the repackager: a file (`open`) or an HLS stream (`HLSRemux`).
     public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }
 
+    /// Whether the repackaged file has sound: a file AVPlayer hears none in is repackaged only when it does (#1774).
+    public static func hasSound(_ url: URL) -> Bool { session(url)?.plan.tracks.contains { $0.kind == .audio } ?? false }
+
     /// Whether `url` is an HLS stream the repackager serves (`HLSRemux`).
     public static func isSegmented(_ url: URL) -> Bool { identifier(url).flatMap(RemuxStore.shared.stream) != nil }
 
@@ -241,6 +244,26 @@ struct CloudRemuxSource: RemuxSource {
     var transfer: (received: Int64, host: String?)? { (stream.counter.value, stream.host) }
     func learned(duration seconds: Double) async { await stream.setDuration(seconds) }
     func close() async { await stream.clear() }
+}
+
+/// A file the repackager reads while AVPlayer still plays it, from the same stream (`CloudStreams`): closing it leaves
+/// that stream to the player until the repackaged file takes over (`adopt`). A look that finds nothing worth
+/// repackaging then doesn't stop the stream under the playing video.
+public final class SharedRemuxSource: RemuxSource, @unchecked Sendable {
+    private let base: any RemuxSource
+    private let lock = NSLock()
+    private var adopted = false
+    public init(_ base: any RemuxSource) { self.base = base }
+    public var length: Int64 { base.length }
+    public func read(at offset: Int64, count: Int) async throws -> Data { try await base.read(at: offset, count: count) }
+    public var transfer: (received: Int64, host: String?)? { base.transfer }
+    public func learned(duration seconds: Double) async { await base.learned(duration: seconds) }
+    /// The repackaged file plays now: closing it closes the stream.
+    public func adopt() { lock.withLock { adopted = true } }
+    public func close() async {
+        guard lock.withLock({ adopted }) else { return }
+        await base.close()
+    }
 }
 
 /// A link that answers every range with the rest of the file, as a plugin's drive proxy does: it downloads
