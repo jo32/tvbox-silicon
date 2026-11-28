@@ -103,6 +103,16 @@ public enum TelegramSource {
     private static func play(_ address: String, endpoint: TelegramEndpoint, http: HTTPClient) async throws -> [String: JSONValue] {
         let header: JSONValue = .object(["Referer": .string("https://t.me/"), "User-Agent": .string(HTTPClient.userAgent)])
         if CatalogClient.isDirectMedia(address) { return ["parse": .number(0), "url": .string(address), "header": header] }
+        // A Baidu share link is a cloud file behind a login and an extraction code. Save its first
+        // video into the signed-in drive and play that copy — web detection can never find a video
+        // in a share page, so this is what makes the line actually play (#2811).
+        if let url = try? WebAddress.resolve(address), let share = BaiduShareLink(url: url) {
+            return try await playBaiduShare(share, header: header)
+        }
+        // Other cloud drives can't be saved from here yet; say so instead of timing out.
+        if Self.isNetdiskShareLink(address) {
+            throw TVError.unsupported(L10n.text("This line is a cloud-drive share link, not a playable video. Open it in the drive's app, save the file to your own drive, then play it from Cloud Files."))
+        }
         if let url = try? WebAddress.resolve(address) {
             // Only Telegram's own pages go through the source's entry; an external "main line" is read directly,
             // so the entry never sees addresses that aren't Telegram's.
@@ -112,6 +122,36 @@ public enum TelegramSource {
             }
         }
         return ["parse": .number(1), "url": .string(address), "header": header]
+    }
+
+    /// Save the Baidu share's first video into Cloud Files and point the line at the saved copy, which
+    /// the player prepares from the signed-in account. A missing Baidu account is called out explicitly.
+    private static func playBaiduShare(_ share: BaiduShareLink, header: JSONValue) async throws -> [String: JSONValue] {
+        let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
+        guard accounts.baiduCookie?.contains("BDUSS") == true else {
+            throw TVError.unsupported(L10n.text("Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line."))
+        }
+        let saved = try await BaiduFiles.shared.saveFirstVideo(from: share)
+        var address = URLComponents()
+        address.scheme = CloudFiles.scheme
+        address.host = "file"
+        address.queryItems = [URLQueryItem(name: "drive", value: "baidu"),
+                              URLQueryItem(name: "id", value: saved.path),
+                              URLQueryItem(name: "name", value: saved.name)]
+        guard let url = address.url else { throw TVError.invalidURL }
+        return ["parse": .number(0), "url": .string(url.absoluteString), "header": header]
+    }
+
+    /// Cloud-drive share links (`/s/…`) point to files behind a login, not to web videos. They have
+    /// no media URL for the sniffer to find, so they are rejected here with an actionable message
+    /// instead of burning the 15-second detection clock. The hosts are the drives Yingxia supports
+    /// under Cloud Files, where a saved copy of the file can be played.
+    private static func isNetdiskShareLink(_ address: String) -> Bool {
+        guard let url = URL(string: address), let host = url.host()?.lowercased() else { return false }
+        let hosts = ["pan.baidu.com", "yun.baidu.com", "www.aliyundrive.com", "aliyundrive.com",
+                     "pan.quark.cn", "drive.uc.cn", "www.123pan.com", "115.com"]
+        guard hosts.contains(host) || host.hasSuffix(".pan.baidu.com") else { return false }
+        return url.path.hasPrefix("/s/")
     }
 
     /// The preview page's posts, newest first.

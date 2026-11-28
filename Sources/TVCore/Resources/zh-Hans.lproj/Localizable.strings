@@ -2357,6 +2357,7 @@
 "Telegram returned a page Yingxia can't read." = "Telegram 返回了映匣无法读取的页面。";
 "This Telegram post is no longer in the channel's public preview." = "这条 Telegram 帖子已不在频道的公开预览中。";
 "This Telegram post has no playable video." = "这条 Telegram 帖子没有可播放的视频。";
+"This line is a cloud-drive share link, not a playable video. Open it in the drive's app, save the file to your own drive, then play it from Cloud Files." = "这条线路是网盘分享链接，不是可播放的视频。请用对应网盘的 App 打开链接，把文件转存到自己的网盘，然后从「网盘文件」中播放。";
 "This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "这个 Telegram 频道的公开预览是空的。只有公开频道能添加，而且有些公开频道不在网页预览中显示帖子。";
 "Only public Telegram channels can be added. Invite links and private channels have no public preview." = "只能添加公开的 Telegram 频道。邀请链接和私密频道没有公开预览。";
 "Telegram post" = "Telegram 帖子";
@@ -2468,3 +2469,11 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片头不填开始即从头开始，片尾不填结束即到结尾。留空一段的时间表示不跳过该段，时间格式为 分:秒。";
 "Keep Controls Visible" = "始终显示控件";
 "Count back from the end" = "从结尾倒数";
+"Baidu Netdisk didn't return the share's file list. The link may have expired." = "百度网盘没有返回该分享的文件列表，链接可能已失效。";
+"This Baidu share has no video Yingxia can play." = "这个百度分享里没有映匣能播放的视频。";
+"Baidu Netdisk asks for a verification code for this share. Open the link in a browser first, then try again." = "百度网盘要求对此分享进行安全验证。请先在浏览器中打开链接完成验证，然后再试一次。";
+"Baidu Netdisk didn't accept this share's extraction code." = "百度网盘未接受此分享的提取码。";
+"Baidu Netdisk didn't return this share's files." = "百度网盘没有返回此分享的文件。";
+"Baidu couldn't save this share to your drive: %@" = "百度网盘无法将此分享转存到你的网盘：%@";
+"try again later" = "请稍后重试";
+"Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line." = "请先在「网盘账号」中登录百度网盘，再播放这条线路。";

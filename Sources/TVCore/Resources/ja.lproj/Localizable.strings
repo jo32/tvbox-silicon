@@ -2357,6 +2357,7 @@
 "Telegram returned a page Yingxia can't read." = "Telegram が読み取れないページを返しました。";
 "This Telegram post is no longer in the channel's public preview." = "この Telegram 投稿はチャンネルの公開プレビューにありません。";
 "This Telegram post has no playable video." = "この Telegram 投稿には再生できる動画がありません。";
+"This line is a cloud-drive share link, not a playable video. Open it in the drive's app, save the file to your own drive, then play it from Cloud Files." = "この回線はクラウドドライブの共有リンクで、再生できる動画ではありません。該当するドライブのアプリでリンクを開き、ファイルを自分のドライブに保存してから「クラウドファイル」で再生してください。";
 "This Telegram channel's public preview is empty. Only public channels can be added, and some public channels do not show their posts in the web preview." = "この Telegram チャンネルの公開プレビューは空です。公開チャンネルだけを追加できます。公開チャンネルの中には、ウェブプレビューに投稿を表示しないものもあります。";
 "Only public Telegram channels can be added. Invite links and private channels have no public preview." = "公開 Telegram チャンネルだけを追加できます。招待リンクとプライベートチャンネルには公開プレビューがありません。";
 "Telegram post" = "Telegram 投稿";
@@ -2468,3 +2469,11 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
 "Keep Controls Visible" = "コントロールを常に表示";
 "Count back from the end" = "終わりから数える";
+"Baidu Netdisk didn't return the share's file list. The link may have expired." = "Baidu Netdisk が共有のファイル一覧を返しませんでした。リンクの有効期限が切れている可能性があります。";
+"This Baidu share has no video Yingxia can play." = "この Baidu 共有には再生できる動画がありません。";
+"Baidu Netdisk asks for a verification code for this share. Open the link in a browser first, then try again." = "この共有には認証コードが必要です。先にブラウザでリンクを開いて認証してから、もう一度お試しください。";
+"Baidu Netdisk didn't accept this share's extraction code." = "Baidu Netdisk がこの共有の抽出コードを受け付けませんでした。";
+"Baidu Netdisk didn't return this share's files." = "Baidu Netdisk がこの共有のファイルを返しませんでした。";
+"Baidu couldn't save this share to your drive: %@" = "Baidu がこの共有をドライブに保存できませんでした: %@";
+"try again later" = "しばらくしてからもう一度お試しください";
+"Sign in to Baidu Netdisk under Cloud Drive Accounts to play this line." = "この回線を再生するには、「クラウドドライブのアカウント」で Baidu Netdisk にサインインしてください。";
