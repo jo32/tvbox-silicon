@@ -1,6 +1,11 @@
 {
  "about": "Lightweight JavaScript ports of TVBox csp_ JAR spiders. Each enabled class runs on the in-process QuickJS runtime (ScriptRuntime) instead of the JVM. Remove a class here to fall back to its JAR spider. Entries whose class ends in Guard come from the fty.json subscription; a port that fails falls back to its JAR spider.",
  "classes": {
+  "GenericHTML": {
+   "script": "GenericHTML.js",
+   "sites": "通用 HTML 源（ext 中配置选择器）",
+   "status": "browse/detail/search/play OK; driven by ext selectors"
+  },
   "App3Q": {
    "script": "App3Q.js",
    "sites": "三秋, 马猴",
