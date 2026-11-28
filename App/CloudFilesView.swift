@@ -84,6 +84,8 @@ struct CloudFolderView: View {
     let drive: CloudFilesDrive
     let folder: String
     let name: String
+    /// The show's name when this folder is only a season ("Season 1", "第一季"), so its episode files still find posters.
+    var parentTitle: String? = nil
     /// Opened from a poster layout: shows posters too, until the viewer picks the list here (#880).
     var inheritsPosters = false
     @State private var files: [CloudFile]?
@@ -152,6 +154,7 @@ struct CloudFolderView: View {
     // MARK: Posters (#880, #1465)
 
     private var showsPosters: Bool { posters ?? CloudFilesLayout.posters(drive, folder: folder) ?? inheritsPosters }
+    private var posterParent: String { MediaName(name, isFile: false).isSeasonOnly ? (parentTitle ?? name) : name }
 
     /// Whether the folder holds anything a poster suits: a folder, or a video that plays here.
     static func hasTitles(_ files: [CloudFile], _ drive: CloudFilesDrive) -> Bool {
@@ -178,6 +181,7 @@ struct CloudFolderView: View {
     private func posterGrid(_ files: [CloudFile], shown arranged: [CloudFile]) -> some View {
         let shown = arranged.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
         let client = CloudFilesSource.client(drive, origin: store.subscription?.origin ?? URL(string: "\(CloudFiles.scheme)://\(drive.key)")!)
+        let parent = posterParent
         return ScrollView {
             VStack(alignment: .leading, spacing: Layout.headerSpacing) {
                 #if os(tvOS)
@@ -185,8 +189,8 @@ struct CloudFolderView: View {
                 #endif
                 LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                     ForEach(shown) { file in
-                        CloudPosterLink(file: file, client: client, parent: name, play: file.isFolder ? nil : { play(file, in: files) }) {
-                            CloudFolderView(drive: drive, folder: file.id, name: file.name, inheritsPosters: true)
+                        CloudPosterLink(file: file, client: client, parent: parent, play: file.isFolder ? nil : { play(file, in: files) }) {
+                            CloudFolderView(drive: drive, folder: file.id, name: file.name, parentTitle: parent, inheritsPosters: true)
                         }
                     }
                 }
@@ -202,7 +206,7 @@ struct CloudFolderView: View {
     @ViewBuilder private func row(_ file: CloudFile, in files: [CloudFile]) -> some View {
         let label = FileRowLabel(symbol: file.symbol, tint: file.tint, title: file.name, subtitle: subtitle(file), chevron: file.isFolder, artwork: file.artwork)
         if file.isFolder {
-            FolderLink(drive: drive, folder: file.id, name: file.name) { label }
+            FolderLink(drive: drive, folder: file.id, name: file.name, parentTitle: name) { label }
                 .contextMenu { pinButton(file) }
         } else if drive.plays(file) {
             let item = FavoriteItem.cloud(FavoriteCloudFile(driveKey: drive.key, folderID: folder, folderName: name, fileID: file.id, fileName: file.name, size: file.size))
@@ -393,9 +397,10 @@ private struct FolderLink<Label: View>: View {
     let drive: CloudFilesDrive
     let folder: String
     let name: String
+    var parentTitle: String? = nil
     @ViewBuilder var label: Label
     var body: some View {
-        RouteLink { CloudFolderView(drive: drive, folder: folder, name: name) } label: { label }
+        RouteLink { CloudFolderView(drive: drive, folder: folder, name: name, parentTitle: parentTitle) } label: { label }
             .glassRow()
             .accessibilityIdentifier("files.open." + name)
     }
