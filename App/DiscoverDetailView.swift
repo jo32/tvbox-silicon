@@ -11,10 +11,12 @@ struct DiscoverDetailView: View {
     let item: TMDBCatalog.Item
     /// The name the card this page opened from had, when that was Douban's (#2744). Sources list a title under the
     /// name it was released here under ("可能的爱"), which TMDB's zh-TW name for it ("假如愛有如果") never matches.
-    var doubanName: String? = nil
+    var doubanItem: DoubanCatalog.Item? = nil
     @State private var model = DiscoverDetailModel()
     @State private var doubanScore: DoubanRating.Score?
     @State private var seasonRating: (title: CatalogRatingTitle, score: DoubanRating.Score)?
+    @State private var manualDouban: (key: String, match: DoubanRating.Match)?
+    @State private var editingDouban = false
     @State private var seasonNumber: Int?
     @State private var season: TMDBMatch.Season?
     @State private var loadingSeason = false
@@ -49,14 +51,14 @@ struct DiscoverDetailView: View {
     var searchName: String { doubanSearchName ?? item.name }
     /// Douban's name when it can be searched for: one that isn't blank.
     private var doubanSearchName: String? {
-        guard let name = doubanName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+        guard let name = doubanItem?.title.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
         return name
     }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
-    private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
+    private var catalogSeason: Int? { seasonNumber ?? doubanItem?.season ?? seasons.first?.number }
     #if os(iOS)
     private var displayedSeason: Int? {
-        if let seasonNumber { return seasonNumber }
+        if let explicit = seasonNumber ?? doubanItem?.season { return explicit }
         if let chosen = sources?.chosen { return SeasonTitles.parse(chosen.video.name).season ?? 1 }
         return catalogSeason
     }
@@ -76,29 +78,70 @@ struct DiscoverDetailView: View {
     }
 
     private var displayedDoubanScore: DoubanRating.Score? {
+        if let manualDouban, manualDouban.key == doubanChoiceKey { return manualDouban.match.score }
+        if DoubanRating.chosenSubject(for: doubanChoiceKey) != nil { return nil }
+        if usesDoubanItem { return doubanItem?.score }
         guard let title = seasonRatingTitle else { return doubanScore }
         if let seasonRating, seasonRating.title == title { return seasonRating.score }
         if title.season == 1, seasons.count == 1, doubanScore?.season == nil { return doubanScore }
         return doubanScore?.season == title.season ? doubanScore : nil
     }
 
+    private var usesDoubanItem: Bool {
+        guard let doubanItem else { return false }
+        if let season = doubanItem.season { return season == seasonRatingTitle?.season }
+        return seasonNumber == nil
+    }
+
+    private var doubanChoiceKey: String {
+        DoubanRating.catalogKey(tmdbID: item.id, mediaType: item.mediaType, season: seasonRatingTitle?.season)
+    }
+
+    private var doubanEditor: some View {
+        let key = doubanChoiceKey
+        let season = seasonRatingTitle?.season
+        let oneSeason = seasons.count == 1
+        let knownID = usesDoubanItem ? doubanItem?.id : nil
+        return DoubanSubjectEditor(current: DoubanRating.chosenSubject(for: key) ?? knownID, accepts: { match in
+            guard item.mediaType == match.mediaType else { return false }
+            return match.season == season || (match.season == nil && season == 1 && oneSeason)
+        }) { match in
+            DoubanRating.choose(match, for: key)
+            manualDouban = (key, match)
+        }
+    }
+
     var body: some View {
         let selectedRatingTitle = seasonRatingTitle
+        let choiceKey = doubanChoiceKey
         page
         .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
         .onAppear { onScreen = true; startSources() }
         .onDisappear { onScreen = false; stopSources() }
         .task(id: item.key) { await model.load(item) }
         .task(id: item.key) {
+            guard doubanItem == nil else { return }
             doubanScore = nil
             let score = await CatalogRatingTitle(item).doubanScore()
             if !Task.isCancelled { doubanScore = score }
         }
         .task(id: selectedRatingTitle) {
-            guard let title = selectedRatingTitle else { return }
+            guard !usesDoubanItem, DoubanRating.chosenSubject(for: choiceKey) == nil,
+                  let title = selectedRatingTitle else { return }
             let score = await title.doubanScore()
             if !Task.isCancelled { seasonRating = score.map { (title, $0) } }
         }
+        .task(id: choiceKey) {
+            guard let id = DoubanRating.chosenSubject(for: choiceKey) else { return }
+            guard let match = try? await DoubanRating.subject(id), !Task.isCancelled,
+                  DoubanRating.chosenSubject(for: choiceKey) == match.id else { return }
+            manualDouban = (choiceKey, match)
+        }
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $editingDouban) { doubanEditor }
+        #else
+        .sheet(isPresented: $editingDouban) { doubanEditor }
+        #endif
         .onChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
         }
@@ -297,28 +340,29 @@ struct DiscoverDetailView: View {
     private func ratings(spacing: CGFloat, scoreSize: CGFloat, voteSize: CGFloat) -> some View {
         let tmdbRating = details?.rating ?? item.rating
         let doubanScore = displayedDoubanScore
-        if tmdbRating != nil || doubanScore != nil {
-            HStack(spacing: 2 * spacing) {
-                if let tmdbRating {
-                    HStack(spacing: spacing) {
-                        TMDBBadge()
-                        Text(tmdbRating, format: .number.precision(.fractionLength(1)))
-                        if let votes = details?.voteCount {
-                            Text("(\(votes))").font(.system(size: voteSize, design: .rounded)).opacity(0.6)
-                        }
+        HStack(spacing: 2 * spacing) {
+            if let tmdbRating {
+                HStack(spacing: spacing) {
+                    TMDBBadge()
+                    Text(tmdbRating, format: .number.precision(.fractionLength(1)))
+                    if let votes = details?.voteCount {
+                        Text("(\(votes))").font(.system(size: voteSize, design: .rounded)).opacity(0.6)
                     }
-                }
-                if let doubanScore {
-                    HStack(spacing: spacing) {
-                        Text(doubanScore.label).fontWeight(.semibold)
-                        Text(doubanScore.value, format: .number.precision(.fractionLength(1)))
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("rating.douban.\(item.key)")
                 }
             }
-            .font(.system(size: scoreSize, design: .rounded))
+            if let doubanScore {
+                HStack(spacing: spacing) {
+                    Text(doubanScore.label).fontWeight(.semibold)
+                    Text(doubanScore.value, format: .number.precision(.fractionLength(1)))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("rating.douban.\(item.key)")
+            }
+            Button { editingDouban = true } label: { Image(systemName: "link") }
+                .accessibilityLabel(L10n.text("Match Douban Title"))
+                .accessibilityIdentifier("discover.douban.match")
         }
+        .font(.system(size: scoreSize, design: .rounded))
     }
 
     private var metadata: String {

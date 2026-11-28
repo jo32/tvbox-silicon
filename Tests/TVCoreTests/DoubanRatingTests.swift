@@ -67,6 +67,44 @@ import Testing
                                                season: 2, year: 2025, session: session) == nil)
         #expect(DoubanRating.cachedScore(tmdbID: id, mediaType: .tv) == nil)
     }
+
+    @Test func acceptsOnlyNumericIDsAndDoubanSubjectLinks() {
+        #expect(DoubanRating.subjectID("38377058") == "38377058")
+        #expect(DoubanRating.subjectID("https://movie.douban.com/subject/38377058/?x=1") == "38377058")
+        #expect(DoubanRating.subjectID("https://m.douban.com/tv/subject/38377058/") == "38377058")
+        #expect(DoubanRating.subjectID("https://movie.douban.com.example/subject/38377058/") == nil)
+        #expect(DoubanRating.subjectID("https://movie.douban.com/celebrity/38377058/") == nil)
+        #expect(DoubanRating.subjectID("１２３") == nil)
+    }
+
+    @Test func resolvesSourceSeasonsAndExplicitIDsWithoutTMDB() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SeasonRatingProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let second = Video(id: "source-2", name: "法警小队 第2季", year: "2026", category: "电视剧")
+        let match = try await DoubanRating.sourceMatch(second, listVideo: second, key: UUID().uuidString, session: session)
+        #expect(match?.id == "2")
+        #expect(match?.score == DoubanRating.Score(value: 8.1, count: 123, season: 2))
+
+        let origin = URL(string: "https://example.com")!
+        let supplied = try #require(Video(json: ["vod_id": .string("foo"), "vod_douban_url": .string(
+            "https://movie.douban.com/subject/2/")], origin: origin))
+        #expect(supplied.doubanID == "2")
+        let direct = try await DoubanRating.sourceMatch(supplied, listVideo: supplied, key: UUID().uuidString, session: session)
+        #expect(direct?.id == "2")
+        #expect(direct?.season == 2)
+
+        let wrong = Video(id: "source-3", name: second.name, year: "2025")
+        let key = UUID().uuidString
+        #expect(try await DoubanRating.sourceMatch(wrong, listVideo: wrong, key: key, session: session) == nil)
+        let selection = try #require(direct)
+        DoubanRating.choose(selection, for: key)
+        defer { UserDefaults.standard.removeObject(forKey: "douban.subject-choices.\(key)") }
+        #expect(DoubanRating.chosenSubject(for: key) == selection.id)
+        #expect(try await DoubanRating.sourceMatch(wrong, listVideo: wrong, key: key, session: session) == selection)
+    }
 }
 
 private final class SeasonRatingProtocol: URLProtocol, @unchecked Sendable {
@@ -85,7 +123,7 @@ private final class SeasonRatingProtocol: URLProtocol, @unchecked Sendable {
             """#
         case ("m.douban.com", "/rexxar/api/v2/tv/1"):
             body = #"{"title":"法警小队 第一季","type":"tv","year":"2026","rating":{"value":6.4,"count":123}}"#
-        case ("m.douban.com", "/rexxar/api/v2/tv/2"):
+        case ("m.douban.com", "/rexxar/api/v2/tv/2"), ("m.douban.com", "/rexxar/api/v2/movie/2"):
             body = #"{"title":"法警小队 第二季","type":"tv","year":"2026","rating":{"value":8.1,"count":123}}"#
         case ("m.douban.com", "/rexxar/api/v2/tv/3"):
             body = #"{"title":"另一部剧 第二季","type":"tv","year":"2026","rating":{"value":9.0,"count":123}}"#

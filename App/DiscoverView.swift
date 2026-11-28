@@ -1842,7 +1842,7 @@ private struct DoubanTitleView: View {
     var body: some View {
         Group {
             // Douban's name goes with it: a source lists the title by the name it was released under (#2744).
-            if let match { DiscoverDetailView(item: match, doubanName: item.title) }
+            if let match { DiscoverDetailView(item: match, doubanItem: item) }
             else if looked { card }
             else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }

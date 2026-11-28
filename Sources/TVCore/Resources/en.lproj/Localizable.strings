@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";
 "Keep Controls Visible" = "Keep Controls Visible";
 "Count back from the end" = "Count back from the end";
+
+"Match Douban Title" = "Match Douban Title";
+"Douban link or ID" = "Douban link or ID";
+"Could not find a matching Douban title." = "Could not find a matching Douban title.";

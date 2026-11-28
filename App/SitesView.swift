@@ -2282,6 +2282,8 @@ struct VideoDetailView: View {
     @State private var queuedNotice: Int?
     /// TMDB's details for the video (TMDBViews.swift). The page shows the source's own until they are in, then fades them in.
     @State private var tmdb = TMDBLookup()
+    @State private var sourceDouban: DoubanRating.Match?
+    @State private var editingDouban = false
     private var flags: [String] {
         var seen = Set<String>()
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
@@ -2367,6 +2369,20 @@ struct VideoDetailView: View {
         }
         .onDisappear { requestTask?.cancel() }
         .task(id: detail?.id) { await startTMDB() }
+        .task(id: detail?.id) {
+            guard let detail else { return }
+            let key = doubanKey
+            let choice = DoubanRating.chosenSubject(for: key)
+            let match = try? await DoubanRating.sourceMatch(detail, listVideo: video, key: key)
+            if !Task.isCancelled, DoubanRating.chosenSubject(for: key) == choice {
+                sourceDouban = match
+            }
+        }
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $editingDouban) { doubanEditor }
+        #else
+        .sheet(isPresented: $editingDouban) { doubanEditor }
+        #endif
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         #if os(iOS)
         .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
@@ -2732,6 +2748,29 @@ struct VideoDetailView: View {
     /// The lookup's progress or its question, then TMDB's cast, facts and notice, under the page's own content.
     @ViewBuilder private var tmdbStatus: some View {
         TMDBLookupStatus(lookup: tmdb)
+        if detail != nil {
+            Button { editingDouban = true } label: { Label(L10n.text("Match Douban Title"), systemImage: "link") }
+                .accessibilityIdentifier("detail.douban.match")
+        }
+    }
+    private var doubanKey: String {
+        DoubanRating.sourceKey(origin: client.origin, site: client.site, videoID: video.id)
+    }
+    private var doubanEditor: some View {
+        DoubanSubjectEditor(current: DoubanRating.chosenSubject(for: doubanKey) ?? sourceDouban?.id) { match in
+            DoubanRating.choose(match, for: doubanKey)
+            sourceDouban = match
+        }
+    }
+    private var doubanRating: DoubanRating.Score? {
+        if let sourceDouban { return sourceDouban.score }
+        if DoubanRating.chosenSubject(for: doubanKey) != nil || detail?.doubanID != nil || video.doubanID != nil { return nil }
+        if let season = tmdb.answer?.match?.season ?? SeasonTitles.parse(detail?.name ?? video.name).season,
+           let resolved = tmdb.douban?.season, resolved != season { return nil }
+        return tmdb.douban
+    }
+    private var ratingFacts: String {
+        tmdb.details?.facts(douban: doubanRating) ?? doubanRating?.caption ?? ""
     }
     @ViewBuilder private var tmdbExtras: some View {
         if let details = tmdb.details {
@@ -2766,10 +2805,14 @@ struct VideoDetailView: View {
     /// TMDB's backdrop banner once its picture is in, the source's cover and title until then.
     @ViewBuilder private var tmdbHero: some View {
         if let details = tmdb.details, let backdrop = details.backdrop, backdrop == loadedBackdrop {
-            let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "") { playControl }
+            let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "",
+                                    suppliedDouban: doubanRating, fetchesDouban: false) { playControl }
             banner.frame(height: bannerHeight).transition(.opacity)
         } else {
-            hero.transition(.opacity)
+            VStack(alignment: .leading, spacing: 8) {
+                hero
+                if !ratingFacts.isEmpty { Text(ratingFacts).foregroundStyle(.secondary) }
+            }.transition(.opacity)
         }
     }
     private var headerLayout: AnyLayout {
@@ -2946,7 +2989,7 @@ struct VideoDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(video.name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
                             if !video.remarks.isEmpty { Text(video.remarks).font(.subheadline).foregroundStyle(.secondary) }
-                            if case let facts = tmdb.facts, !facts.isEmpty {
+                            if case let facts = ratingFacts, !facts.isEmpty {
                                 Text(facts).font(.subheadline).foregroundStyle(.secondary).transition(.opacity)
                             }
                             Spacer(minLength: 0)
@@ -3505,8 +3548,7 @@ struct VideoDetailView: View {
     /// TMDB's facts (2026 · Drama · ★ 7.0) once they are in, else the source's remarks and year; then the source.
     private var watchFacts: String {
         let video = currentVideo()
-        let facts = tmdb.facts
-        let lead = facts.isEmpty ? [video.remarks, video.year ?? ""] : [facts]
+        let lead = tmdb.details == nil ? [video.remarks, video.year ?? "", ratingFacts] : [ratingFacts]
         return (lead + [SourceLabel(client.site.name).text]).filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -4721,9 +4763,9 @@ private struct TVCoverBackdrop: View {
 extension VideoDetailView {
     /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name: the line under the hero's title.
     private var heroFacts: String {
-        if !tmdb.facts.isEmpty { return tmdb.facts }
+        if tmdb.details != nil, !ratingFacts.isEmpty { return ratingFacts }
         let current = currentVideo()
-        return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
+        return [current.remarks, current.year ?? "", client.site.name, ratingFacts].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 

@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片头不填开始即从头开始，片尾不填结束即到结尾。留空一段的时间表示不跳过该段，时间格式为 分:秒。";
 "Keep Controls Visible" = "始终显示控件";
 "Count back from the end" = "从结尾倒数";
+
+"Match Douban Title" = "匹配豆瓣条目";
+"Douban link or ID" = "豆瓣链接或 ID";
+"Could not find a matching Douban title." = "找不到匹配的豆瓣条目。";
