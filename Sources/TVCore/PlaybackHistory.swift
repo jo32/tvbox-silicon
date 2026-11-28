@@ -25,6 +25,24 @@ public struct PlaybackHistoryContext: Codable, Hashable, Sendable {
     public var posterHeaders: [String: String]?
     public var id: String { EpisodeSkipSettings.scope(origin: origin, source: sourceKey, video: videoID) }
 
+    /// A looser identity than `id` (#2064): the origin with its tail slash, fragment and query dropped
+    /// and the host lowercased, plus the source and video, so a title that a second device or a
+    /// re-addressed subscription saves under a cosmetically different origin collapses into one line.
+    /// It never replaces `id` (the cloud sync and local caches key on that); it only merges near-dups.
+    public var dedupKey: String {
+        var parts = [String]()
+        if let host = origin.host, !host.isEmpty {
+            parts.append(host.lowercased())
+            if let port = origin.port { parts.append("\(port)") }
+        } else {
+            parts.append(origin.absoluteString)
+        }
+        if let path = origin.path, !path.isEmpty { parts.append(path.hasSuffix("/") ? String(path.dropLast()) : path) }
+        parts.append(sourceKey)
+        parts.append(videoID)
+        return parts.joined(separator: "␟")
+    }
+
     /// The title the player shows: the video and its episode, except when the two
     /// are the same and would read twice ("第1集 · 第1集", #2363).
     public var displayName: String { Self.displayName(video: videoName, episode: episodeName) }
@@ -77,6 +95,11 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
     public let duration: Double
     public let updatedAt: Date
     public var id: String { context.id }
+    /// A looser identity than `id` for merging near-duplicates that the same title takes on across
+    /// devices or subscription addresses (#2064): the origin with its tail slash, fragment and query
+    /// dropped and host lowercased, plus the source and video. `id` (and the cloud sync that keys on
+    /// it) is left untouched, so this only collapses near-duplicates locally.
+    public var dedupKey: String { context.dedupKey }
     public var completed: Bool { duration > 0 && position >= duration - 1 }
     public var resumePosition: Double { completed ? 0 : position }
     public var progress: Double { duration > 0 ? min(1, max(0, position / duration)) : 0 }
@@ -164,11 +187,24 @@ extension PlaybackHistoryEntry {
             entries = latest; entriesRevision = persistence.latestRevision
         } else if let data = try? Data(contentsOf: self.file), data.count <= 2 * 1024 * 1024,
            let decoded = try? JSONDecoder().decode([PlaybackHistoryEntry].self, from: data) {
-            var seen = Set<String>()
-            entries = Array(decoded.filter { Self.valid($0) }.sorted { $0.updatedAt > $1.updatedAt }
-                .filter { seen.insert($0.id).inserted }.prefix(Self.limit))
+            entries = Self.deduplicate(Array(decoded.filter { Self.valid($0) }))
         }
         prioritizeCaches()
+    }
+
+    /// Collapse near-duplicates saved under a cosmetically different origin (#2064), keeping the newest of
+    /// each `dedupKey`. The persisted file may still hold the older exact-`id` lines; this trims them in memory.
+    private static func deduplicate(_ entries: [PlaybackHistoryEntry]) -> [PlaybackHistoryEntry] {
+        var seenExact = Set<String>()
+        var kept = [String: PlaybackHistoryEntry]()
+        let ordered = entries.sorted { ($0.updatedAt, $0.position) > ($1.updatedAt, $1.position) }
+        let next = ordered.compactMap { entry -> PlaybackHistoryEntry? in
+            guard seenExact.insert(entry.id).inserted else { return nil }
+            if let existing = kept[entry.dedupKey], existing.updatedAt >= entry.updatedAt { return nil }
+            kept[entry.dedupKey] = entry
+            return entry
+        }
+        return Array(next.prefix(limit))
     }
 
     public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double, now: Date = Date()) {
@@ -184,6 +220,13 @@ extension PlaybackHistoryEntry {
         if let old = previous, old.context == context,
            abs(old.position - entry.position) < 0.25, old.duration == duration { return }
         entries.removeAll { $0.id == entry.id }
+        // A near-duplicate saved under a cosmetically different origin (a second device, or a
+        // re-addressed subscription, #2064) loses to the one just recorded; its caches are dropped.
+        entries.removeAll { item in
+            guard item.dedupKey == entry.dedupKey, item.id != entry.id else { return false }
+            clean(item)
+            return true
+        }
         entries.insert(entry, at: 0)
         let dropped = entries.dropFirst(Self.limit)
         for entry in dropped { clean(entry) }
@@ -196,8 +239,18 @@ extension PlaybackHistoryEntry {
     public func adopt(_ synced: [PlaybackHistoryEntry]) {
         refreshPendingEntries()
         var seen = Set<String>()
-        let next = Array(synced.filter { Self.valid($0) }.sorted { $0.updatedAt > $1.updatedAt }
-            .filter { seen.insert($0.id).inserted }.prefix(Self.limit))
+        var seenNear = [String: PlaybackHistoryEntry]()
+        let next = Array(synced.filter { Self.valid($0) }
+            .sorted { ($0.updatedAt, $0.position) > ($1.updatedAt, $1.position) }
+            .compactMap { entry in
+                guard seen.insert(entry.id).inserted else { return nil }
+                // Across devices the same title can sit under a cosmetically different origin (#2064);
+                // keep the most recent of each near-duplicate and drop the rest, as if removed here.
+                if let kept = seenNear[entry.dedupKey], kept.updatedAt >= entry.updatedAt { return nil }
+                if let kept = seenNear[entry.dedupKey] { clean(kept) }
+                seenNear[entry.dedupKey] = entry
+                return entry
+            }.prefix(Self.limit))
         let kept = Set(next.map(\.id))
         for entry in entries where !kept.contains(entry.id) { clean(entry) }
         entries = next
