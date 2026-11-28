@@ -698,7 +698,7 @@ private struct MacRouteDestinations: ViewModifier {
     @Environment(\.openRoute) private var openRoute
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute) }
+        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute).assistantPushedPage() }
         #else
         content.navigationDestination(for: Route.self) { $0.build().environment(\.openRoute, openRoute) }
         #endif

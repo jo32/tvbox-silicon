@@ -67,7 +67,8 @@ import TVCore
         }
         let cards: [AgentCard] = found.prefix(20).compactMap { match in
             let (id, title, page): (String, String, String)
-            if let setting = match.setting { (id, title, page) = (setting.id, setting.title(), setting.page()) }
+            // A setting with no row in Settings (one in a video page's menu) has no card to open.
+            if let setting = match.setting { guard opens(setting) else { return nil }; (id, title, page) = (setting.id, setting.title(), setting.page()) }
             else if let link = match.link { (id, title, page) = (link.id, link.title(), link.page()) }
             else { return nil }
             return AgentCard(id: id, title: title, subtitle: page, play: ["id": .str(id)], action: "settings_open", symbol: "gearshape", square: true)
@@ -85,6 +86,9 @@ import TVCore
         return (L10n.text("Change “%@” to %@?", setting.title(), new), L10n.text("Now: %@", old))
     }
 
+    /// Whether `settings_open` can show the setting: it has a row (or a page) in Settings.
+    static func opens(_ setting: AgentSetting) -> Bool { setting.anchor != nil || setting.subpage != nil }
+
     /// Opens Settings at a setting's row or a Settings page.
     static func open(_ id: String, _ context: AgentToolContext) async throws -> JSONValue {
         let store = context.store
@@ -96,6 +100,16 @@ import TVCore
             try await AgentNavigator.push(Route(build: subpage), in: .settings, store: store)
             return .obj(["opened": .str(id), "title": .str(title)])
         }
+        if let setting, !opens(setting) {
+            throw AgentToolError("“\(title)” has no row in Settings: it is in a video page's menu. Change it with settings_set.")
+        }
+        #if os(iOS)
+        // A row on the Playback page: that page, where the row is, rather than its link in Settings.
+        if setting?.anchor == "playback" {
+            try await AgentNavigator.push(Route { AnyView(PlaybackSettingsView()) }, in: .settings, store: store)
+            return .obj(["opened": .str(id), "title": .str(title), "page": .str(setting?.page() ?? "")])
+        }
+        #endif
         let changes = store.section != .settings
         try AgentNavigator.open(.settings, in: store)
         if changes { try? await Task.sleep(for: .milliseconds(450)) }

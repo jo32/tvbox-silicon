@@ -255,7 +255,8 @@ import TVCore
         list.append(AgentSetting(
             id: "start_speed", key: PlaybackSpeed.key, title: { L10n.text("Start Speed") }, titleKey: "Start Speed", page: playback, kind: .choice,
             choices: { PlaybackSpeed.speeds.map { .init(value: .number(Double($0)), label: PlaybackSpeed.speedLabel($0)) } },
-            keywords: ["speed", "playback speed", "倍速", "速度"], anchor: "playback",
+            // Its own row on the Mac; on iPhone and iPad it is on the Playback page.
+            keywords: ["speed", "playback speed", "倍速", "速度"], anchor: AppTools.platform == "macOS" ? "startSpeed" : "playback",
             read: { _ in .number(Double(PlaybackSpeed.load())) },
             write: { _, value in if let speed = value.string.flatMap(Float.init) { PlaybackSpeed.save(speed) } }))
         list.append(flag("show_video_info", PlaybackInfo.key, "Show Video Info", page: playback, standard: false, anchor: "showVideoInfo",

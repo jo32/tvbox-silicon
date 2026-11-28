@@ -72,6 +72,36 @@ struct AssistantToolbarButton: View {
 }
 #endif
 
+#if os(macOS)
+extension View {
+    /// The panel as the Mac's inspector, beside the page.
+    fileprivate func assistantInspector(enabled: Bool, assistant: AssistantController) -> some View {
+        inspector(isPresented: Binding(get: { enabled && assistant.isOpen }, set: { assistant.isOpen = $0 })) {
+            AssistantPanel()
+                .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
+        }
+    }
+
+    /// A page pushed on the Mac's detail stack: the toolbar's sparkles, and the panel beside it. The inspector on the
+    /// stack (`assistantHost`) is only drawn beside its root page, so an open panel vanished when a page was opened.
+    func assistantPushedPage() -> some View { modifier(AssistantPushedPage()) }
+}
+
+private struct AssistantPushedPage: ViewModifier {
+    @Environment(AssistantController.self) private var assistant
+    @AppStorage(AgentSettings.enabledKey) private var enabled = false
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                if enabled && !assistant.isOpen {
+                    ToolbarItem(placement: .primaryAction) { AssistantToolbarButton() }
+                }
+            }
+            .assistantInspector(enabled: enabled, assistant: assistant)
+    }
+}
+#endif
+
 #if os(tvOS)
 /// Apple TV's round button at the top of Watch Now and Discover, as Discover's search button is.
 struct AssistantTVButton: View {
@@ -150,10 +180,7 @@ private struct AssistantHost: ViewModifier {
         #elseif os(macOS)
         content
             .onAppear { assistant.attach(store) }
-            .inspector(isPresented: Binding(get: { enabled && assistant.isOpen }, set: { assistant.isOpen = $0 })) {
-                AssistantPanel()
-                    .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
-            }
+            .assistantInspector(enabled: enabled, assistant: assistant)
         #else
         content
             .onAppear { assistant.attach(store) }

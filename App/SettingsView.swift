@@ -568,6 +568,7 @@ struct FormSettingsView: View {
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(MacPlayerWindowSize.key) private var playerWindowSize = MacPlayerWindowSize.keep.rawValue
+    @State private var startSpeed = PlaybackSpeed.load()
     @State private var skipsIntros = false
     @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
     /// The language picked here, "" for the system's.
@@ -994,6 +995,16 @@ struct FormSettingsView: View {
                 }
                 .settingsSwitch()
                 .settingsAnchor(.showVideoInfo)
+                // The speed every new title starts at, as on iPhone and iPad (the player's own menu changes this title's).
+                Picker(selection: Binding(get: { startSpeed }, set: { startSpeed = $0; PlaybackSpeed.save($0) })) {
+                    ForEach(PlaybackSpeed.speeds, id: \.self) { Text(PlaybackSpeed.speedLabel($0)).tag($0) }
+                } label: {
+                    FormLabel(symbol: "speedometer", tint: .orange, title: L10n.text("Start Speed"),
+                              subtitle: L10n.text("Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes."))
+                }
+                .onAppear { startSpeed = PlaybackSpeed.load() }
+                .accessibilityIdentifier("settings.playbackSpeed")
+                .settingsAnchor(.startSpeed)
                 Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
                                           set: { playerWindowSize = $0.rawValue })) {
                     ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -1394,6 +1405,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case bilibiliCast
     case playOn
     case showVideoInfo
+    case startSpeed
     case playerWindowSize
     case skipIntroOutro
     case subtitleStyle
@@ -1440,7 +1452,7 @@ enum SettingsRowAnchor {
             .addSubscription, .livePlugins, .comicSources, .bookSources, .bilibili, .douyin, .cloudDrive, .profiles,
             .iCloudSync, .watchNow, .appIcon, .colorTheme, .appearance, .playback, .playURL, .editTabBar, .launchPage,
             .tabBarLabels, .collapseTabBar, .language, .showDanmaku, .danmakuSettings, .bilibiliCast, .playOn,
-            .showVideoInfo, .playerWindowSize, .skipIntroOutro, .subtitleStyle, .subtitleSources, .sharperPicture,
+            .showVideoInfo, .startSpeed, .playerWindowSize, .skipIntroOutro, .subtitleStyle, .subtitleSources, .sharperPicture,
             .smoothMotion, .localCache, .jarRuntime, .diagnostics, .privacy, .errorReports, .tmdbLookup,
             .softwareUpdate, .autoInstallUpdates, .releaseNotes, .licenses,
         ]
@@ -1745,6 +1757,8 @@ private extension FormSettingsView {
             keywords: ["play on", "handoff", "cast", "dlna", "接力", "投屏", "设备"])
         add(.showVideoInfo, title: L10n.text("Show Video Info"), section: secPlayback, subtitle: SettingsNote.playbackInfo,
             keywords: ["info", "fps", "bitrate", "codec", "resolution", "信息", "码率", "帧率", "分辨率"])
+        add(.startSpeed, title: L10n.text("Start Speed"), section: secPlayback,
+            keywords: ["speed", "playback speed", "rate", "倍速", "速度", "播放速度"])
         add(.playerWindowSize, title: L10n.text("Default Window Size"), section: secPlayback,
             keywords: ["window", "size", "default", "resize", "窗口", "大小", "默认尺寸"])
         add(.skipIntroOutro, title: L10n.text("Automatically skip intro and outro"), section: secPlayback, subtitle: SettingsNote.introOutro,
