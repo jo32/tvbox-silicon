@@ -760,14 +760,18 @@ struct NovelReaderView: View {
     }
 
     /// The page colour, with the picked picture showing through it (#1265). The picture fills the page without
-    /// sizing it, and is decoded once, so turning draws nothing new.
-    private var pageBackground: some View {
-        colors.background.overlay {
-            if let image = store.backgroundImage {
+    /// sizing it, and is decoded once, so turning draws nothing new. Clipped only when a picture is set: on iOS 18
+    /// a bare `Color` with `.clipped()` keeps its layer pinned at the screen's origin while `.offset(x:)` slides the
+    /// rest of the page, covering the page underneath (#2713).
+    @ViewBuilder private var pageBackground: some View {
+        if let image = store.backgroundImage {
+            colors.background.overlay {
                 Image(decorative: image, scale: 1).resizable().scaledToFill().opacity(store.backgroundOpacity)
             }
+            .clipped()
+        } else {
+            colors.background
         }
-        .clipped()
     }
 
     private func remaining(_ pages: Int) -> String {
