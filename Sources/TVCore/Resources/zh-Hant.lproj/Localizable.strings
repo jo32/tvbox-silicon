@@ -2132,6 +2132,9 @@
 "Follow Show" = "追劇";
 "Unfollow Show" = "取消追劇";
 "Following Show" = "已追劇";
+"Favorite Movies" = "收藏的電影";
+"Favorited" = "已收藏";
+"Add to Favorites" = "加入收藏";
 "Following Calendar" = "追劇日曆";
 "Air Calendar" = "播出日曆";
 "Episode %@ / %@" = "第 %@/%@ 集";

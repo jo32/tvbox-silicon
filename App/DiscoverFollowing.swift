@@ -69,6 +69,35 @@ struct DiscoverFollowButton: View {
     }
 }
 
+/// The page's Favorite Movie button (#2782), the same capsule as Follow Show: a movie is favorited as the TMDB title
+/// itself, without looking for a source to play it from.
+struct DiscoverFavoriteButton: View {
+    @Environment(Store.self) private var store
+    let item: TMDBCatalog.Item
+    var body: some View {
+        let favorited = store.followedTitles.contains(item.id)
+        Button { DiscoverFollowing.toggleFavorite(item, in: store) } label: {
+            let label = HStack(spacing: 5) {
+                Image(systemName: favorited ? "checkmark" : "plus").font(.system(size: 14, weight: .bold))
+                Text(L10n.text(favorited ? "Favorited" : "Favorite")).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            }
+            .fixedSize()
+            .padding(.horizontal, 16)
+            .frame(height: 54)
+            if favorited {
+                label.foregroundStyle(.black).background(Capsule().fill(.white))
+            } else {
+                label.glassSurface(.regular, in: Capsule())
+            }
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: favorited)
+        .help(L10n.text(favorited ? "Remove from Favorites" : "Add to Favorites"))
+        .accessibilityLabel(L10n.text(favorited ? "Remove from Favorites" : "Add to Favorites"))
+        .accessibilityIdentifier("discover.detail.favorite")
+    }
+}
+
 /// "Air Calendar · 11-16 · Episode 7-8 / 30" over a series' episodes while its latest season airs.
 struct DiscoverAirCalendarRow: View {
     let schedule: AirSchedule
@@ -100,6 +129,15 @@ extension DiscoverFollowing {
         let following = !store.followedShows.contains(item.id)
         withAnimation(.snappy(duration: 0.2)) { store.followedShows.toggle(item) }
         DiscoverToast.shared.show(following: following)
+    }
+
+    /// Favorites or unfavorites a movie: the title page's button on the phone and on the TV (#2782).
+    @MainActor static func toggleFavorite(_ item: TMDBCatalog.Item, in store: Store) {
+        withAnimation(.snappy(duration: 0.2)) { store.followedTitles.toggle(item) }
+    }
+
+    @MainActor static func unfavorite(_ id: Int, in store: Store) {
+        withAnimation(.snappy(duration: 0.25)) { store.followedTitles.unfavorite(id) }
     }
 
     @MainActor static func unfollow(_ id: Int, in store: Store) {
@@ -648,6 +686,59 @@ struct DiscoverFollowingTile: View {
                 #endif
                 .foregroundStyle(Brand.onAccent).background(Brand.accent, in: Capsule())
         }
+    }
+}
+
+/// A favorited movie as Discover draws its titles: the cover, the name and the year (#2782).
+struct DiscoverFavoriteTile: View {
+    let title: FollowedTitle
+    var width: CGFloat = DiscoverLayout.posterWidth
+    var body: some View {
+        #if os(tvOS)
+        VStack(spacing: 5) {
+            PosterImage(url: title.poster).frame(width: width, height: width * 1.5)
+            VStack(spacing: 0) {
+                Text(title.name).font(.system(size: DiscoverLayout.caption))
+                Text(title.year.map(String.init) ?? " ").font(.system(size: DiscoverLayout.secondary, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            }.lineLimit(1).cardCaption()
+        }.frame(width: width)
+        #else
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.aspectRatio(2.0 / 3, contentMode: .fit)
+                .overlay { PosterImage(url: title.poster) }
+                .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title.name).font(.system(size: DiscoverLayout.caption)).lineLimit(1)
+                Text(title.year.map(String.init) ?? " ").lineLimit(1)
+                    .font(.system(size: DiscoverLayout.secondary, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.primary.opacity(0.56))
+            }.frame(maxWidth: .infinity, alignment: .leading).frame(height: DiscoverLayout.captionHeight)
+        }
+        .accessibilityElement(children: .combine)
+        #endif
+    }
+}
+
+/// Opens a favorited movie's Discover page; its menu unfavorites it.
+struct DiscoverFavoriteLink<Label: View>: View {
+    @Environment(Store.self) private var store
+    let title: FollowedTitle
+    @ViewBuilder let label: Label
+    var body: some View {
+        RouteLink { DiscoverDetailView(item: title.catalogItem) } label: { label }
+        #if os(tvOS)
+        .cardButton()
+        #else
+        .tmdbCardButton()
+        #endif
+        .contextMenu {
+            Button(role: .destructive) { DiscoverFollowing.unfavorite(title.id, in: store) } label: {
+                SwiftUI.Label(L10n.text("Remove from Favorites"), systemImage: "star.slash")
+            }
+        }
+        .accessibilityIdentifier("discover.favorites.\(title.id)")
     }
 }
 

@@ -49,6 +49,8 @@ import TVCore
     private(set) var playlists: MusicPlaylists
     /// The series followed from Discover (追剧, #1186).
     private(set) var followedShows: FollowedShows
+    /// The movies favorited from Discover (#2782).
+    private(set) var followedTitles: FollowedTitles
     var importing = false
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
@@ -277,6 +279,7 @@ import TVCore
         favorites = Favorites(defaults: library.defaults)
         playlists = MusicPlaylists(defaults: library.defaults)
         followedShows = FollowedShows(defaults: library.defaults)
+        followedTitles = FollowedTitles(defaults: library.defaults)
         autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")
         guideAddresses = library.defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
         subscriptionAddress = ""
@@ -369,6 +372,7 @@ import TVCore
         favorites = Favorites(defaults: library.defaults)
         playlists = MusicPlaylists(defaults: library.defaults)
         followedShows = FollowedShows(defaults: library.defaults)
+        followedTitles = FollowedTitles(defaults: library.defaults)
         searchModel.order = sourceOrder
         autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")
         guideAddresses = library.defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
@@ -861,8 +865,10 @@ import TVCore
         let favorites = favorites, history = playbackHistory, pinned = pinnedSources, hidden = hiddenSources, order = sourceOrder
         let hiddenLive = hiddenLiveSources
         let followed = followedShows
+        let titles = followedTitles
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
         sync.register("followedShows", current: { followed.syncValues }, apply: { followed.adopt($0) })
+        sync.register("followedTitles", current: { titles.syncValues }, apply: { titles.adopt($0) })
         sync.register("history", delay: .seconds(30), modifiedAt: { $0.updatedAt },
                       current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
@@ -883,6 +889,7 @@ import TVCore
         sync.register("sourceOrderOn", current: { order.enabled ? ["on": true] : [:] }, apply: { if order.enabled == $0.isEmpty { order.enabled = !$0.isEmpty } })
         favorites.onChange = { sync.changed("favorites") }
         followed.onChange = { sync.changed("followedShows") }
+        titles.onChange = { sync.changed("followedTitles") }
         history.onChange = { sync.changed("history") }
         pinned.onChange = { sync.changed("pinnedSources") }
         hidden.onChange = { sync.changed("hiddenSources") }
