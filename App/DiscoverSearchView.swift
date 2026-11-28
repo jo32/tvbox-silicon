@@ -160,6 +160,17 @@ struct DiscoverSearchView: View {
                         .accessibilityLabel(L10n.text("Clear")).accessibilityIdentifier("discover.search.clear")
                 }
             }.padding(.horizontal, 18).frame(height: 48).glassSurface(.regular, in: Capsule())
+            .gesture(
+                // Left to right across the search bar hides the keyboard (#2734): the list only
+                // dismisses it on a vertical scroll, which is easy to trigger by accident. The bar
+                // sits away from the screen edges, so this doesn't fight the interactive back swipe.
+                DragGesture(minimumDistance: 20)
+                    .onEnded { value in
+                        if value.translation.width > 40, abs(value.translation.width) > abs(value.translation.height) {
+                            focused = false
+                        }
+                    }
+            )
             if focused || filter != nil {
                 Button {
                     if focused { focused = false } else { filter = nil; filterSection = nil }
