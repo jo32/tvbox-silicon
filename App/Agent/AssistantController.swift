@@ -47,8 +47,9 @@ import UIKit
         if (demo != nil && !UserDefaults.standard.bool(forKey: "qaAssistantClosed")) || ["open", "settings"].contains(UserDefaults.standard.string(forKey: "qaAssistant")) {
             // `-qaAssistant settings`: Settings › Assistant over the panel.
             showsSettings = UserDefaults.standard.string(forKey: "qaAssistant") == "settings"
-            #if os(macOS)
-            // An inspector presented before the window is up stays closed: open it once the page appears.
+            #if os(macOS) || os(tvOS)
+            // An inspector (Mac) or a full-screen cover (Apple TV) asked for before the window is up never shows:
+            // open it once the page appears.
             opensAtLaunch = true
             #else
             isOpen = true; hasOpened = true
@@ -56,7 +57,7 @@ import UIKit
         }
         #endif
     }
-    #if DEBUG && os(macOS)
+    #if DEBUG && (os(macOS) || os(tvOS))
     @ObservationIgnored private var opensAtLaunch = false
     #endif
 
@@ -66,7 +67,7 @@ import UIKit
         self.store = store
         builtFor = nil
         if hasOpened { prepare() }
-        #if DEBUG && os(macOS)
+        #if DEBUG && (os(macOS) || os(tvOS))
         if opensAtLaunch {
             opensAtLaunch = false
             Task { try? await Task.sleep(for: .milliseconds(600)); isOpen = true }
@@ -206,12 +207,15 @@ import UIKit
     }
 
     func clear() {
+        composerFocus += 1
         #if DEBUG
         if demo != nil { demo = AssistantDemo(); return }
         #endif
         conversation?.clear()
         draft = ""
     }
+    /// Bumped when the text field should take focus (Apple TV, after Clear Conversation disables the focused row).
+    private(set) var composerFocus = 0
 
     /// Runs the turn that failed again.
     func retry() {
