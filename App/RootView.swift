@@ -395,9 +395,19 @@ struct RootView: View {
 struct SectionPage: View {
     let section: AppSection
     var body: some View {
+        #if os(macOS)
+        // The Mac's panel opens beside any page, so every page has the toolbar's sparkles. No page draws a toolbar band:
+        // its buttons float over the page, as on Discover. Watch Now and Discover set their own, for their heroes.
+        if section == .home || section == .discover { page.assistantEntry(section) }
+        else { page.assistantEntry(section).bandlessToolbar() }
+        #else
+        if section == .home || section == .discover { page.assistantEntry(section) } else { page }
+        #endif
+    }
+    @ViewBuilder private var page: some View {
         switch section {
-        case .home: HomeView().assistantEntry(.home)
-        case .discover: DiscoverView().assistantEntry(.discover)
+        case .home: HomeView()
+        case .discover: DiscoverView()
         case .search: GlobalSearchView()
         case .live: LiveView()
         case .music: MusicView()

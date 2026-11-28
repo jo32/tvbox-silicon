@@ -182,6 +182,15 @@ extension View {
         }
     }
 
+    /// A page with no toolbar band, as Discover: the toolbar's buttons float over the page, which fades under them.
+    func bandlessToolbar() -> some View { heroUnderToolbar(false) }
+
+    /// Scroll views in it keep what scrolls under the window toolbar's items from showing through them: a hard edge on
+    /// macOS 26, where the pages draw no toolbar band (`bandlessToolbar`). macOS 15's toolbar keeps its band.
+    @ViewBuilder func hardToolbarEdge() -> some View {
+        if #available(macOS 26, *) { scrollEdgeEffectStyle(.hard, for: .top) } else { self }
+    }
+
     /// A page whose hero runs up to the window's top edge, as in the TV app: while the hero is under the toolbar the
     /// toolbar draws nothing over it, neither a backing nor the scroll edge's blur. Once the page scrolls past the hero
     /// the soft edge comes back, so rows don't run sharp under the toolbar's buttons.

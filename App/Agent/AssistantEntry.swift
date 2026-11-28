@@ -10,7 +10,7 @@ extension View {
     /// The app's root: where the panel shows. iPhone: over everything, from the right edge. iPad: a trailing panel
     /// beside the page. Mac (on the detail column's stack): an inspector. Apple TV: a full-screen page.
     func assistantHost() -> some View { modifier(AssistantHost()) }
-    /// Watch Now's and Discover's root pages: the button that opens the assistant, and on iPhone and iPad the edge swipe.
+    /// A section's root page: the button that opens the assistant (every page on the Mac; Watch Now and Discover elsewhere), and on iPhone and iPad the edge swipe.
     func assistantEntry(_ section: AppSection) -> some View { modifier(AssistantEntry(section: section)) }
 }
 

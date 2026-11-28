@@ -138,7 +138,7 @@ import AuthenticationServices
         #if os(tvOS)
         L10n.text("Open it with the sparkles button at the top of Watch Now or Discover. You can dictate to it with the remote's microphone.")
         #elseif os(macOS)
-        L10n.text("Open it with the sparkles button on Watch Now or Discover, or press ⇧⌘A.")
+        L10n.text("Open it with the sparkles button at the top of any page, or press ⇧⌘A.")
         #else
         L10n.text("Swipe left from the right edge of Watch Now or Discover, or tap the sparkles button.")
         #endif

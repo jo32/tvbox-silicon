@@ -13,6 +13,7 @@ import TVCore
         tools += AppTools.make(context)
         tools += SettingsTools.make(context)
         tools += VideoTools.make(context)
+        tools += DiscoverTools.make(context)
         tools += LibraryTools.make(context)
         tools += SubscriptionTools.make(context)
         tools += ScriptTools.make(context)
@@ -35,6 +36,8 @@ import TVCore
     /// Books and comics the last searches found, by id.
     var books: [String: NovelSearchHit] = [:]
     var comics: [String: MangaComic] = [:]
+    /// TMDB titles the last Discover searches found, by title id.
+    var titles: [String: TMDBCatalog.Item] = [:]
     /// The assistant's own music search, so Music's search page keeps the viewer's.
     lazy var musicSearch = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()])
     init(store: Store) {

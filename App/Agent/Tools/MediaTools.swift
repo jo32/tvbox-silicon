@@ -54,9 +54,16 @@ import TVCore
                     }
                     var groups: [String] = []
                     for channel in all where !groups.contains(channel.group) { groups.append(channel.group) }
-                    return .capped("channels", matching.map { index, channel in
+                    let result = JSONValue.capped("channels", matching.map { index, channel in
                         .obj(["channel": .num(index + 1), "name": .str(channel.name), "group": .text(channel.group)])
                     }, limit: 30, extra: ["total": .num(all.count), "groups": .list(groups.prefix(30).map { .str($0) })])
+                    // A search's channels are cards to tap; a whole playlist isn't.
+                    guard query != nil || group != nil else { return result }
+                    return AgentCard.attach(matching.prefix(30).map { index, channel in
+                        AgentCard(id: "\(id)/\(index + 1)", title: channel.name, subtitle: channel.group.isEmpty ? nil : channel.group,
+                                  poster: channel.logo, play: ["playlist_id": .str(id), "channel": .num(index + 1)],
+                                  action: "live_play", symbol: "tv", square: true)
+                    }, to: result)
                 },
 
             AppTool("live_play", .read, """
@@ -106,7 +113,11 @@ import TVCore
                         JSONValue.obj(["track_id": .str(track.id), "title": .str(track.title), "artists": .text(track.artists.joined(separator: ", ")),
                                        "album": .text(track.album), "seconds": track.duration.map { .num(Int($0)) }])
                     }
-                    return .capped("tracks", items, limit: 20, extra: ["query": .str(query), "still_searching": model.busy ? .bool(true) : nil])
+                    let cards = model.results.prefix(20).map { track in
+                        AgentCard(id: track.id, title: track.title, subtitle: track.artists.joined(separator: ", "), poster: track.artwork,
+                                  play: ["track_ids": .list([.str(track.id)])], action: "music_play", symbol: "music.note", square: true)
+                    }
+                    return AgentCard.attach(cards, to: .capped("tracks", items, limit: 20, extra: ["query": .str(query), "still_searching": model.busy ? .bool(true) : nil]))
                 },
 
             AppTool("music_play", .read, """
@@ -165,7 +176,12 @@ import TVCore
                         JSONValue.obj(["book_id": .str(novelID(hit.book)), "title": .str(hit.book.name), "author": .text(hit.book.author),
                                        "sources": .num(hit.books.count), "intro": .text(AgentToolKit.clip(hit.book.intro, 120))])
                     }
-                    return .capped("books", items, limit: 20, extra: ["sources_answered": .num(answered), "sources_total": .num(sources.count)])
+                    let cards = hits.prefix(20).map { hit in
+                        AgentCard(id: novelID(hit.book), title: hit.book.name, subtitle: hit.book.author.isEmpty ? nil : hit.book.author,
+                                  poster: AgentToolKit.webURL(hit.book.cover), play: ["book_id": .str(novelID(hit.book))],
+                                  action: "novels_open", symbol: "text.book.closed")
+                    }
+                    return AgentCard.attach(cards, to: .capped("books", items, limit: 20, extra: ["sources_answered": .num(answered), "sources_total": .num(sources.count)]))
                 },
 
             AppTool("novels_open", .read, """
@@ -198,7 +214,7 @@ import TVCore
                     let query = try args.requiredString("query")
                     let sources = MangaStore.shared.sources
                     guard !sources.isEmpty else { throw AgentToolError("No comic sources are installed.") }
-                    var found: [JSONValue] = [], failures = 0
+                    var found: [JSONValue] = [], cards: [AgentCard] = [], failures = 0
                     // Every source at once, each with its own time limit.
                     let searches = sources.prefix(12).map { source in
                         Task { () -> (String, [MangaComic]?) in
@@ -220,9 +236,11 @@ import TVCore
                             context.comics[mangaID(comic)] = comic
                             found.append(.obj(["comic_id": .str(mangaID(comic)), "title": .str(comic.title), "source": .str(name),
                                                "subtitle": .text(AgentToolKit.clip(comic.subtitle, 60))]))
+                            cards.append(AgentCard(id: mangaID(comic), title: comic.title, subtitle: name, poster: AgentToolKit.webURL(comic.cover),
+                                                   play: ["comic_id": .str(mangaID(comic))], action: "manga_open", symbol: "book"))
                         }
                     }
-                    return .capped("comics", found, limit: 30, extra: ["failed_sources": failures > 0 ? .num(failures) : nil])
+                    return AgentCard.attach(Array(cards.prefix(30)), to: .capped("comics", found, limit: 30, extra: ["failed_sources": failures > 0 ? .num(failures) : nil]))
                 },
 
             AppTool("manga_open", .read, """

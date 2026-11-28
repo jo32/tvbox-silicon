@@ -2606,7 +2606,7 @@
 "Your messages, and what the assistant's tools read for it (titles, settings, and the script text you ask about), go to the model's provider. Passwords, cookies, keys and tokens are never sent. The provider's own terms and privacy policy apply." = "你发的消息，以及助手的工具为它读取的内容（标题、设置，和你让它看的脚本文字），会发送给模型的服务商。密码、Cookie、密钥和令牌绝不会发送。使用时适用服务商自己的条款和隐私政策。";
 "The assistant asks before it changes a setting, a favorite or the playback speed. It always asks before it removes anything or overwrites a script." = "助手更改设置、收藏或播放速度前会先问你。删除任何东西或覆盖脚本前，它始终会问。";
 "Open it with the sparkles button at the top of Watch Now or Discover. You can dictate to it with the remote's microphone." = "在“现在观看”或“发现”顶部按星光按钮打开。可以用遥控器的麦克风说话输入。";
-"Open it with the sparkles button on Watch Now or Discover, or press ⇧⌘A." = "在“现在观看”或“发现”点按星光按钮，或按 ⇧⌘A 打开。";
+"Open it with the sparkles button at the top of any page, or press ⇧⌘A." = "点按任一页面顶部的星光按钮，或按 ⇧⌘A 打开。";
 "Swipe left from the right edge of Watch Now or Discover, or tap the sparkles button." = "在“现在观看”或“发现”从屏幕右边缘向左滑动呼出助手，或轻点星光按钮。";
 "Server" = "服务器";
 "API" = "接口";
@@ -2657,3 +2657,8 @@
 
 "Press Again to Clear" = "再按一次以清除";
 "Couldn’t play “%@”." = "无法播放“%@”。";
+"Looking in Discover…" = "正在查找“发现”…";
+"Looked in Discover" = "查找了“发现”";
+"Looking for “%@” in Discover…" = "正在“发现”里查找“%@”…";
+"Looked for “%@” in Discover" = "在“发现”里查找了“%@”";
+"Couldn’t open “%@”." = "无法打开“%@”。";

@@ -145,6 +145,7 @@
 		3F7AA2351B3C009CDDE41C4F /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */; };
 		41947E313A2EF1F270864F02 /* MobilePlayerKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */; };
 		41FB20C693CBD87C569DCC18 /* DanmakuSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */; };
+		442EB13BEB07C66AAAA4826C /* DiscoverTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C18C0AD23DAA272DA9412 /* DiscoverTools.swift */; };
 		455119517E0FFF07B799E98C /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		45B29C434AF09F895B918AD8 /* MusicIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24C3A21F10F41307AF2937E /* MusicIntents.swift */; };
 		45ECD9E8EE6888748AC6D46E /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
@@ -290,6 +291,7 @@
 		88369D34534D9AF1BC424875 /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */; };
 		8841F62611BD2311301226B8 /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
+		89EA89CACC1EBC474149A674 /* DiscoverTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C18C0AD23DAA272DA9412 /* DiscoverTools.swift */; };
 		8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
 		8CE57D90E27A4326A9DDAEB8 /* SettingsTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B979996EA2BCFC6791F /* SettingsTools.swift */; };
@@ -485,6 +487,7 @@
 		F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		F418F8B8793AF0B489F83AB9 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
 		F4C6D6FEC3FA7757629E5EEE /* VideoTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ACE1F21020A202520B0CDC /* VideoTools.swift */; };
+		F565B9FF2D2FA63543A37073 /* DiscoverTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C18C0AD23DAA272DA9412 /* DiscoverTools.swift */; };
 		F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
 		F5F92EF7AFCA773D9FF85A8A /* OpenJDK-assembly-exception.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */; };
 		F619534F102FC9D165F900C9 /* NovelQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF046FB7D8F99B3EC47C9069 /* NovelQA.swift */; };
@@ -692,6 +695,7 @@
 		F714C204B589F33E2806EDF8 /* TMDBViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBViews.swift; sourceTree = "<group>"; };
 		F7D32FD5D631B4C58A2C3022 /* TVBox-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "TVBox-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEnhancement.swift; sourceTree = "<group>"; };
+		FB5C18C0AD23DAA272DA9412 /* DiscoverTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverTools.swift; sourceTree = "<group>"; };
 		FB8C8A2729B74B279EE60736 /* TVCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TVCore; path = Packages/TVCore; sourceTree = SOURCE_ROOT; };
 		FBED9BDC96E5249DBA0BFDB0 /* MusicMiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMiniPlayer.swift; sourceTree = "<group>"; };
 		FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlay.swift; sourceTree = "<group>"; };
@@ -927,6 +931,7 @@
 				B02574C25DDAD2D2EDA76495 /* AgentToolsQA.swift */,
 				C2F12721B869BDEF097E482F /* AppAgentTools.swift */,
 				3AC8C059656D8F78B93B761F /* AppTools.swift */,
+				FB5C18C0AD23DAA272DA9412 /* DiscoverTools.swift */,
 				CDA2AE335DA91CFDC3903E4B /* LibraryTools.swift */,
 				2475103E66CAADAC4AE2C78D /* MediaTools.swift */,
 				88B3C85C16FB09801FBBD992 /* ScriptTools.swift */,
@@ -1495,6 +1500,7 @@
 				C0CF8F2481F4B90775C681F8 /* DiscoverSearchFilters.swift in Sources */,
 				E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */,
 				57564C01CEC3BA2D6EC610C8 /* DiscoverTVLayout.swift in Sources */,
+				442EB13BEB07C66AAAA4826C /* DiscoverTools.swift in Sources */,
 				B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */,
 				CA220FE90112CA22B964F339 /* DiscoverView.swift in Sources */,
 				6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */,
@@ -1641,6 +1647,7 @@
 				963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */,
 				2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */,
 				D7E748CE00CE922BAA68C022 /* DiscoverTVLayout.swift in Sources */,
+				F565B9FF2D2FA63543A37073 /* DiscoverTools.swift in Sources */,
 				2F58769982B29FDB6BE2304C /* DiscoverTrailer.swift in Sources */,
 				38089AAF28B91679EFEA5F70 /* DiscoverView.swift in Sources */,
 				15E3F2F86594F2B8A9CF0175 /* DiscoveryView.swift in Sources */,
@@ -1789,6 +1796,7 @@
 				97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */,
 				FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */,
 				9D695241F4A54C5335B16668 /* DiscoverTVLayout.swift in Sources */,
+				89EA89CACC1EBC474149A674 /* DiscoverTools.swift in Sources */,
 				C8024841462ADC780DB0058C /* DiscoverTrailer.swift in Sources */,
 				862B4D7324AB9499E249FB15 /* DiscoverView.swift in Sources */,
 				4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */,

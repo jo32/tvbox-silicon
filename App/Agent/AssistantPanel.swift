@@ -41,6 +41,8 @@ struct AssistantPanel: View {
         }
         .background { Backdrop() }
         #if os(macOS)
+        // The chat scrolls up under the toolbar's title and buttons, which have no band behind them.
+        .hardToolbarEdge()
         // The Mac's header is the window toolbar over the panel, so it's one line with the window's buttons (a header
         // of its own made a second row under the toolbar, and one moved up into the toolbar's band was blurred by it).
         // The toolbar's sparkles hides while the panel is open (`AssistantEntry`); this close button takes its place.
@@ -440,7 +442,8 @@ struct AssistantToolRow: View {
     }
 }
 
-/// What a tool found (search results, history, favorites), as covers in a row under its line; tapping one plays it.
+/// What a tool found (search results, history, favorites), as cards in a row under its line; tapping one plays or
+/// opens it.
 private struct AssistantCardRow: View {
     let callID: String
     let cards: [AgentCard]
@@ -481,8 +484,8 @@ private struct AssistantCardRow: View {
     }
 }
 
-/// One title: its cover, name and source (or episode), as on Global Search. Tapping plays it; a title in progress
-/// shows how much was watched.
+/// One result: its cover, name and source (or episode), as on Global Search. Tapping plays or opens it; a title in
+/// progress shows how much was watched.
 private struct AssistantVideoCard: View {
     let card: AgentCard
     let key: String
@@ -494,18 +497,17 @@ private struct AssistantVideoCard: View {
         Button {
             guard drag?.active != true else { return }
             #if os(macOS)
-            assistant.play(card, key: key, closing: false)
+            assistant.open(card, key: key, closing: false)
             #else
-            assistant.play(card, key: key, closing: true)
+            assistant.open(card, key: key, closing: true)
             #endif
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                PosterCard(name: card.title, poster: card.poster, headers: card.posterHeaders ?? [:],
-                           remarks: card.progress.map { "\(Int(($0 * 100).rounded()))%" } ?? "")
+                cover
                     .overlay(alignment: .top) {
                         if starting {
                             ProgressView().appControlSize(.small)
-                                .frame(maxWidth: .infinity).aspectRatio(2.0 / 3.0, contentMode: .fit)
+                                .frame(maxWidth: .infinity).aspectRatio(aspect, contentMode: .fit)
                                 .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                     }
@@ -521,23 +523,75 @@ private struct AssistantVideoCard: View {
         .accessibilityLabel([card.title, card.subtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
     }
+
+    private var aspect: CGFloat { card.square == true ? 1 : 2.0 / 3.0 }
+
+    /// A poster as on Global Search; a song's, channel's or setting's square, with its symbol when it has no picture.
+    @ViewBuilder private var cover: some View {
+        if card.square == true {
+            VStack(alignment: .leading, spacing: 10) {
+                Color.clear.aspectRatio(1, contentMode: .fit)
+                    .overlay {
+                        if card.poster == nil, let symbol = card.symbol {
+                            Image(systemName: symbol).font(.title2).foregroundStyle(Brand.cyan)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(.quaternary)
+                        } else {
+                            PosterImage(url: card.poster, headers: card.posterHeaders ?? [:], symbol: card.symbol ?? "music.note")
+                        }
+                    }
+                    .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(card.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    .lineLimit(1).truncationMode(.tail).cardCaption()
+            }
+        } else {
+            PosterCard(name: card.title, poster: card.poster, headers: card.posterHeaders ?? [:],
+                       remarks: card.progress.map { "\(Int(($0 * 100).rounded()))%" } ?? "", symbol: card.symbol ?? "film")
+        }
+    }
 }
 
 /// The assistant wants to change something: what, and the viewer's yes or no.
 private struct AssistantConfirmationCard: View {
     @Environment(AssistantController.self) private var assistant
     let confirmation: AgentConfirmation
+    private var destructive: Bool { confirmation.effect == .destructive }
+    /// A diff (a script's change) shows in monospace; a one-line note ("Now: 1×") is plain words under the question.
+    private var diff: String? {
+        guard let detail = confirmation.detail, detail.contains("\n") else { return nil }
+        return detail
+    }
+    private var note: String? {
+        guard let detail = confirmation.detail, !detail.isEmpty, !detail.contains("\n") else { return nil }
+        return detail
+    }
+
     var body: some View {
-        let destructive = confirmation.effect == .destructive
+        #if os(macOS)
+        // As a Mac alert: the question, the buttons at the trailing edge at their usual size.
+        VStack(alignment: .leading, spacing: 10) {
+            question
+            if let diff { AssistantDiff(text: diff) }
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(L10n.text("Don't Allow")) { assistant.confirm(false) }
+                    .buttonStyle(.bordered)
+                Button(L10n.text("Allow")) { assistant.confirm(true) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(destructive ? .red : systemAccent)
+            }
+            .controlSize(.large)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.separator, lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .contain)
+        #else
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: destructive ? "exclamationmark.triangle.fill" : "hand.raised.fill")
-                    .foregroundStyle(destructive ? Brand.rose : Brand.amber)
-                Text(confirmation.summary).font(AssistantMetrics.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-            }
-            if let detail = confirmation.detail, !detail.isEmpty {
-                AssistantDiff(text: detail)
-            }
+            question
+            if let diff { AssistantDiff(text: diff) }
             HStack(spacing: 10) {
                 Button { assistant.confirm(false) } label: { Text(L10n.text("Don't Allow")).frame(maxWidth: .infinity) }
                     .controlButton()
@@ -560,11 +614,21 @@ private struct AssistantConfirmationCard: View {
         }
         .padding(AssistantMetrics.bubbleInset + 2)
         .contentPanel(cornerRadius: AssistantMetrics.bubbleRadius)
-        .overlay {
-            RoundedRectangle(cornerRadius: max(AssistantMetrics.bubbleRadius, 14), style: .continuous)
-                .strokeBorder((destructive ? Brand.rose : Brand.amber).opacity(0.45), lineWidth: 1)
-        }
         .accessibilityElement(children: .contain)
+        #endif
+    }
+
+    private var question: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: destructive ? "exclamationmark.triangle.fill" : "hand.raised.fill")
+                .foregroundStyle(destructive ? Brand.rose : Brand.amber)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(confirmation.summary).font(AssistantMetrics.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                if let note {
+                    Text(note).font(AssistantMetrics.detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 }
 

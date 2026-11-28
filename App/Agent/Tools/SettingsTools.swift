@@ -65,7 +65,14 @@ import TVCore
             guard let link = match.link else { return .null }
             return .obj(["id": .str(link.id), "title": .str(link.title()), "page": .str(link.page()), "type": .str("page")])
         }
-        return .capped("settings", items, limit: 20, extra: ["query": .str(query), "note": items.isEmpty ? .str("Nothing matched; try other words, or call without a query for the full list.") : nil])
+        let cards: [AgentCard] = found.prefix(20).compactMap { match in
+            let (id, title, page): (String, String, String)
+            if let setting = match.setting { (id, title, page) = (setting.id, setting.title(), setting.page()) }
+            else if let link = match.link { (id, title, page) = (link.id, link.title(), link.page()) }
+            else { return nil }
+            return AgentCard(id: id, title: title, subtitle: page, play: ["id": .str(id)], action: "settings_open", symbol: "gearshape", square: true)
+        }
+        return AgentCard.attach(cards, to: .capped("settings", items, limit: 20, extra: ["query": .str(query), "note": items.isEmpty ? .str("Nothing matched; try other words, or call without a query for the full list.") : nil]))
     }
 
     private static func setSummary(_ args: AgentArguments, _ store: Store) -> (summary: String, detail: String?) {

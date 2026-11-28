@@ -33,6 +33,7 @@ struct AssistantActivity {
             case "script_read": return pick("doc.text.magnifyingglass", "Reading the script…", "Read the script", "Reading %@…", "Read %@")
             case "script_write": return pick("square.and.pencil", "Editing the script…", "Edited the script", "Editing %@…", "Edited %@")
             case "script_test": return pick("checkmark.seal", "Testing the script…", "Tested the script", "Testing %@…", "Tested %@")
+            case "discover_open": return pick("arrow.up.forward.square", "Opening the page…", "Opened the page", "Opening %@…", "Opened %@")
             case "recent_log": return pick("list.bullet.rectangle", "Reading the recent log…", "Read the recent log")
             default: break
             }
@@ -45,6 +46,7 @@ struct AssistantActivity {
             case "live": return pick("dot.radiowaves.left.and.right", "Looking in Live TV…", "Looked in Live TV", "Looking for “%@” in Live TV…", "Looked for “%@” in Live TV")
             case "music": return pick("music.note", "Looking in Music…", "Looked in Music", "Looking for “%@” in Music…", "Looked for “%@” in Music")
             case "novels", "novel": return pick("text.book.closed", "Looking in Novels…", "Looked in Novels", "Looking for “%@” in Novels…", "Looked for “%@” in Novels")
+            case "discover": return pick("film.stack", "Looking in Discover…", "Looked in Discover", "Looking for “%@” in Discover…", "Looked for “%@” in Discover")
             case "manga": return pick("book", "Looking in Manga…", "Looked in Manga", "Looking for “%@” in Manga…", "Looked for “%@” in Manga")
             default: return ("wrench.and.screwdriver", L10n.text("Using %@…", name), L10n.text("Used %@", name))
             }

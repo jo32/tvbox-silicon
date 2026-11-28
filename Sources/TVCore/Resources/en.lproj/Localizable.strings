@@ -2606,7 +2606,7 @@
 "Your messages, and what the assistant's tools read for it (titles, settings, and the script text you ask about), go to the model's provider. Passwords, cookies, keys and tokens are never sent. The provider's own terms and privacy policy apply." = "Your messages, and what the assistant's tools read for it (titles, settings, and the script text you ask about), go to the model's provider. Passwords, cookies, keys and tokens are never sent. The provider's own terms and privacy policy apply.";
 "The assistant asks before it changes a setting, a favorite or the playback speed. It always asks before it removes anything or overwrites a script." = "The assistant asks before it changes a setting, a favorite or the playback speed. It always asks before it removes anything or overwrites a script.";
 "Open it with the sparkles button at the top of Watch Now or Discover. You can dictate to it with the remote's microphone." = "Open it with the sparkles button at the top of Watch Now or Discover. You can dictate to it with the remote's microphone.";
-"Open it with the sparkles button on Watch Now or Discover, or press ⇧⌘A." = "Open it with the sparkles button on Watch Now or Discover, or press ⇧⌘A.";
+"Open it with the sparkles button at the top of any page, or press ⇧⌘A." = "Open it with the sparkles button at the top of any page, or press ⇧⌘A.";
 "Swipe left from the right edge of Watch Now or Discover, or tap the sparkles button." = "Swipe left from the right edge of Watch Now or Discover, or tap the sparkles button.";
 "Server" = "Server";
 "API" = "API";
@@ -2657,3 +2657,8 @@
 
 "Press Again to Clear" = "Press Again to Clear";
 "Couldn’t play “%@”." = "Couldn’t play “%@”.";
+"Looking in Discover…" = "Looking in Discover…";
+"Looked in Discover" = "Looked in Discover";
+"Looking for “%@” in Discover…" = "Looking for “%@” in Discover…";
+"Looked for “%@” in Discover" = "Looked for “%@” in Discover";
+"Couldn’t open “%@”." = "Couldn’t open “%@”.";

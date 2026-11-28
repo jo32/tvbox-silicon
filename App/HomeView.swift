@@ -95,6 +95,10 @@ struct HomeView: View {
         #if os(tvOS)
         // The tab sidebar already names this page; a second heading just repeats it.
         .toolbar(.hidden, for: .navigationBar)
+        #elseif os(macOS)
+        // As Discover: no title and no toolbar band, so the toolbar's buttons float over the page.
+        .navigationTitle("")
+        .bandlessToolbar()
         #else
         .screenTitle(L10n.text("Watch Now"))
         #endif

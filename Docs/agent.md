@@ -69,7 +69,14 @@ the owner confirms. API keys work everywhere.
 - Scripts: `scripts_list` (the viewer's imported `.py`/`.js` files), `script_read` (by line range), `script_write`
   (destructive: shows a diff, keeps the previous copy as `<name>.bak`), `script_test` (loads it as a source and runs
   its home and a search, returning errors and counts).
+- Discover: `discover_search` (TMDB: a title, trending, or genres/language/years), `discover_open` (the title's
+  Discover page). The assistant is told to recommend titles through it, never from memory alone.
 - Live, music, novels, manga: search, open, play.
+
+Cards: every search (videos, Discover, music, novels, manga, live channels with a query, settings), history and
+favorites hand back `AgentCard`s under `_cards`; the conversation keeps them for the viewer and leaves them out of
+what the model reads. A card names the tool a tap runs (`play`, `discover_open`, `music_play`, `novels_open`,
+`manga_open`, `live_play`, `settings_open`) with its arguments.
 - Diagnostics: `recent_log` (the app's recent diagnostic lines, already scrubbed of addresses).
 
 Rules: tools only reach what the viewer could reach on screen. Sections the App Store build hides

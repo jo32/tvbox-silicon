@@ -185,6 +185,13 @@ public enum AgentToolKit {
         return parts
     }
 
+    /// A cover's address when it is a web one (sources also give relative paths and data).
+    public static func webURL(_ text: String) -> URL? {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.hasPrefix("http://") || text.hasPrefix("https://") else { return nil }
+        return URL(string: text)
+    }
+
     /// `text` cut to `limit` characters, ending in "…" when cut.
     public static func clip(_ text: String, _ limit: Int) -> String {
         let flat = text.trimmingCharacters(in: .whitespacesAndNewlines)

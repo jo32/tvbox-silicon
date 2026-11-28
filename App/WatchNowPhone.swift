@@ -62,8 +62,13 @@ struct WatchNowPhonePage: View {
             #endif
             .task(id: entries.map(\.id)) { await hero.load(entries) }
         }
+        #if os(macOS)
+        // As Discover: no title, and no toolbar band without a hero either.
+        .navigationTitle("")
+        #else
         // Over the hero the page has no title, as Discover; without one it keeps its name.
         .navigationTitle(entries.isEmpty ? L10n.text("Watch Now") : "")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

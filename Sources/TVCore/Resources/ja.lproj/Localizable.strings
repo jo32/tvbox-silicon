@@ -2606,7 +2606,7 @@
 "Your messages, and what the assistant's tools read for it (titles, settings, and the script text you ask about), go to the model's provider. Passwords, cookies, keys and tokens are never sent. The provider's own terms and privacy policy apply." = "メッセージと、アシスタントのツールが読み取った内容（タイトル、設定、頼んだスクリプトのテキスト）は、モデルの提供元に送られます。パスワード、Cookie、キー、トークンは送信されません。提供元の利用規約とプライバシーポリシーが適用されます。";
 "The assistant asks before it changes a setting, a favorite or the playback speed. It always asks before it removes anything or overwrites a script." = "アシスタントは、設定、お気に入り、再生速度を変える前に確認します。何かを削除するときやスクリプトを上書きするときは、必ず確認します。";
 "Open it with the sparkles button at the top of Watch Now or Discover. You can dictate to it with the remote's microphone." = "「今すぐ観る」または「見つける」の上部にあるきらきらボタンで開きます。リモコンのマイクで音声入力できます。";
-"Open it with the sparkles button on Watch Now or Discover, or press ⇧⌘A." = "「今すぐ観る」または「見つける」のきらきらボタンか、⇧⌘A で開きます。";
+"Open it with the sparkles button at the top of any page, or press ⇧⌘A." = "各ページ上部のきらきらボタンか、⇧⌘A で開きます。";
 "Swipe left from the right edge of Watch Now or Discover, or tap the sparkles button." = "「今すぐ観る」または「見つける」で画面の右端から左へスワイプするか、きらきらボタンをタップします。";
 "Server" = "サーバ";
 "API" = "API";
@@ -2657,3 +2657,8 @@
 
 "Press Again to Clear" = "もう一度押すと消去";
 "Couldn’t play “%@”." = "「%@」を再生できませんでした。";
+"Looking in Discover…" = "「見つける」を探しています…";
+"Looked in Discover" = "「見つける」を探しました";
+"Looking for “%@” in Discover…" = "「見つける」で「%@」を探しています…";
+"Looked for “%@” in Discover" = "「見つける」で「%@」を探しました";
+"Couldn’t open “%@”." = "「%@」を開けませんでした。";

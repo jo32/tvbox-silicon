@@ -25,26 +25,37 @@ public struct AgentMessage: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// A title a tool found (a search result, a history entry, a favorite), drawn as a cover under the tool's line;
-/// tapping it plays it. A tool hands its cards over under `resultKey` in its result, and the conversation keeps them
-/// with the tool's turn instead of sending them to the model, so covers cost no tokens.
+/// Something a tool found (a video, a TMDB title, a song, a book, a comic, a channel, a setting, a history entry, a
+/// favorite), drawn as a card under the tool's line; tapping it plays or opens it. A tool hands its cards over under
+/// `resultKey` in its result, and the conversation keeps them with the tool's turn instead of sending them to the
+/// model, so cards cost no tokens.
 public struct AgentCard: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var title: String
-    /// A short second line: the year and source, or the episode.
+    /// A short second line: the year and source, the artist, or the episode.
     public var subtitle: String?
     public var poster: URL?
     public var posterHeaders: [String: String]?
     /// How much has been watched, 0 to 1, for a title in progress.
     public var progress: Double?
-    /// The `play` tool's arguments that play this title.
+    /// The arguments of the tool (`tool`) that plays or opens it.
     public var play: [String: JSONValue]
+    /// The tool a tap runs; nil is `play` (cards saved before there were others).
+    public var action: String?
+    /// The symbol shown while there is no cover, or instead of one (a setting).
+    public var symbol: String?
+    /// A square cover (a song, a channel, a setting) instead of a poster.
+    public var square: Bool?
 
     public init(id: String, title: String, subtitle: String? = nil, poster: URL? = nil, posterHeaders: [String: String]? = nil,
-                progress: Double? = nil, play: [String: JSONValue]) {
+                progress: Double? = nil, play: [String: JSONValue], action: String? = nil, symbol: String? = nil, square: Bool = false) {
         self.id = id; self.title = title; self.subtitle = subtitle; self.poster = poster
         self.posterHeaders = posterHeaders?.isEmpty == false ? posterHeaders : nil; self.progress = progress; self.play = play
+        self.action = action == "play" ? nil : action; self.symbol = symbol; self.square = square ? true : nil
     }
+
+    /// The tool a tap runs, with `play` as its arguments.
+    public var tool: String { action ?? "play" }
 
     public static let resultKey = "_cards"
 
