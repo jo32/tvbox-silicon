@@ -1003,42 +1003,59 @@ struct TMDBArtwork: View {
     var aspect: Binding<CGFloat?>? = nil
     /// Request headers for hosts that want them (Bilibili's covers, shown large on Apple TV's video page).
     var headers: [String: String] = [:]
-    @State private var image: CGImage?
-    private static let cache: NSCache<NSURL, Box> = { let cache = NSCache<NSURL, Box>(); cache.countLimit = 24; return cache }()
+    @State private var loaded: (url: URL, image: CGImage)?
+    private static let cache: NSCache<NSURL, Box> = {
+        let cache = NSCache<NSURL, Box>()
+        cache.countLimit = 96
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
     final class Box { let image: CGImage; init(_ image: CGImage) { self.image = image } }
+
+    /// The decoded image if it is already in memory, so a lazy view reappearing draws it on its first frame.
+    static func cached(_ url: URL) -> CGImage? { cache.object(forKey: url as NSURL)?.image }
+
+    private var shown: CGImage? {
+        if let loaded, loaded.url == url { return loaded.image }
+        return Self.cached(url)
+    }
 
     var body: some View {
         ZStack {
-            if let image {
-                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: fill ? .fill : .fit)
+            if let shown {
+                Image(decorative: shown, scale: 1).resizable().aspectRatio(contentMode: fill ? .fill : .fit)
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
-            if let cached = Self.cache.object(forKey: url as NSURL) { show(cached.image); return }
+            if let cached = Self.cached(url) { show(cached); return }
             guard let decoded = await Self.load(url, maxPixels: maxPixels, headers: headers), !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) { show(decoded) }
         }
     }
 
-    /// Downloads and decodes `url` into the shared cache; nil when it doesn't load.
+    /// Downloads and decodes `url` into the shared cache off the main thread; nil when it doesn't load.
     static func load(_ url: URL, maxPixels: Int, headers: [String: String] = [:]) async -> CGImage? {
         if let cached = cache.object(forKey: url as NSURL) { return cached.image }
         var request = URLRequest(url: url)
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
-              ] as CFDictionary) else { return nil }
-        cache.setObject(Box(decoded), forKey: url as NSURL)
+        guard let (data, _) = try? await URLSession.shared.data(for: request), !Task.isCancelled else { return nil }
+        guard let decoded = await Task.detached(priority: .utility) { Self.decode(data, maxPixels: maxPixels) }.value else { return nil }
+        cache.setObject(Box(decoded), forKey: url as NSURL, cost: decoded.bytesPerRow * decoded.height)
         return decoded
     }
 
+    private nonisolated static func decode(_ data: Data, maxPixels: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
+        ] as CFDictionary)
+    }
+
     private func show(_ decoded: CGImage) {
-        image = decoded
+        loaded = (url, decoded)
         aspect?.wrappedValue = CGFloat(decoded.width) / CGFloat(max(decoded.height, 1))
     }
 }

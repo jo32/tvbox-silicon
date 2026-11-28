@@ -333,3 +333,56 @@ import Testing
     #expect(!FileManager.default.fileExists(atPath: root.appending(path: "e1").path))
     #expect(!FileManager.default.fileExists(atPath: root.appending(path: "e3").path))
 }
+
+@MainActor @Test func downloadLibraryPartitionsAndIndexesStayInSyncAcrossMutationsAndMeasure() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "downloads-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let site = Site(key: "s", name: "S", type: 3, api: "csp_Test", raw: [:])
+    let ep1 = Episode(id: "1", name: "第 1 集", address: "https://example.com/1.mp4", flag: "line")
+    let ep2 = Episode(id: "2", name: "第 2 集", address: "https://example.com/2.mp4", flag: "line")
+    let ep3 = Episode(id: "3", name: "第 3 集", address: "https://example.com/3.mp4", flag: "line")
+    let saved = [ep1, ep2].enumerated().map { idx, ep in
+        DownloadItem(id: "c\(idx + 1)", title: "Show", episode: ep.name, poster: nil, posterHeaders: [:],
+                     source: DownloadSource(site: site, videoID: "v", episode: ep), created: Date(),
+                     status: .completed, media: "media.mp4")
+    }
+    for item in saved {
+        let dir = root.appending(path: item.id)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(repeating: 0xAA, count: 4096).write(to: dir.appending(path: "media.mp4"))
+    }
+    try JSONEncoder().encode(saved).write(to: root.appending(path: "downloads.json"))
+    let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+    let library = DownloadLibrary(root: root, defaults: defaults)
+
+    #expect(!library.isEmpty)
+    #expect(library.completedItems.map(\.id) == ["c1", "c2"])
+    #expect(library.pendingItems.isEmpty)
+    #expect(library.item(id: "c1")?.id == "c1")
+    #expect(library.item(for: DownloadSource(site: site, videoID: "v", episode: ep2))?.id == "c2")
+
+    // Adding, pausing, resuming, and prioritizing pending items keeps buckets and O(1) lookups accurate.
+    let queued = library.download(DownloadSource(site: site, videoID: "v", episode: ep3), title: "Show", poster: nil)
+    #expect(library.pendingItems.map(\.id) == [queued.id])
+    #expect(library.completedItems.map(\.id) == ["c1", "c2"])
+    #expect(library.item(id: queued.id)?.status == .queued)
+    #expect(library.item(for: DownloadSource(site: site, videoID: "v", episode: ep3))?.id == queued.id)
+    library.pause(queued.id)
+    #expect(library.item(id: queued.id)?.status == .paused)
+    library.resume(queued.id)
+    #expect(library.item(id: queued.id)?.status == .queued)
+
+    // measure() forgets missing completed files and updates sizes/usage without touching valid items.
+    try FileManager.default.removeItem(at: root.appending(path: "c1/media.mp4"))
+    await library.measure()
+    #expect(library.completedItems.map(\.id) == ["c2"])
+    #expect(library.item(id: "c1") == nil)
+    #expect(library.item(for: DownloadSource(site: site, videoID: "v", episode: ep1)) == nil)
+    #expect((library.item(id: "c2")?.size ?? 0) > 0)
+    #expect(library.usage.downloads > 0)
+
+    library.remove(["c2", queued.id])
+    #expect(library.isEmpty)
+    #expect(library.completedItems.isEmpty)
+    #expect(library.pendingItems.isEmpty)
+}

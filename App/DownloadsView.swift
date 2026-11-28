@@ -11,11 +11,6 @@ import BackgroundTasks
 struct DownloadsView: View {
     @Environment(Store.self) private var store
     @State private var action: CachedShowAction?
-    @State private var confirmsDeleteAll = false
-    #if os(tvOS)
-    /// Apple TV asks for a second press instead of a dialog; moving off the button takes the question back.
-    @FocusState private var deleteAllFocused: Bool
-    #endif
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
     /// How the downloaded shows are listed, and 倒序 (#653): the other way round.
@@ -25,28 +20,26 @@ struct DownloadsView: View {
     enum Kind: Hashable { case videos, music }
 
     var body: some View {
-        let pending = library.items.filter(\.isPending)
-        let shows = DownloadShow.group(library.items.filter { $0.status == .completed }, by: sort, reversed: reversed)
         Group {
             if hasMusic && kind == .music {
                 MusicDownloadsView(embedded: true)
-            } else if library.items.isEmpty {
+            } else if library.isEmpty {
                 // One message instead of an empty storage card above it: a 0 KB total says nothing new.
                 EmptyDownloads(available: library.usage.available) { store.section = .sites }
             } else {
-                content(pending: pending, shows: shows)
+                content
             }
         }
         .modifier(DownloadKindBar(shown: hasMusic, kind: $kind))
-        .onAppear { if library.items.isEmpty && hasMusic { kind = .music } }
+        .onAppear { if library.isEmpty && hasMusic { kind = .music } }
         .screenBackdrop()
         .tabTitle(L10n.text("Offline Cache"))
         .task { await library.measure() }
-        .onChange(of: library.items.filter { $0.status == .completed }.count) { Task { await library.measure() } }
+        .onChange(of: library.completedItems.count) { Task { await library.measure() } }
         #if os(macOS)
         // Space in one line under the window title, as Finder's status bar has it: beside a whole disk the
         // downloads were a sliver on a bar that was nearly all "Other".
-        .navigationSubtitle(library.items.isEmpty || (hasMusic && kind == .music) ? "" : storageSummary)
+        .navigationSubtitle(library.isEmpty || (hasMusic && kind == .music) ? "" : storageSummary)
         // Files may have been deleted or moved in Finder while the app was in the background.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await library.measure() }
@@ -66,36 +59,173 @@ struct DownloadsView: View {
     }
     #endif
 
-    private func content(pending: [DownloadItem], shows: [DownloadShow]) -> some View {
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                 #if !os(macOS)
-                StorageCard(usage: library.usage, songs: MusicDownloadLibrary.shared.size)
+                DownloadStorageSection()
                 #endif
-                if !pending.isEmpty { queue(pending) }
-                if !shows.isEmpty {
-                    VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-                        // Sections of their own, as on a show's page: with fewer shows than columns nothing lay under
-                        // the sort buttons at the right, so Down from them stopped there and the shows couldn't be
-                        // reached (#1324).
-                        downloadedHeader(count: shows.count).tvFocusSection()
-                        // Not lazy: the remote only moves focus to views that exist, and below a download queue
-                        // as tall as the screen a lazy grid had built none, so Down stopped at the queue.
-                        EpisodeGrid(minimum: DownloadMetrics.cardMin, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
-                            ForEach(shows) { show in card(show) }
-                        }
-                        .tvFocusSection()
-                    }
-                }
+                DownloadQueueSection()
+                DownloadedShowsSection(sort: $sort, reversed: $reversed, action: $action)
             }.pageContainer()
         }
-        // TMDB's art for the shows this device hasn't matched yet, one at a time while the page is open.
-        .task(id: shows.map(\.id)) { await DownloadArtwork.shared.load(shows) }
+    }
+}
+
+#if !os(macOS)
+private struct DownloadStorageSection: View {
+    private var library: DownloadLibrary { .shared }
+    var body: some View {
+        StorageCard(usage: library.usage, songs: MusicDownloadLibrary.shared.size)
+    }
+}
+#endif
+
+/// The active/queued downloads section, isolated so 1-second progress ticks don't invalidate the cached shows grid.
+private struct DownloadQueueSection: View {
+    private var library: DownloadLibrary { .shared }
+
+    var body: some View {
+        let pending = library.pendingItems
+        if !pending.isEmpty {
+            queue(pending)
+        }
+    }
+
+    #if os(macOS)
+    /// The queue as Safari's downloads list: one grouped box of rows, with quiet text controls above it.
+    private func queue(_ pending: [DownloadItem]) -> some View {
+        let allPaused = pending.allSatisfy { $0.status == .paused || $0.status == .failed }
+        let positions = Self.queuePositions(in: pending)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(L10n.text("Caching")).font(.title3.weight(.semibold))
+                Text("\(pending.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Menu {
+                    Picker(L10n.text("At a Time"), selection: Binding(get: { library.simultaneous }, set: { library.simultaneous = $0 })) {
+                        ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text(L10n.text("%lld at a time", library.simultaneous))
+                }
+                .menuStyle(.button).buttonStyle(.borderless).fixedSize()
+                Divider().frame(height: 12)
+                if allPaused {
+                    Button(L10n.text("Resume All")) { library.resumeAll() }.buttonStyle(.borderless)
+                } else {
+                    Button(L10n.text("Pause All")) { library.pauseAll() }.buttonStyle(.borderless)
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 4)
+            LazyVStack(spacing: 0) {
+                ForEach(Array(pending.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().padding(.leading, 70) }
+                    QueueRow(item: item, rate: library.rates[item.id], position: positions[item.id])
+                }
+            }
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)) }
+        }
+    }
+    #else
+    private func queue(_ pending: [DownloadItem]) -> some View {
+        let allPaused = pending.allSatisfy { $0.status == .paused || $0.status == .failed }
+        let positions = Self.queuePositions(in: pending)
+        return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+            HStack(alignment: .center, spacing: 12) {
+                SectionHeader(title: L10n.text("Caching")).fixedSize().layoutPriority(1)
+                Text("\(pending.count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Menu {
+                    Picker(L10n.text("At a Time"), selection: Binding(get: { library.simultaneous }, set: { library.simultaneous = $0 })) {
+                        ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
+                    }
+                } label: {
+                    FittingLabel(title: L10n.text("%lld at a time", library.simultaneous), symbol: "square.stack.3d.down.right")
+                }
+                .controlButton()
+                if allPaused {
+                    Button { library.resumeAll() } label: { FittingLabel(title: L10n.text("Resume All"), symbol: "play.fill") }.controlButton()
+                } else {
+                    Button { library.pauseAll() } label: { FittingLabel(title: L10n.text("Pause All"), symbol: "pause.fill") }.controlButton()
+                }
+            }
+            #if os(tvOS)
+            VStack(spacing: DownloadMetrics.rowSpacing) {
+                ForEach(pending) { item in
+                    QueueRow(item: item, rate: library.rates[item.id], position: positions[item.id])
+                }
+            }
+            #else
+            LazyVStack(spacing: DownloadMetrics.rowSpacing) {
+                ForEach(pending) { item in
+                    QueueRow(item: item, rate: library.rates[item.id], position: positions[item.id])
+                }
+            }
+            #endif
+        }
+        // Liquid Glass controls over the glass rows, as on the watch page.
+        .environment(\.glassControls, true)
+        .tvFocusSection()
+    }
+    #endif
+
+    /// 1 for the next download to start.
+    private static func queuePositions(in pending: [DownloadItem]) -> [String: Int] {
+        var result: [String: Int] = [:]
+        for item in pending where item.status == .queued {
+            result[item.id] = result.count + 1
+        }
+        return result
+    }
+}
+
+/// The finished shows section, observing only `completedItems` so download progress ticks don't re-group or re-diff it.
+private struct DownloadedShowsSection: View {
+    @Environment(Store.self) private var store
+    @Binding var sort: DownloadSort
+    @Binding var reversed: Bool
+    @Binding var action: CachedShowAction?
+    @State private var confirmsDeleteAll = false
+    #if os(tvOS)
+    /// Apple TV asks for a second press instead of a dialog; moving off the button takes the question back.
+    @FocusState private var deleteAllFocused: Bool
+    #endif
+    private var library: DownloadLibrary { .shared }
+
+    var body: some View {
+        let shows = DownloadShow.group(library.completedItems, by: sort, reversed: reversed)
+        if !shows.isEmpty {
+            VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+                // Sections of their own, as on a show's page: with fewer shows than columns nothing lay under
+                // the sort buttons at the right, so Down from them stopped there and the shows couldn't be
+                // reached (#1324).
+                downloadedHeader(count: shows.count).tvFocusSection()
+                #if os(tvOS)
+                // Not lazy on Apple TV: the remote only moves focus to views that exist, and below a download queue
+                // as tall as the screen a lazy grid had built none, so Down stopped at the queue.
+                EpisodeGrid(minimum: DownloadMetrics.cardMin, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
+                    ForEach(shows) { show in card(show) }
+                }
+                .tvFocusSection()
+                #else
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: DownloadMetrics.cardMin), spacing: Layout.gridSpacing, alignment: .top)],
+                          spacing: Layout.gridRowSpacing) {
+                    ForEach(shows) { show in card(show) }
+                }
+                #endif
+            }
+            // TMDB's art for the shows this device hasn't matched yet, one at a time while the page is open.
+            .task(id: shows.map(\.id)) { await DownloadArtwork.shared.load(shows) }
+        }
     }
 
     /// A show with several episodes opens its page; a film (one download) plays at once.
     @ViewBuilder private func card(_ show: DownloadShow) -> some View {
-        let label = DownloadShowCard(show: show, details: DownloadArtwork.shared.details(for: show))
+        let label = DownloadShowCard(show: show)
         Group {
             if show.items.count == 1, let item = show.items.first {
                 Button { store.playing = store.savedChannel(item) } label: { label }
@@ -187,83 +317,6 @@ struct DownloadsView: View {
     private func deleteAll() {
         confirmsDeleteAll = false
         library.remove(library.items.map(\.id))
-    }
-
-    #if os(macOS)
-    /// The queue as Safari's downloads list: one grouped box of rows, with quiet text controls above it.
-    private func queue(_ pending: [DownloadItem]) -> some View {
-        let paused = pending.filter { $0.status == .paused || $0.status == .failed }
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(L10n.text("Caching")).font(.title3.weight(.semibold))
-                Text("\(pending.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Menu {
-                    Picker(L10n.text("At a Time"), selection: Binding(get: { library.simultaneous }, set: { library.simultaneous = $0 })) {
-                        ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
-                    }
-                    .pickerStyle(.inline).labelsHidden()
-                } label: {
-                    Text(L10n.text("%lld at a time", library.simultaneous))
-                }
-                .menuStyle(.button).buttonStyle(.borderless).fixedSize()
-                Divider().frame(height: 12)
-                if paused.count == pending.count {
-                    Button(L10n.text("Resume All")) { library.resumeAll() }.buttonStyle(.borderless)
-                } else {
-                    Button(L10n.text("Pause All")) { library.pauseAll() }.buttonStyle(.borderless)
-                }
-            }
-            .font(.subheadline)
-            .padding(.horizontal, 4)
-            VStack(spacing: 0) {
-                ForEach(Array(pending.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Divider().padding(.leading, 70) }
-                    QueueRow(item: item, rate: library.rates[item.id], position: queuePosition(item, in: pending))
-                }
-            }
-            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)) }
-        }
-    }
-    #else
-    private func queue(_ pending: [DownloadItem]) -> some View {
-        let paused = pending.filter { $0.status == .paused || $0.status == .failed }
-        return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            HStack(alignment: .center, spacing: 12) {
-                SectionHeader(title: L10n.text("Caching")).fixedSize().layoutPriority(1)
-                Text("\(pending.count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Menu {
-                    Picker(L10n.text("At a Time"), selection: Binding(get: { library.simultaneous }, set: { library.simultaneous = $0 })) {
-                        ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
-                    }
-                } label: {
-                    FittingLabel(title: L10n.text("%lld at a time", library.simultaneous), symbol: "square.stack.3d.down.right")
-                }
-                .controlButton()
-                if paused.count == pending.count {
-                    Button { library.resumeAll() } label: { FittingLabel(title: L10n.text("Resume All"), symbol: "play.fill") }.controlButton()
-                } else {
-                    Button { library.pauseAll() } label: { FittingLabel(title: L10n.text("Pause All"), symbol: "pause.fill") }.controlButton()
-                }
-            }
-            VStack(spacing: DownloadMetrics.rowSpacing) {
-                ForEach(pending) { item in
-                    QueueRow(item: item, rate: library.rates[item.id], position: queuePosition(item, in: pending))
-                }
-            }
-        }
-        // Liquid Glass controls over the glass rows, as on the watch page.
-        .environment(\.glassControls, true)
-        .tvFocusSection()
-    }
-    #endif
-
-    /// 1 for the next download to start.
-    private func queuePosition(_ item: DownloadItem, in pending: [DownloadItem]) -> Int? {
-        guard item.status == .queued else { return nil }
-        return (pending.filter { $0.status == .queued }.firstIndex { $0.id == item.id } ?? 0) + 1
     }
 }
 
@@ -357,9 +410,9 @@ struct DownloadShow: Identifiable {
     let videoID: String
     let sourceName: String
     let items: [DownloadItem]
-    var size: Int64 { items.reduce(0) { $0 + $1.size } }
+    let size: Int64
     /// When its last episode finished.
-    var latest: Date { items.compactMap(\.finished).max() ?? .distantPast }
+    let latest: Date
     /// The show a download belongs to: its video on its source.
     static func key(for item: DownloadItem) -> String { item.source.siteKey + "\u{1F}" + item.source.videoID }
     /// The video's key in `TMDBMatchStore`, as its page has it.
@@ -370,9 +423,12 @@ struct DownloadShow: Identifiable {
         let groups = Dictionary(grouping: items, by: key(for:))
         let shows = groups.map { key, items in
             let first = items[0]
+            let ordered = DownloadItem.inEpisodeOrder(items)
+            let size = ordered.reduce(0) { $0 + $1.size }
+            let latest = ordered.compactMap(\.finished).max() ?? .distantPast
             return DownloadShow(id: key, title: first.title, poster: first.poster, posterHeaders: first.posterHeaders,
                                 siteKey: first.source.siteKey, videoID: first.source.videoID, sourceName: first.source.siteName,
-                                items: DownloadItem.inEpisodeOrder(items))
+                                items: ordered, size: size, latest: latest)
         }
         // The id breaks ties, so shows of one name or size keep their places between updates.
         let sorted = shows.sorted { a, b in
@@ -801,8 +857,8 @@ extension View {
 private struct DownloadShowCard: View {
     @Environment(Store.self) private var store
     let show: DownloadShow
-    let details: TMDBMatch.Details?
     var body: some View {
+        let details = DownloadArtwork.shared.details(for: show)
         let shape = RoundedRectangle(cornerRadius: DownloadMetrics.cardCorner, style: .continuous)
         VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
@@ -815,7 +871,7 @@ private struct DownloadShowCard: View {
                 if show.items.count == 1, let item = show.items.first, let progress = store.cachedProgress(item) {
                     Text(progress.label).font(.caption).monospacedDigit()
                 }
-                Text(caption).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                Text(caption(details)).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 4)
         }
@@ -824,7 +880,7 @@ private struct DownloadShowCard: View {
     }
 
     /// "2024 · 剧情 · 玩偶 · 4.2 GB": TMDB's year and genre, then the source and the space it takes.
-    private var caption: String {
+    private func caption(_ details: TMDBMatch.Details?) -> String {
         let facts = details.map { [$0.year.map(String.init), $0.genres.first].compactMap { $0 } } ?? []
         return (facts + [SourceLabel(show.sourceName).text, DownloadFormat.size(show.size)]).joined(separator: " · ")
     }
@@ -848,18 +904,26 @@ private struct DownloadShowCard: View {
 private struct DownloadShowArt: View {
     let show: DownloadShow
     let details: TMDBMatch.Details?
+    @State private var backdropAspect: CGFloat?
     @State private var logoAspect: CGFloat?
     var body: some View {
+        let backdrop = details?.backdrop
+        let hasBackdrop = backdrop.map { backdropAspect != nil || TMDBArtwork.cached($0) != nil } ?? false
+        let cachedLogoAspect = details?.logo.flatMap(TMDBArtwork.cached).map { CGFloat($0.width) / CGFloat(max($0.height, 1)) }
+        let resolvedLogoAspect = logoAspect ?? cachedLogoAspect
         GeometryReader { proxy in
             let size = proxy.size
             ZStack(alignment: .bottomLeading) {
                 Color(white: 0.12)
-                PosterImage(url: show.poster, headers: show.posterHeaders)
-                    .frame(width: size.width, height: size.height).clipped()
-                    .blur(radius: 30).scaleEffect(1.3)
-                    .overlay(Color.black.opacity(0.3))
-                if let backdrop = details?.backdrop {
-                    TMDBArtwork(url: backdrop, maxPixels: 1280).frame(width: size.width, height: size.height).clipped()
+                if !hasBackdrop {
+                    PosterImage(url: show.poster, headers: show.posterHeaders)
+                        .frame(width: size.width, height: size.height).clipped()
+                        .blur(radius: 30, opaque: true).scaleEffect(1.3)
+                        .overlay(Color.black.opacity(0.3))
+                }
+                if let backdrop {
+                    TMDBArtwork(url: backdrop, maxPixels: 1280, aspect: $backdropAspect)
+                        .frame(width: size.width, height: size.height).clipped()
                 } else {
                     let height = size.height * 0.84
                     PosterImage(url: show.poster, headers: show.posterHeaders)
@@ -871,16 +935,18 @@ private struct DownloadShowArt: View {
                 if let logo = details?.logo {
                     LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
                     // Wide logos get a width limit, tall ones a height limit.
-                    let aspect = max(logoAspect ?? 3, 0.5)
+                    let aspect = max(resolvedLogoAspect ?? 3, 0.5)
                     let width = min(size.width * 0.5, size.height * 0.3 * aspect)
                     TMDBArtwork(url: logo, maxPixels: 600, fill: false, aspect: $logoAspect)
                         .frame(width: width, height: width / aspect)
-                        .opacity(logoAspect == nil ? 0 : 1)
+                        .opacity(resolvedLogoAspect == nil ? 0 : 1)
                         .shadow(color: .black.opacity(0.4), radius: 8)
                         .padding(size.width * 0.045)
                 }
             }
         }
+        .onChange(of: backdrop) { backdropAspect = nil }
+        .onChange(of: details?.logo) { logoAspect = nil }
         .accessibilityHidden(true)
     }
 }
@@ -898,7 +964,7 @@ struct DownloadShowPage: View {
     private var artwork: DownloadArtwork { .shared }
 
     var body: some View {
-        let show = DownloadShow.group(library.items.filter { $0.status == .completed && DownloadShow.key(for: $0) == id }).first
+        let show = DownloadShow.group(library.completedItems.filter { DownloadShow.key(for: $0) == id }).first
         Group {
             if let show { content(show) } else { Color.clear }
         }
@@ -989,11 +1055,18 @@ struct DownloadShowPage: View {
                     .accessibilityIdentifier("downloads.episodes.reverse")
             }
             .tvFocusSection()
-            // Not lazy, as on the Downloads page: the remote only moves to tiles that exist.
+            #if os(tvOS)
+            // Not lazy on Apple TV, as on the Downloads page: the remote only moves to tiles that exist.
             EpisodeGrid(minimum: DownloadMetrics.episodeTile, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
                 ForEach(items) { item in tile(item, info: infos[item.id], backdrops: backdrops) }
             }
             .tvFocusSection()
+            #else
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: DownloadMetrics.episodeTile), spacing: Layout.gridSpacing, alignment: .top)],
+                      spacing: Layout.gridRowSpacing) {
+                ForEach(items) { item in tile(item, info: infos[item.id], backdrops: backdrops) }
+            }
+            #endif
         }
     }
 
@@ -1101,7 +1174,7 @@ private struct RemoveCachedEpisodes: View {
                 selection = selection.count == show.items.count ? [] : Set(show.items.map(\.id))
             }.controlButton()
             ScrollView {
-                VStack(spacing: 8) {
+                LazyVStack(spacing: 8) {
                     ForEach(show.items) { item in
                         Button {
                             if !selection.insert(item.id).inserted { selection.remove(item.id) }
@@ -1135,6 +1208,7 @@ private struct RemoveCachedEpisodes: View {
     }
 }
 
+#if os(tvOS)
 /// LazyVGrid's adaptive columns, built all at once, for the same reason as the list of shows: a lazy grid below
 /// the screen has no episodes yet for the remote to move to.
 private struct EpisodeGrid: SwiftUI.Layout {
@@ -1175,6 +1249,7 @@ private struct EpisodeGrid: SwiftUI.Layout {
         }
     }
 }
+#endif
 
 /// A downloaded episode's mark on a short episode chip.
 struct DownloadedBadge: View {
