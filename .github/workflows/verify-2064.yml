@@ -1,0 +1,36 @@
+# 临时验证 #2064 改动：在 macos runner 上编译 TVCore 并跑 PlaybackHistory 相关测试。
+# 用完即删。上游仓库无 PR 触发的 CI，这是 fork 侧的临时自检。
+name: verify-2064
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [history-near-dup-fold]
+
+jobs:
+  build-test:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Build FFmpeg (binary target)
+        run: |
+          bash Scripts/build-apple-ffmpeg.sh || true
+          ls -la Vendor/FFmpeg/ 2>/dev/null || true
+      - name: Build LibASS (binary target)
+        run: |
+          bash Scripts/build-apple-libass.sh || true
+          ls -la Vendor/LibASS/ 2>/dev/null || true
+      - name: Build TVCore
+        run: swift build --target TVCore 2>&1 | tee build.log
+      - name: Run PlaybackHistory tests
+        run: |
+          swift test --filter 'PlaybackHistory' 2>&1 | tee test.log
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo '=== build.log tail ==='; tail -n 80 build.log || true
+          echo '=== test.log tail ==='; tail -n 80 test.log || true
+          echo '=== grep my symbols ==='; grep -nE 'dedupKey|deduplicate|PlaybackHistoryContext' Sources/TVCore/PlaybackHistory.swift || true
