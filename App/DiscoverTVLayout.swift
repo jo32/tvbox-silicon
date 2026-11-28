@@ -354,12 +354,11 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
             detail.adjustsFontSizeToFitWidth = entry.ratingItem != nil
             detail.minimumScaleFactor = 0.7
             if let ratingItem = entry.ratingItem {
-                ratingTask = Task { [weak self] in
-                    guard let score = await CatalogRatingTitle(ratingItem).doubanScore(),
-                          !Task.isCancelled, let self else { return }
+                // A shelf shows the device's scores only, like the cards (`CatalogRatingTitle.cachedDoubanScore`).
+                if let score = CatalogRatingTitle(ratingItem).cachedDoubanScore() {
                     let caption = [entry.detail, score.caption].filter { !$0.isEmpty }.joined(separator: " · ")
-                    self.detail.text = caption
-                    self.accessibilityLabel = [entry.title, caption].joined(separator: "、")
+                    detail.text = caption
+                    accessibilityLabel = [entry.title, caption].joined(separator: "、")
                 }
             }
             posterHeight.constant = size.height

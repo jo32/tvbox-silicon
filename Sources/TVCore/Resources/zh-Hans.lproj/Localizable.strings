@@ -2466,3 +2466,5 @@
 "The outro must start before it ends." = "片尾的开始时间必须在结束时间之前。";
 "Looks up this episode's intro and outro in TheIntroDB, IntroDB and TheOtherDB, which then learn what you play. Times found fill the empty fields below; until you save them they only offer Skip." = "在 TheIntroDB、IntroDB 和 TheOtherDB 中查找这一集的片头片尾，这些服务会因此得知你在播放什么。找到的时间会填入下方的空白栏；保存之前，它们只显示“跳过”按钮。";
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片头不填开始即从头开始，片尾不填结束即到结尾。留空一段的时间表示不跳过该段，时间格式为 分:秒。";
+"Keep Controls Visible" = "始终显示控件";
+"Count back from the end" = "从结尾倒数";

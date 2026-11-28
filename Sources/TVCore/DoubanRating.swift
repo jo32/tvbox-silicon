@@ -19,6 +19,13 @@ public enum DoubanRating {
     static let fewestRatings = 10
     private static let userAgent = "Yingxia/1 (https://yingxia.getmegaportal.com)"
 
+    /// The score this device already has for a title, without asking anyone: what a catalog card shows, so a grid
+    /// scrolling past doesn't send Douban a burst of searches (it limits busy addresses, and Discover's Douban
+    /// lists come from the same address). A title page asks with `score(...)`, and its card shows it from then on.
+    public static func cachedScore(tmdbID: Int, mediaType: TMDBMatch.MediaType) -> Score? {
+        Cache.read("\(mediaType.rawValue)-\(tmdbID)")?.score
+    }
+
     public static func score(tmdbID: Int, mediaType: TMDBMatch.MediaType, name: String = "", originalName: String = "",
                              year: Int? = nil, session: URLSession = .shared) async -> Score? {
         let key = "\(mediaType.rawValue)-\(tmdbID)"
@@ -212,6 +219,8 @@ public enum DoubanRating {
     enum Cache {
         private static let defaultsKey = "douban.ratings"
         private static let lock = NSLock()
+        /// Decoded once: every card on screen reads the cache. Only touched under `lock`.
+        nonisolated(unsafe) private static var memo: [String: Entry]?
 
         static func read(_ key: String) -> Entry? {
             lock.withLock {
@@ -225,13 +234,16 @@ public enum DoubanRating {
                 var all = load().filter { $0.value.date.addingTimeInterval($0.value.lasts) > Date() }
                 all[key] = entry
                 if all.count > 300 { all = Dictionary(uniqueKeysWithValues: all.sorted { $0.value.date > $1.value.date }.prefix(300).map { ($0.key, $0.value) }) }
+                memo = all
                 if let data = try? JSONEncoder().encode(all) { UserDefaults.standard.set(data, forKey: defaultsKey) }
             }
         }
 
         private static func load() -> [String: Entry] {
-            guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return [:] }
-            return (try? JSONDecoder().decode([String: Entry].self, from: data)) ?? [:]
+            if let memo { return memo }
+            let all = UserDefaults.standard.data(forKey: defaultsKey).flatMap { try? JSONDecoder().decode([String: Entry].self, from: $0) } ?? [:]
+            memo = all
+            return all
         }
     }
 }

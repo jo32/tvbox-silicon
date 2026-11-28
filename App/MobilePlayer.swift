@@ -90,6 +90,8 @@ struct MobilePlayerView: View {
     @State private var tapTask: Task<Void, Never>?
     /// Sliding sideways across the picture: where the slide began.
     @State private var swipeStart: Double?
+    /// How far the seek swipe had moved at its last step: each step adds its own distance at the speed it moved (#2580).
+    @State private var swipeMoved: CGFloat = 0
     /// Sliding up or down: the brightness on the left, the volume on the right, from where the slide began.
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     /// Off, as it starts (#1745): two taps anywhere play or pause, and the sides don't skip.
@@ -427,6 +429,7 @@ struct MobilePlayerView: View {
             guard showsTransport, seekable, clock.duration > 0, playingOn == nil, !pip.active else { return }
             let start = clock.currentPosition
             swipeStart = start
+            swipeMoved = 0
             clock.scrub(to: start)
             hideChrome()
         case .began(let slide):
@@ -443,8 +446,11 @@ struct MobilePlayerView: View {
             hideChrome()
         case .moved(let moved, let size, let velocity):
             if let swipeStart {
-                let span = PictureSeek.span(for: velocity.width)
-                clock.scrub(to: PictureSeek.target(from: swipeStart, moved: moved.width, width: size.width, duration: clock.duration, span: span),
+                // Step by step from where the scrub is, each step at its own speed's span: the whole swipe measured
+                // with the current speed jumped back toward the start as a fast flick slowed down (#2580).
+                let span = PictureSeek.span(for: velocity.width), step = moved.width - swipeMoved
+                swipeMoved = moved.width
+                clock.scrub(to: PictureSeek.target(from: clock.scrubbing ?? swipeStart, moved: step, width: size.width, duration: clock.duration, span: span),
                             secondsPerPoint: PictureSeek.secondsPerPoint(width: size.width, duration: clock.duration, span: span))
             } else if leveling, var level {
                 level.value = PictureLevel.value(from: level.start, moved: moved.height, height: size.height)

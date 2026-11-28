@@ -969,7 +969,8 @@ typealias MusicTrack = TVCore.MusicTrack
         guard let url = track.artwork else { return }
         artworkTask = Task { [weak self, weak item] in
             guard let bitmap = await PosterPalette.image(url), !Task.isCancelled,
-                  let data = UIImage(cgImage: bitmap).pngData(),
+                  // JPEG: a cover encodes several times faster than as PNG, and this runs on the main actor.
+                  let data = UIImage(cgImage: bitmap).jpegData(compressionQuality: 0.85),
                   let self, self.generation == run, let item, player.currentItem === item else { return }
             let artwork = AVMutableMetadataItem()
             artwork.identifier = .commonIdentifierArtwork

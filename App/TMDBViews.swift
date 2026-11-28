@@ -28,6 +28,11 @@ struct CatalogRatingTitle: Hashable, Sendable {
     func doubanScore() async -> DoubanRating.Score? {
         await CatalogRatingLookups.shared.score(for: self)
     }
+
+    /// What a card shows: only a score already on the device, from a title page opened before (`doubanScore()`).
+    func cachedDoubanScore() -> DoubanRating.Score? {
+        DoubanRating.cachedScore(tmdbID: id, mediaType: type)
+    }
 }
 
 /// Keep scrolling lists from starting a burst of network calls. Visible views can share the same request.
@@ -95,10 +100,8 @@ struct CatalogRatings: View {
         }
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .task(id: title) {
-            let score = await title.doubanScore()
-            if !Task.isCancelled { result = score.map { (title, $0) } }
-        }
+        // Cards read the device's scores only: a grid of them asking Douban gets the address limited (`cachedScore`).
+        .task(id: title) { result = title.cachedDoubanScore().map { (title, $0) } }
     }
 
     nonisolated static func tmdbCaption(_ score: Double) -> String {

@@ -3117,6 +3117,7 @@ struct VideoDetailView: View {
                     // The file name a label stands for: its resolution and codec can matter on a netdisk line.
                     if episodeLabels[episode.id] != nil { Text(episode.name) }
                     FavoriteMenuButton(item: episodeFavorite(episode), name: episode.name)
+                    chooseQualityButton(episode)
                     if saved == nil || saved?.status == .failed {
                         Button(L10n.text("Cache"), systemImage: "arrow.down.circle") {
                             DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
@@ -3197,6 +3198,16 @@ struct VideoDetailView: View {
                 store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback, resumePosition: resume)
             }
         } catch { fail(episode, error) }
+    }
+    /// A remembered quality plays without asking (#2609), so the episode's menu is where another one is picked: it
+    /// asks again, and the new pick is remembered.
+    @ViewBuilder private func chooseQualityButton(_ episode: Episode) -> some View {
+        if RememberedQuality.remembered(for: client.site.key) != nil {
+            Button(L10n.text("Choose quality"), systemImage: "slider.horizontal.3") {
+                RememberedQuality.forget(for: client.site.key)
+                startRequest { await play(episode) }
+            }
+        }
     }
     private func resolve(_ plan: PlaybackPlan, choice: PlaybackChoice, episode: Episode) async {
         busy = true; loadingEpisode = episode.id
@@ -3774,6 +3785,7 @@ extension VideoDetailView {
         .accessibilityAddTraits(current ? .isSelected : [])
         .contextMenu {
             if episodeLabels[episode.id] != nil { Text(episode.name) }
+            chooseQualityButton(episode)
             if saved == nil || saved?.status == .failed {
                 Button(L10n.text("Cache"), systemImage: "arrow.down.circle") {
                     DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
