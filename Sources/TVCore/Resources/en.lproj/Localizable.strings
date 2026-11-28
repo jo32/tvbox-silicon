@@ -2502,3 +2502,31 @@
 "This sign-in link is out of date. Go back to Yingxia and try again." = "This sign-in link is out of date. Go back to Yingxia and try again.";
 "Signed in. You can return to Yingxia." = "Signed in. You can return to Yingxia.";
 "Sign-in didn't finish. You can return to Yingxia." = "Sign-in didn't finish. You can return to Yingxia.";
+
+/* Assistant tools (App/Agent/Tools) */
+"%@ s" = "%@ s";
+"%@ and %@ more" = "%@ and %@ more";
+"Add “%@” to Favorites?" = "Add “%@” to Favorites?";
+"Delete %@ from Downloads?" = "Delete %@ from Downloads?";
+"Download “%@”?" = "Download “%@”?";
+"Episodes: %@" = "Episodes: %@";
+"Remove %@ from Favorites?" = "Remove %@ from Favorites?";
+"Remove %@ from history?" = "Remove %@ from history?";
+"Change a setting?" = "Change a setting?";
+"Change “%@” to %@?" = "Change “%@” to %@?";
+"Now: %@" = "Now: %@";
+"Change the player?" = "Change the player?";
+"Episode: %@" = "Episode: %@";
+"Play a video?" = "Play a video?";
+"Play at %@?" = "Play at %@?";
+"Play “%@”?" = "Play “%@”?";
+"Switch audio to “%@”?" = "Switch audio to “%@”?";
+"Switch subtitles to “%@”?" = "Switch subtitles to “%@”?";
+"Add the subscription from %@?" = "Add the subscription from %@?";
+"Change a subscription?" = "Change a subscription?";
+"Move the subscription “%@”?" = "Move the subscription “%@”?";
+"Remove the subscription “%@”?" = "Remove the subscription “%@”?";
+"Rename the subscription “%@” to “%@”?" = "Rename the subscription “%@” to “%@”?";
+"Turn off the subscription “%@”?" = "Turn off the subscription “%@”?";
+"Turn on the subscription “%@”?" = "Turn on the subscription “%@”?";
+"Change the script “%@”?" = "Change the script “%@”?";

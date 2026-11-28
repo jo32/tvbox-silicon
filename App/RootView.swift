@@ -121,6 +121,8 @@ struct RootView: View {
                 // section change collapsed the sidebar while the new page was still a placeholder.
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
+                    // A page the assistant opened, for the section on screen.
+                    .agentPages(accepts: { $0 == store.section }) { detailPath.append($0) }
                     .overlay { ThemedTitleBand() }
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
@@ -318,7 +320,19 @@ struct RootView: View {
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
             .environment(\.openRoute, moreStack.opener)
-        } else { RouteStack { content(item).tvDefaultControls() } }
+            .agentPages(accepts: { $0 == .more || inMoreTab.contains($0) }) { moreStack.path.append($0) }
+        } else { RouteStack(section: item) { content(item).tvDefaultControls() } }
+    }
+
+    /// The sections the More tab shows, whose pages the assistant opens on its stack.
+    private var inMoreTab: [AppSection] {
+        #if os(iOS)
+        phoneTabs ? inMore : []
+        #elseif os(tvOS)
+        tvMore
+        #else
+        []
+        #endif
     }
 
     #if os(tvOS)
@@ -628,12 +642,15 @@ extension EnvironmentValues {
 /// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
 private struct RouteStack<Root: View>: View {
     @State private var stack = RoutePath()
+    /// The tab's section, whose pages the assistant opens here (`agentPages`).
+    private let section: AppSection
     private let root: Root
-    init(@ViewBuilder root: () -> Root) { self.root = root() }
+    init(section: AppSection, @ViewBuilder root: () -> Root) { self.section = section; self.root = root() }
     var body: some View {
         @Bindable var stack = stack
         NavigationStack(path: $stack.path) { root.routeDestinations() }
             .environment(\.openRoute, stack.opener)
+            .agentPages(accepts: { [section] in $0 == section }) { stack.path.append($0) }
     }
 }
 

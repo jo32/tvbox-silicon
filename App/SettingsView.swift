@@ -1191,6 +1191,12 @@ struct FormSettingsView: View {
                 jumpRequest = nil
             }
         }
+        // A row the assistant opened (`settings_open`), as a search result opens it.
+        .onChange(of: store.agentSettingsAnchor, initial: true) { _, anchor in
+            guard let anchor else { return }
+            store.agentSettingsAnchor = nil
+            jumpRequest = SettingsJumpRequest(anchor: anchor)
+        }
         #if DEBUG
         // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
         .task {
@@ -1410,6 +1416,23 @@ private enum SettingsSearchTarget: Hashable, Sendable {
         #endif
         default: return "settings.search \(self)"
         }
+    }
+}
+
+/// A Settings row's anchor by the name of its search target (`"playOn"`, `"iCloudSync"`), for the assistant's
+/// `settings_open` (App/Agent/Tools/SettingsCatalog.swift); nil for a name with no row.
+enum SettingsRowAnchor {
+    static func named(_ name: String) -> String? {
+        let targets: [SettingsSearchTarget] = [
+            .account, .feedback, .telegram, .hiddenSources, .hiddenLive, .arrangeSubscriptions, .removeSubscriptions,
+            .addSubscription, .livePlugins, .comicSources, .bookSources, .bilibili, .douyin, .cloudDrive, .profiles,
+            .iCloudSync, .watchNow, .appIcon, .colorTheme, .appearance, .playback, .playURL, .editTabBar, .launchPage,
+            .tabBarLabels, .collapseTabBar, .language, .showDanmaku, .danmakuSettings, .bilibiliCast, .playOn,
+            .showVideoInfo, .playerWindowSize, .skipIntroOutro, .subtitleStyle, .subtitleSources, .sharperPicture,
+            .smoothMotion, .localCache, .jarRuntime, .diagnostics, .privacy, .errorReports, .tmdbLookup,
+            .softwareUpdate, .autoInstallUpdates, .releaseNotes, .licenses,
+        ]
+        return targets.first { "\($0)" == name }?.anchor
     }
 }
 

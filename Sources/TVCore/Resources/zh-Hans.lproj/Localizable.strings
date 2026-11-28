@@ -2502,3 +2502,31 @@
 "This sign-in link is out of date. Go back to Yingxia and try again." = "此登录链接已失效。请返回映匣重试。";
 "Signed in. You can return to Yingxia." = "已登录。现在可以返回映匣了。";
 "Sign-in didn't finish. You can return to Yingxia." = "登录未完成。可以返回映匣了。";
+
+/* Assistant tools (App/Agent/Tools) */
+"%@ s" = "%@ 秒";
+"%@ and %@ more" = "%@ 及另外 %@ 项";
+"Add “%@” to Favorites?" = "将“%@”加入收藏？";
+"Delete %@ from Downloads?" = "从下载中删除 %@？";
+"Download “%@”?" = "下载“%@”？";
+"Episodes: %@" = "集数：%@";
+"Remove %@ from Favorites?" = "从收藏中移除 %@？";
+"Remove %@ from history?" = "从播放历史中删除 %@？";
+"Change a setting?" = "更改设置？";
+"Change “%@” to %@?" = "将“%@”改为 %@？";
+"Now: %@" = "当前：%@";
+"Change the player?" = "更改播放器设置？";
+"Episode: %@" = "剧集：%@";
+"Play a video?" = "播放视频？";
+"Play at %@?" = "以 %@ 播放？";
+"Play “%@”?" = "播放“%@”？";
+"Switch audio to “%@”?" = "将音轨切换为“%@”？";
+"Switch subtitles to “%@”?" = "将字幕切换为“%@”？";
+"Add the subscription from %@?" = "添加来自 %@ 的订阅？";
+"Change a subscription?" = "更改订阅？";
+"Move the subscription “%@”?" = "移动订阅“%@”？";
+"Remove the subscription “%@”?" = "移除订阅“%@”？";
+"Rename the subscription “%@” to “%@”?" = "将订阅“%@”重命名为“%@”？";
+"Turn off the subscription “%@”?" = "关闭订阅“%@”？";
+"Turn on the subscription “%@”?" = "开启订阅“%@”？";
+"Change the script “%@”?" = "修改脚本“%@”？";

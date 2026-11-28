@@ -130,6 +130,8 @@ enum QALaunch {
             }
             await store.importSubscription(address: subscription)
         }
+        // `-qaAgentTool <name> -qaAgentArgs <json>`: runs one of the assistant's tools (App/Agent/Tools/AgentToolsQA.swift).
+        AgentToolsQA.start(store)
         // `-qaOpenProfile <name>` opens that profile, adding it first if there is none by that name; `main` is the main one.
         if let name = UserDefaults.standard.string(forKey: "qaOpenProfile") {
             store.openProfile(name == "main" ? .main : Profiles.shared.all.first { $0.name == name } ?? Profiles.shared.add(named: name))

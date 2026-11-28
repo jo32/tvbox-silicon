@@ -2502,3 +2502,31 @@
 "This sign-in link is out of date. Go back to Yingxia and try again." = "このサインインリンクは古くなっています。映匣に戻ってもう一度お試しください。";
 "Signed in. You can return to Yingxia." = "サインインしました。映匣に戻れます。";
 "Sign-in didn't finish. You can return to Yingxia." = "サインインが完了しませんでした。映匣に戻れます。";
+
+/* Assistant tools (App/Agent/Tools) */
+"%@ s" = "%@ 秒";
+"%@ and %@ more" = "%@ ほか %@ 件";
+"Add “%@” to Favorites?" = "「%@」をお気に入りに追加しますか？";
+"Delete %@ from Downloads?" = "%@ をダウンロードから削除しますか？";
+"Download “%@”?" = "「%@」をダウンロードしますか？";
+"Episodes: %@" = "エピソード数：%@";
+"Remove %@ from Favorites?" = "%@ をお気に入りから削除しますか？";
+"Remove %@ from history?" = "%@ を再生履歴から削除しますか？";
+"Change a setting?" = "設定を変更しますか？";
+"Change “%@” to %@?" = "「%@」を %@ に変更しますか？";
+"Now: %@" = "現在：%@";
+"Change the player?" = "プレーヤーを変更しますか？";
+"Episode: %@" = "エピソード：%@";
+"Play a video?" = "ビデオを再生しますか？";
+"Play at %@?" = "%@ で再生しますか？";
+"Play “%@”?" = "「%@」を再生しますか？";
+"Switch audio to “%@”?" = "音声を「%@」に切り替えますか？";
+"Switch subtitles to “%@”?" = "字幕を「%@」に切り替えますか？";
+"Add the subscription from %@?" = "%@ の配信設定を追加しますか？";
+"Change a subscription?" = "配信設定を変更しますか？";
+"Move the subscription “%@”?" = "配信設定「%@」を移動しますか？";
+"Remove the subscription “%@”?" = "配信設定「%@」を削除しますか？";
+"Rename the subscription “%@” to “%@”?" = "配信設定「%@」の名前を「%@」に変更しますか？";
+"Turn off the subscription “%@”?" = "配信設定「%@」をオフにしますか？";
+"Turn on the subscription “%@”?" = "配信設定「%@」をオンにしますか？";
+"Change the script “%@”?" = "スクリプト「%@」を変更しますか？";
