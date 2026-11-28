@@ -458,7 +458,7 @@ private struct TVSubtitleStylePage: View {
     }
 
     /// #2725: the row's value, named as the novel reader's script picker names the same three choices.
-    static func scriptTitle(_ script: NovelScript) -> String {
+    private static func scriptTitle(_ script: NovelScript) -> String {
         switch script {
         case .original: L10n.text("Original Text")
         case .traditional: L10n.text("Traditional")
