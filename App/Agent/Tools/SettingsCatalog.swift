@@ -12,6 +12,8 @@ import TVCore
     /// The user-defaults key behind it, for the catalog's completeness test; nil when the store keeps it.
     let key: String?
     let title: () -> String
+    /// The localization key of its title, so it is found by its name in every language the app speaks.
+    var titleKey: String?
     /// The Settings page it is on.
     let page: () -> String
     let kind: Kind
@@ -104,7 +106,7 @@ import TVCore
     private static func flag(_ id: String, _ key: String, _ title: String, page: @escaping () -> String, standard: Bool,
                              anchor: String? = nil, keywords: [String] = [], available: @escaping @MainActor (Store) -> Bool = { _ in true },
                              changed: (@MainActor (Store, Bool) -> Void)? = nil) -> AgentSetting {
-        AgentSetting(id: id, key: key, title: { L10n.text(title) }, page: page, kind: .bool, keywords: keywords, anchor: anchor,
+        AgentSetting(id: id, key: key, title: { L10n.text(title) }, titleKey: title, page: page, kind: .bool, keywords: keywords, anchor: anchor,
                      available: available,
                      read: { _ in .bool(UserDefaults.standard.object(forKey: key) as? Bool ?? standard) },
                      write: { store, value in
@@ -118,7 +120,7 @@ import TVCore
                                 choices: @escaping () -> [Double], label: @escaping (Double) -> String = { Self.plain($0) },
                                 anchor: String? = nil, keywords: [String] = [],
                                 available: @escaping @MainActor (Store) -> Bool = { _ in true }) -> AgentSetting {
-        AgentSetting(id: id, key: key, title: { L10n.text(title) }, page: page, kind: .choice,
+        AgentSetting(id: id, key: key, title: { L10n.text(title) }, titleKey: title, page: page, kind: .choice,
                      choices: { choices().map { AgentSetting.Choice(value: .number($0), label: label($0)) } },
                      keywords: keywords, anchor: anchor, available: available,
                      read: { _ in .number(UserDefaults.standard.object(forKey: key) as? Double ?? standard) },
@@ -128,7 +130,7 @@ import TVCore
     private static func texts(_ id: String, _ key: String, _ title: String, page: @escaping () -> String, standard: String,
                               choices: @escaping () -> [(String, String)], anchor: String? = nil, keywords: [String] = [],
                               available: @escaping @MainActor (Store) -> Bool = { _ in true }) -> AgentSetting {
-        AgentSetting(id: id, key: key, title: { L10n.text(title) }, page: page, kind: .choice,
+        AgentSetting(id: id, key: key, title: { L10n.text(title) }, titleKey: title, page: page, kind: .choice,
                      choices: { choices().map { AgentSetting.Choice(value: .string($0.0), label: $0.1) } },
                      keywords: keywords, anchor: anchor, available: available,
                      read: { _ in .string(UserDefaults.standard.string(forKey: key) ?? standard) },
@@ -138,7 +140,7 @@ import TVCore
     private static func integers(_ id: String, _ key: String, _ title: String, page: @escaping () -> String, standard: Int,
                                  choices: @escaping () -> [(Int, String)], keywords: [String] = [],
                                  available: @escaping @MainActor (Store) -> Bool = { _ in true }) -> AgentSetting {
-        AgentSetting(id: id, key: key, title: { L10n.text(title) }, page: page, kind: .choice,
+        AgentSetting(id: id, key: key, title: { L10n.text(title) }, titleKey: title, page: page, kind: .choice,
                      choices: { choices().map { AgentSetting.Choice(value: .number(Double($0.0)), label: $0.1) } },
                      keywords: keywords, available: available,
                      read: { _ in .number(Double(UserDefaults.standard.object(forKey: key) as? Int ?? standard)) },
@@ -198,13 +200,13 @@ import TVCore
                           choices: { [("system", L10n.text("System")), ("light", L10n.text("Light")), ("dark", L10n.text("Dark"))] },
                           anchor: "appearance", keywords: ["dark mode", "light mode", "深色", "浅色", "外观"], available: notTV))
         list.append(AgentSetting(
-            id: "color_theme", key: "colorTheme", title: { L10n.text("Color Theme") }, page: general, kind: .choice,
+            id: "color_theme", key: "colorTheme", title: { L10n.text("Color Theme") }, titleKey: "Color Theme", page: general, kind: .choice,
             choices: { ColorTheme.choices.filter { $0 != .custom }.map { .init(value: .string($0.rawValue), label: $0.title) } },
             keywords: ["theme", "color", "accent", "主题", "配色"], anchor: "colorTheme",
             read: { _ in .string(ColorThemes.shared.current.rawValue) },
             write: { _, value in if let theme = value.string.flatMap(ColorTheme.init(rawValue:)) { ColorThemes.shared.choose(theme) } }))
         list.append(AgentSetting(
-            id: "launch_page", key: nil, title: { L10n.text("Launch Page") }, page: general, kind: .choice,
+            id: "launch_page", key: nil, title: { L10n.text("Launch Page") }, titleKey: "Launch Page", page: general, kind: .choice,
             choices: {
                 let hidden = store?.hiddenSections ?? []
                 return AppSection.launchChoices.filter { !hidden.contains($0) }.map { .init(value: .string(AgentNavigator.name($0)), label: $0.title) }
@@ -226,7 +228,9 @@ import TVCore
         // Watch Now
         for section in HomeSection.available {
             list.append(AgentSetting(
-                id: "watch_now_" + section.rawValue.snakeCased, key: section.key, title: { section.title }, page: watchNow,
+                id: "watch_now_" + section.rawValue.snakeCased, key: section.key, title: { section.title },
+                titleKey: ["upNext": "Up Next", "continueWatching": "Continue Watching", "pinnedSources": "Pinned Sources",
+                           "recommendations": "Recommendations", "favorites": "Favorites", "liveTV": "Live TV"][section.rawValue], page: watchNow,
                 kind: .bool, keywords: ["watch now", "home", "首页"], anchor: "watchNow",
                 read: { _ in .bool(UserDefaults.standard.object(forKey: section.key) as? Bool ?? true) },
                 write: { _, value in UserDefaults.standard.set(AgentArguments.flag(value) ?? true, forKey: section.key) }))
@@ -238,18 +242,18 @@ import TVCore
         list.append(flag("show_danmaku", DanmakuPreference.key, "Show Danmaku", page: playback, standard: true, anchor: "showDanmaku",
                          keywords: ["danmaku", "bullet comments", "弹幕"], available: extras))
         list.append(AgentSetting(
-            id: "auto_play_next_episode", key: nil, title: { L10n.text("Auto-play next episode") }, page: playback, kind: .bool,
+            id: "auto_play_next_episode", key: nil, title: { L10n.text("Auto-play next episode") }, titleKey: "Auto-play next episode", page: playback, kind: .bool,
             keywords: ["next episode", "autoplay", "连播", "自动播放"],
             read: { .bool($0.autoPlayNext) }, write: { store, value in store.autoPlayNext = AgentArguments.flag(value) ?? true }))
         list.append(AgentSetting(
-            id: "skip_intro_outro", key: nil, title: { L10n.text("Automatically skip intro and outro") }, page: playback,
+            id: "skip_intro_outro", key: nil, title: { L10n.text("Automatically skip intro and outro") }, titleKey: "Automatically skip intro and outro", page: playback,
             kind: .bool, keywords: ["intro", "outro", "opening", "片头", "片尾", "跳过"], anchor: "skipIntroOutro",
             read: { .bool(EpisodeSkipSettings.isAutomatic(defaults: $0.playbackDefaults)) },
             write: { store, value in EpisodeSkipSettings.setAutomatic(AgentArguments.flag(value) ?? false, defaults: store.playbackDefaults) }))
         list.append(flag("online_skip_markers", PlaybackSkipLookup.enabledKey, "Look Up Intro and Outro Times Online", page: playback,
                          standard: false, anchor: "skipIntroOutro", keywords: ["intro", "outro", "片头"]))
         list.append(AgentSetting(
-            id: "start_speed", key: PlaybackSpeed.key, title: { L10n.text("Start Speed") }, page: playback, kind: .choice,
+            id: "start_speed", key: PlaybackSpeed.key, title: { L10n.text("Start Speed") }, titleKey: "Start Speed", page: playback, kind: .choice,
             choices: { PlaybackSpeed.speeds.map { .init(value: .number(Double($0)), label: PlaybackSpeed.speedLabel($0)) } },
             keywords: ["speed", "playback speed", "倍速", "速度"], anchor: "playback",
             read: { _ in .number(Double(PlaybackSpeed.load())) },
@@ -338,7 +342,7 @@ import TVCore
         danmakuSettings.append(flag("danmaku_bottom", DanmakuStyle.bottomKey, "Bottom Comments", page: danmaku, standard: true))
         danmakuSettings.append(flag("danmaku_colors", DanmakuFilter.colorsKey, "Colored Comments", page: danmaku, standard: true))
         danmakuSettings.append(AgentSetting(
-            id: "danmaku_blocked_words", key: DanmakuFilter.wordsKey, title: { L10n.text("Blocked Words") }, page: danmaku, kind: .text,
+            id: "danmaku_blocked_words", key: DanmakuFilter.wordsKey, title: { L10n.text("Blocked Words") }, titleKey: "Blocked Words", page: danmaku, kind: .text,
             keywords: ["block", "filter", "屏蔽"],
             read: { _ in .list(DanmakuFilter.words(UserDefaults.standard.string(forKey: DanmakuFilter.wordsKey) ?? "").map { JSONValue.string($0) }) },
             write: { _, value in
@@ -350,6 +354,18 @@ import TVCore
                                     changed: { _, _ in NotificationCenter.default.post(name: DanmakuService.changed, object: nil) }))
         danmakuSettings.append(flag("danmaku_official_lookup", DanmakuService.officialLookupKey, "Find official episodes for dmku",
                                     page: danmaku, standard: true))
+        #if os(iOS)
+        // On iPhone and iPad these rows are on Settings' Playback and Privacy pages, not its main list.
+        let playbackPage: Set<String> = ["show_danmaku", "online_skip_markers", "show_video_info", "show_video_tags", "skip_ads",
+                                         "picture_in_picture", "keep_controls_visible", "lock_button_side", "touch_and_hold_speed",
+                                         "skip_interval", "double_tap_to_skip", "brightness_and_volume", "watch_page_auto_play",
+                                         "watch_page_full_screen", "sharper_picture", "smooth_motion"]
+        let privacyPage: Set<String> = ["send_error_reports", "look_up_titles_on_tmdb"]
+        for index in list.indices {
+            if playbackPage.contains(list[index].id) { list[index].subpage = { AnyView(PlaybackSettingsView()) } }
+            if privacyPage.contains(list[index].id) { list[index].subpage = { AnyView(PrivacySettingsView()) } }
+        }
+        #endif
         for var setting in danmakuSettings {
             setting.subpage = danmakuPage
             setting.available = extras
@@ -394,18 +410,33 @@ import TVCore
         let settings = available(store), links = self.links.filter { $0.available(store) }
         var items: [SettingsSearchItem<String>] = []
         for (order, setting) in settings.enumerated() {
-            let labels = setting.choices().map(\.label)
             items.append(SettingsSearchItem(id: setting.id, title: setting.title(), section: setting.page(),
-                                            keywords: setting.keywords + labels + [setting.id.replacingOccurrences(of: "_", with: " ")],
-                                            order: order))
+                                            keywords: words(setting), order: order))
         }
         for (order, link) in links.enumerated() {
             items.append(SettingsSearchItem(id: link.id, title: link.title(), section: link.page(), keywords: link.keywords,
                                             order: settings.count + order))
         }
-        return SettingsSearchEngine.search(query: query, in: items).map { item in
-            (settings.first { $0.id == item.id }, links.first { $0.id == item.id })
+        var found = SettingsSearchEngine.search(query: query, in: items)
+        if found.isEmpty {
+            // Run-together words (弹幕透明度) are one token to the engine: rank by how much of the query each one's
+            // words cover instead.
+            let text = query.lowercased().filter { !$0.isWhitespace }
+            let scored = items.compactMap { item -> (SettingsSearchItem<String>, Int)? in
+                let terms = Set(([item.title, item.section] + item.keywords).map { $0.lowercased().filter { !$0.isWhitespace } }).filter { $0.count >= 2 }
+                let score = terms.filter { text.contains($0) }.reduce(0) { $0 + $1.count }
+                return score > 0 ? (item, score) : nil
+            }
+            found = scored.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.order < $1.0.order }.map(\.0)
         }
+        return found.map { item in (settings.first { $0.id == item.id }, links.first { $0.id == item.id }) }
+    }
+
+    /// What a setting is found by: its keywords, its choices' labels, and its title and page in every language.
+    private static func words(_ setting: AgentSetting) -> [String] {
+        var words = setting.keywords + setting.choices().map(\.label) + [setting.id.replacingOccurrences(of: "_", with: " ")]
+        if let key = setting.titleKey { words += L10n.supportedLanguages.map { L10n.text(key, language: $0) } }
+        return words
     }
 }
 

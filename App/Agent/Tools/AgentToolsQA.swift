@@ -4,7 +4,7 @@ import TVCore
 
 /// `-qaAgentTool <name> -qaAgentArgs '<json object>'` runs one assistant tool at launch, without a model, and prints
 /// its confirmation summary and JSON result (`AGENT-QA` lines on stdout, and Caches/agent-qa.json). Several in a row:
-/// `-qaAgentSteps '[{"tool":"app_state"},{"tool":"settings_get","args":{"ids":["appearance"]}}]'`. Needs a QA launch
+/// `-qaAgentStepsFile <steps.json>` holding `[{"tool":"app_state"},{"tool":"settings_get","args":{"ids":["appearance"]}}]`. Needs a QA launch
 /// (`-qaSection …`), after its `-qaSubscription` import.
 @MainActor enum AgentToolsQA {
     static func start(_ store: Store) {
@@ -13,7 +13,9 @@ import TVCore
         if let name = defaults.string(forKey: "qaAgentTool") {
             steps.append((name, defaults.string(forKey: "qaAgentArgs").flatMap(JSONValue.parse)?.object ?? [:]))
         }
-        if let text = defaults.string(forKey: "qaAgentSteps"), let list = JSONValue.parse(text)?.array {
+        // `-qaAgentStepsFile <path>`: the steps in a file, as launch arguments read JSON-like text as a property list.
+        let file = defaults.string(forKey: "qaAgentStepsFile").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        if let text = file ?? defaults.string(forKey: "qaAgentSteps"), let list = JSONValue.parse(text)?.array {
             for step in list {
                 guard let name = step.object?["tool"]?.string else { continue }
                 steps.append((name, step.object?["args"]?.object ?? [:]))
@@ -54,6 +56,7 @@ import TVCore
 
     private static func emit(_ line: String) {
         print("AGENT-QA " + line)
+        fflush(stdout)
         Diagnostics.shared.record(.info, "agent-qa", String(line.prefix(2000)))
     }
 }

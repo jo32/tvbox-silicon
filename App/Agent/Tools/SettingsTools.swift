@@ -92,12 +92,13 @@ import TVCore
         let changes = store.section != .settings
         try AgentNavigator.open(.settings, in: store)
         if changes { try? await Task.sleep(for: .milliseconds(450)) }
+        #if os(tvOS)
+        // Apple TV's Settings has no rows to jump to.
+        return .obj(["opened": .str(id), "title": .str(title), "note": .str("Settings is open; on Apple TV the viewer scrolls to the row.")])
+        #else
         if let name = setting?.anchor ?? link?.anchor, let anchor = SettingsRowAnchor.named(name) {
             store.agentSettingsAnchor = anchor
         }
-        #if os(tvOS)
-        return .obj(["opened": .str(id), "title": .str(title), "note": .str("Settings is open; on Apple TV the viewer scrolls to the row.")])
-        #else
         return .obj(["opened": .str(id), "title": .str(title)])
         #endif
     }
