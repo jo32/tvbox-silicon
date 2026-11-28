@@ -304,6 +304,7 @@ struct DiscoverView: View {
             }
         case .douban: doubanShelves
         case .following: following
+        case .favorites: favorites
         case .airingAnime: airing(.anime)
         case .airingSeries: airing(.tv)
         case .nowPlaying: shelf(.nowPlaying)
@@ -375,6 +376,36 @@ struct DiscoverView: View {
                             DiscoverFollowingLink(show: entry.show) {
                                 DiscoverFollowingTile(show: entry.show, caption: DiscoverFollowing.caption(entry, today: today),
                                                       highlight: entry.day?.date == today).frame(width: DiscoverLayout.posterWidth)
+                            }
+                        }
+                    }.padding(.horizontal, DiscoverLayout.gutter)
+                }
+                #endif
+            }
+        }
+    }
+
+    /// The movies favorited from Discover (#2782), newest first, as the shelf above opens their pages. Only once the
+    /// viewer favorites something.
+    @ViewBuilder private var favorites: some View {
+        let titles = store.followedTitles.titles
+        if !titles.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeading(DiscoverSection.favorites.title)
+                #if os(tvOS)
+                DiscoverTVRow {
+                    ForEach(titles) { title in
+                        DiscoverFavoriteLink(title: title) {
+                            DiscoverFavoriteTile(title: title, width: DiscoverLayout.posterWidth)
+                        }
+                    }
+                }
+                #else
+                DiscoverRail(arrowCenter: 87) {
+                    LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                        ForEach(titles) { title in
+                            DiscoverFavoriteLink(title: title) {
+                                DiscoverFavoriteTile(title: title, width: DiscoverLayout.posterWidth)
                             }
                         }
                     }.padding(.horizontal, DiscoverLayout.gutter)
@@ -1629,12 +1660,13 @@ private extension TMDBCatalog.Feed {
 #endif
 
 private enum DiscoverSection: String, CaseIterable, Identifiable {
-    case hero, following, airingAnime, airingSeries, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
+    case hero, following, favorites, airingAnime, airingSeries, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
     var id: String { rawValue }
     var title: String {
         switch self {
         case .hero: L10n.text("Featured Titles")
         case .following: L10n.text("Following Calendar")
+        case .favorites: L10n.text("Favorite Movies")
         case .airingAnime: TMDBCalendar.Kind.anime.shelfTitle
         case .airingSeries: TMDBCalendar.Kind.tv.shelfTitle
         case .douban: L10n.text("Douban Hot Lists")

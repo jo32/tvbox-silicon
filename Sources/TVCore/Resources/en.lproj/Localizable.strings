@@ -2132,6 +2132,9 @@
 "Follow Show" = "Follow Show";
 "Unfollow Show" = "Unfollow Show";
 "Following Show" = "Following";
+"Favorite Movies" = "Favorite Movies";
+"Favorited" = "Favorited";
+"Add to Favorites" = "Add to Favorites";
 "Following Calendar" = "My Shows";
 "Air Calendar" = "Air Calendar";
 "Episode %@ / %@" = "Ep %@ of %@";

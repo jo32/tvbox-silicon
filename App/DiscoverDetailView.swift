@@ -250,6 +250,7 @@ struct DiscoverDetailView: View {
                         .accessibilityIdentifier("discover.detail.playTrailer")
                 }
                 if item.mediaType == .tv { DiscoverFollowButton(item: followItem) }
+                else if item.mediaType == .movie { DiscoverFavoriteButton(item: followItem) }
             }
             Button { overviewShown = true } label: {
                 Text(overview).font(.system(size: 12)).lineLimit(3)
@@ -1348,6 +1349,10 @@ extension DiscoverDetailView {
                             let following = store.followedShows.contains(item.id)
                             tvIconButton(following ? "calendar.badge.checkmark" : "calendar.badge.plus", following ? "Unfollow Show" : "Follow Show",
                                          "discover.detail.follow") { DiscoverFollowing.toggle(followItem, in: store) }
+                        } else if item.mediaType == .movie {
+                            let favorited = store.followedTitles.contains(item.id)
+                            tvIconButton(favorited ? "star.fill" : "star", favorited ? "Remove from Favorites" : "Add to Favorites",
+                                         "discover.detail.favorite") { DiscoverFollowing.toggleFavorite(followItem, in: store) }
                         }
                         if airing != nil {
                             tvIconButton("calendar", "Air Calendar", "discover.detail.airCalendar") { airCalendarShown = true }
@@ -1368,8 +1373,8 @@ extension DiscoverDetailView {
     }
 
     /// One of the round buttons under Search Sources. Up to five share the column's 368 pt (Trailer, Overview,
-    /// Follow Show, Air Calendar, Search Catalog), so they keep little padding: with the usual 18 pt each one
-    /// needs about 76 pt and five overflow the column, wider than Search Sources above them.
+    /// Follow Show or Favorite, Air Calendar, Search Catalog), so they keep little padding: with the usual 18 pt each
+    /// one needs about 76 pt and five overflow the column, wider than Search Sources above them.
     private func tvIconButton(_ symbol: String, _ label: String, _ identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).frame(maxWidth: .infinity) }
             .buttonStyle(DiscoverTVActionStyle(height: 75, font: 30, corner: 24, padding: 6))

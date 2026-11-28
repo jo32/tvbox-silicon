@@ -2132,6 +2132,9 @@
 "Follow Show" = "フォロー";
 "Unfollow Show" = "フォローを解除";
 "Following Show" = "フォロー中";
+"Favorite Movies" = "お気に入りの映画";
+"Favorited" = "お気に入り済み";
+"Add to Favorites" = "お気に入りに追加";
 "Following Calendar" = "フォロー中の番組";
 "Air Calendar" = "放送カレンダー";
 "Episode %@ / %@" = "第%@話／全%@話";
