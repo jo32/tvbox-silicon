@@ -856,6 +856,14 @@ struct MobilePlayerView: View {
                 .accessibilityLabel(L10n.text("Picture in Picture"))
                 .accessibilityIdentifier("player.pip")
             }
+            // Fit, Fill or Stretch on one tap, instead of digging through the options menu (#2660).
+            Button { videoFill = videoFill.next } label: {
+                Image(systemName: videoFill.symbol).font(.playerGlyph).frame(width: 24, height: 24)
+            }
+            .chromeButton()
+            .accessibilityLabel(L10n.text("Picture Size"))
+            .accessibilityValue(videoFill.title)
+            .accessibilityIdentifier("player.videoFillButton")
             Menu {
                 Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
                 Button { showsDanmakuSettings = true } label: { Label(L10n.text("Danmaku Settings…"), systemImage: "slider.horizontal.3") }
@@ -1769,6 +1777,14 @@ extension VideoFill {
         case .fit: "rectangle.center.inset.filled"
         case .fill: "arrow.up.left.and.arrow.down.right"
         case .stretch: "arrow.left.and.right"
+        }
+    }
+    /// The next mode, cycling Fit -> Fill -> Stretch (#2660).
+    var next: VideoFill {
+        switch self {
+        case .fit: .fill
+        case .fill: .stretch
+        case .stretch: .fit
         }
     }
 }
