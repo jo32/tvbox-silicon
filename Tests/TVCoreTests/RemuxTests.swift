@@ -419,6 +419,22 @@ import VideoToolbox
         #expect(played.size == CGSize(width: 320, height: 180) && played.video)
     }
 
+    /// Dolby Vision 5 in an MKV that left out its configuration (one written from a transport stream, as these are, or by
+    /// tools that don't know Dolby Vision) was copied as plain HEVC, and AVPlayer showed Dolby's IPT colours as YCbCr:
+    /// green and purple. The fixtures are x265's 128x72 profile 5 picture, 3 frames at 59.94 fps, Dolby's metadata in
+    /// each: `-bare` with its colours unspecified, as Dolby's own files have them, `-ipt` naming IPT-C2, as x265 writes.
+    @Test func dolbyVisionWithoutItsConfigurationKeepsItsColours() async throws {
+        for name in ["remux-dv5-bare.mkv", "remux-dv5-ipt.mkv"] {
+            let url = try await Remux.open(try Remux.fileSource(fixture(name)))
+            defer { Remux.stop(url) }
+            let master = String(decoding: try await fetch(url), as: UTF8.self)
+            #expect(master.contains("CODECS=\"dvh1.05.01\"") && master.contains("VIDEO-RANGE=PQ"), "\(name): \(master)")
+            let initialization = try await fetch(url.deletingLastPathComponent().appending(path: "0.mp4"))
+            let dovi = try #require(RemuxPlan.box("dvcC", in: initialization), "\(name)")
+            #expect(RemuxPlan.doviCodec(dovi)?.codec == "dvh1.05.01" && Remux.isDolbyVision(url), "\(name)")
+        }
+    }
+
     @Test func aviIsConvertedForAVPlayer() async throws {
         let url = try await Remux.open(try Remux.fileSource(fixture("remux-convert.avi")))
         defer { Remux.stop(url) }
