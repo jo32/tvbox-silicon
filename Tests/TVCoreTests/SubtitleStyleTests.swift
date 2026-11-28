@@ -67,6 +67,44 @@ struct SubtitleStyleTests {
         #expect(SubtitleStyle.load(defaults) == SubtitleStyle())
     }
 
+    /// #2725: the script is a new field, so a style saved before it must still read, in the script the text arrived in.
+    @Test func stylesSavedBeforeTheScriptChoiceStillLoad() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SubtitleStyleTests-\(UUID().uuidString)"))
+        // Exactly what 1.8.33 saved: no "script" key.
+        let old = #"{"x":0.5,"y":0.92,"size":6,"bold":true,"italic":false,"color":"yellow","edge":"outline","backdrop":"none","positionWasChosen":false}"#
+        defaults.set(Data(old.utf8), forKey: SubtitleStyle.key)
+        let style = SubtitleStyle.load(defaults)
+        #expect(style.script == .original)
+        #expect(style.size == 6 && style.bold && style.color == .yellow && style.edge == .outline)
+        // A JSON object with nothing in it at all must not throw either.
+        #expect((try? JSONDecoder().decode(SubtitleStyle.self, from: Data("{}".utf8)))?.script == .original)
+    }
+
+    @Test func theScriptChoiceRoundTrips() throws {
+        var style = SubtitleStyle()
+        style.script = .traditional
+        let data = try JSONEncoder().encode(style)
+        #expect(try JSONDecoder().decode(SubtitleStyle.self, from: data).script == .traditional)
+        // A choice a newer app wrote falls back to the standard one rather than failing to read the style.
+        let odd = #"{"script":"bopomofo"}"#
+        #expect(try JSONDecoder().decode(SubtitleStyle.self, from: Data(odd.utf8)).script == .original)
+        // Equatable still tells the choices apart.
+        var other = style
+        other.script = .simplified
+        #expect(style != other)
+        #expect(SubtitleStyle().script == .original)
+    }
+
+    /// #2725: the lines are converted after `lines(_:)` has broken the cues up, in the chosen script's own phrases.
+    @Test func theScriptConvertsSubtitleLines() {
+        var style = SubtitleStyle()
+        style.script = .traditional
+        let lines = SubtitleStyle.lines(["头发很长\n后来我们干杯了"])
+        #expect(style.script.convert(lines) == ["頭髮很長", "後來我們乾杯了"])
+        style.script = .original
+        #expect(style.script.convert(lines) == lines)
+    }
+
     /// A legible output hands over one string for each cue on screen, each perhaps several lines.
     @Test func cuesBecomeLines() {
         #expect(SubtitleStyle.lines(["你好\n世界 ", "", "  Second\r\n\nthird"]) == ["你好", "世界", "Second", "third"])

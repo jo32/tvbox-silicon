@@ -130,7 +130,8 @@ struct SubtitlePreview: View {
                         Rectangle().fill(Brand.amber).frame(width: 1.5, height: size.height).offset(x: size.width / 2 - 0.75)
                     }
                 }
-                SubtitleLines(lines: Self.sample, style: shown, letters: size.height * shown.size / 100, oneLine: true)
+                // Converted like the player's lines (#2725), so choosing Traditional or Simplified shows in the preview.
+                SubtitleLines(lines: shown.script.convert(Self.sample), style: shown, letters: size.height * shown.size / 100, oneLine: true)
                     .contentShape(Rectangle())
                     #if !os(tvOS)
                     .gesture(drag(in: size), including: draggable ? .all : .none)
@@ -266,6 +267,14 @@ private struct FormSubtitleStylePage: View {
                         }
                     } label: {
                         FormLabel(symbol: "paintpalette.fill", tint: .purple, title: L10n.text("Color"))
+                    }
+                    // #2725: a subtitle in Simplified characters read in Traditional, or the other way round.
+                    Picker(selection: $style.script) {
+                        Text(L10n.text("Original Text")).tag(NovelScript.original)
+                        Text(L10n.text("Traditional")).tag(NovelScript.traditional)
+                        Text(L10n.text("Simplified")).tag(NovelScript.simplified)
+                    } label: {
+                        FormLabel(symbol: "character.book.closed", tint: .brown, title: L10n.text("Chinese Script"))
                     }
                 } header: {
                     Text(L10n.text("Text"))
@@ -415,6 +424,10 @@ private struct TVSubtitleStylePage: View {
                         TVSettingsToggle(title: L10n.text("Bold"), isOn: $style.bold)
                         TVSettingsToggle(title: L10n.text("Italic"), isOn: $style.italic)
                         TVSettingsAction(title: L10n.text("Color"), value: style.color.title) { style.color = Self.next(style.color) }
+                        // #2725: a subtitle in Simplified characters read in Traditional, or the other way round.
+                        TVSettingsAction(title: L10n.text("Chinese Script"), value: Self.scriptTitle(style.script)) {
+                            style.script = Self.next(style.script)
+                        }
                     }
                     TVSettingsSection(title: L10n.text("Effects"),
                                       footer: L10n.text("Applies to subtitles in every video, including one that is playing.")) {
@@ -443,6 +456,15 @@ private struct TVSubtitleStylePage: View {
         .screenBackdrop()
         .screenTitle("")
         .fullScreenCover(isPresented: $positioning) { TVSubtitlePositioner(style: $style) }
+    }
+
+    /// #2725: the row's value, named as the novel reader's script picker names the same three choices.
+    private static func scriptTitle(_ script: NovelScript) -> String {
+        switch script {
+        case .original: L10n.text("Original Text")
+        case .traditional: L10n.text("Traditional")
+        case .simplified: L10n.text("Simplified")
+        }
     }
 
     private static func next<Choice: CaseIterable & Equatable>(_ choice: Choice) -> Choice where Choice.AllCases == [Choice] {

@@ -4,8 +4,9 @@ import UniformTypeIdentifiers
 
 /// Simplified and Traditional Chinese in the novel reader (#1007): a chapter is shown in the script the reader picks,
 /// converted once when it arrives, never while pages turn. ICU's transforms convert phrases (头发 → 頭髮, 乾杯 → 干杯),
-/// about 2 ms for a 10,000-character chapter.
-public enum NovelScript: String, CaseIterable, Sendable {
+/// about 2 ms for a 10,000-character chapter. The subtitle style keeps its choice with its other settings (#2725),
+/// which is why it is `Codable` too.
+public enum NovelScript: String, CaseIterable, Codable, Sendable {
     case original = "", traditional, simplified
 
     private var transform: StringTransform? {
