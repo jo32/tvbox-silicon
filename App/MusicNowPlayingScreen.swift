@@ -122,6 +122,9 @@ struct MusicNowPlayingScreen: View {
                 Text(music.track?.artistLine ?? "").font(compact ? .subheadline : .title3).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if let track = music.track {
+                FavoriteHeartButton(item: .music(track), name: track.title)
+            }
             Menu {
                 if let track = music.track {
                     FavoriteMenuButton(item: .music(track), name: track.title)
