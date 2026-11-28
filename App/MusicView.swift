@@ -949,7 +949,12 @@ struct MusicLikedView: View {
             .pageContainer()
         }
         // Not on Apple TV: the system search there takes the top of the page for its keyboard row.
-        #if !os(tvOS)
+        // On iOS 26+, pushing from MusicView's .searchable drawer to a second .searchable drawer makes
+        // UIKit hide both search bars' Liquid Glass capsules until the navigation transition finishes
+        // (#2443). A pinned glass search field here keeps both pages' capsules visible throughout.
+        #if os(iOS)
+        .musicLikedSearch(text: $filter)
+        #elseif !os(tvOS)
         .catalogSearchable(text: $filter, prompt: L10n.text("Search Liked Songs"), endsWhenIdle: true)
         #endif
         .screenBackdrop()
@@ -993,6 +998,82 @@ struct MusicLikedView: View {
         }
     }
 }
+
+#if os(iOS)
+private extension View {
+    /// On iOS 26+, pins a Liquid Glass search bar under the navigation bar instead of a second
+    /// `.searchable` drawer, so pushing from or popping back to `MusicView` keeps both search bars'
+    /// Liquid Glass capsules visible without UIKit's transition-end delay (#2443).
+    @ViewBuilder func musicLikedSearch(text: Binding<String>) -> some View {
+        if #available(iOS 26, *) {
+            scrollDismissesKeyboard(.interactively)
+                .topBar { MusicLikedSearchBar(text: text) }
+        } else {
+            catalogSearchable(text: text, prompt: L10n.text("Search Liked Songs"), endsWhenIdle: true)
+        }
+    }
+}
+
+/// Pinned Liquid Glass search field for `MusicLikedView` on iOS 26+, matching the geometry of
+/// `MusicView`'s navigation bar drawer without attaching a competing `UISearchController`.
+@available(iOS 26, *)
+private struct MusicLikedSearchBar: View {
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        GlassGroup(spacing: 8) {
+            HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .accessibilityHidden(true)
+                    TextField(L10n.text("Search Liked Songs"), text: $text)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                        .focused($focused)
+                        .onSubmit { focused = false }
+                    if !text.isEmpty {
+                        Button { text = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.text("Clear"))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .glassSurface(.regular.interactive(), in: Capsule())
+                .contentShape(Capsule())
+                .onTapGesture { if !focused { focused = true } }
+                if focused {
+                    Button { focused = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .glassSurface(.regular.interactive(), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("Close"))
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: focused)
+        .padding(.horizontal, Layout.gutter)
+        .padding(.bottom, 10)
+        .frame(maxWidth: Layout.maxWidth)
+        .frame(maxWidth: .infinity)
+    }
+}
+#endif
 
 /// Everything played recently, on its own page: the Music home keeps only the first twenty entries,
 /// so a long history stops pushing the rest of the page down (#2004). The rows are the home's, each
