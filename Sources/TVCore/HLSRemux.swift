@@ -292,8 +292,11 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         let began = Date()
         var source = url
         var (text, address) = try await playlist(url, headers: headers, network: network)
+        var variants = 1
         if text.contains("#EXT-X-STREAM-INF") {
-            guard let variant = HLS.variants(text, base: address).max(by: { $0.bandwidth < $1.bandwidth }) else {
+            let listed = HLS.variants(text, base: address)
+            variants = listed.count
+            guard let variant = listed.max(by: { $0.bandwidth < $1.bandwidth }) else {
                 throw TVError.unsupported("no variant")
             }
             source = variant.url
@@ -319,7 +322,8 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         // AVPlayer first sees the playlist made so far: read again now, it would list segments that came out while
         // these were fetched, and start with one of them, not yet made (57 s to the picture from a slow server).
         session.lock.withLock { session.refreshed = Date() }
-        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) deinterlaced=\(first.deinterlaced) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        // The codecs name the picture's profile and level, which tells a picture a device can't decode (#2737).
+        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) deinterlaced=\(first.deinterlaced) discontinuities=\(segments.filter(\.discontinuity).count) codecs=\(session.codecs(first) ?? "-") variants=\(variants) bytes=\(first.bytes)/\(String(format: "%.1f", segments[probe].duration))s ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         return session
     }
 

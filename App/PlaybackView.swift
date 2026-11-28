@@ -341,6 +341,11 @@ import IOKit.pwr_mgt
     @ObservationIgnored private var checkingSegmentsActive = false
     /// Whether `repackageSegments` is currently opening `HLSRemux`.
     @ObservationIgnored private var repackagingSegments = false
+    /// The item playing now was repackaged because its picture didn't show (`repackage`, `repackageSegments`), and
+    /// `watchRepackagedPicture` follows whether it shows now.
+    @ObservationIgnored private var repackagedForPicture = false
+    @ObservationIgnored private var pictureWatch: Task<Void, Never>?
+    @ObservationIgnored private var pictureWatchItem: ObjectIdentifier?
     /// Called by the player layer / controller when `isReadyForDisplay` changes, so the waiting backdrop drops on the
     /// exact frame the video appears (#2636, #1629, #1956) instead of lagging behind it.
     func setDisplayReady(_ ready: Bool) {
@@ -355,16 +360,18 @@ import IOKit.pwr_mgt
                                             checkingPicture: checkingPicture,
                                             repackagingSegments: repackagingSegments,
                                             hasVideoFrameRate: hasFrameRate) else { return }
-        showPicture(delay: 0)
+        showPicture(delay: 0, frame: true)
     }
-    private func showPicture(delay: TimeInterval) {
+    /// `frame`: a frame of the picture is ready; false when the player shows while only its sound plays.
+    private func showPicture(delay: TimeInterval, frame: Bool = false) {
         guard !showsPicture else { return }
         showsPicture = true
         countPlay(.started)
-        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
+        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455). Whether a frame
+        // was there tells a picture from sound over a black screen (#2737).
         let seconds = player.currentTime().seconds
         let waited = max(0, Date().timeIntervalSince(openedAt) - delay)
-        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", waited))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
+        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", waited))s at=\(seconds.isFinite ? Int(seconds) : -1)s frame=\(frame)")
     }
     /// Reveals an audio-only stream once checks confirm there is no video picture waiting to be repackaged.
     private func revealAudioIfPlaying() {
@@ -1768,6 +1775,7 @@ import IOKit.pwr_mgt
                 return
             }
             self.detachItem(); self.observation = nil
+            self.repackagedForPicture = true
             self.configure(channel, url: remuxed, generation: active)
             self.externalSubtitles.playing(remuxed)
             self.automatic = remuxed
@@ -1877,10 +1885,75 @@ import IOKit.pwr_mgt
                 self.exactResume = true
             }
             self.detachItem(); self.observation = nil
+            self.repackagedForPicture = true
             self.configure(channel, url: remuxed, generation: active)
             self.externalSubtitles.playing(remuxed)
             self.automatic = remuxed
         }
+    }
+
+    /// Seconds a repackaged picture may play in front of the viewer without a frame before it counts as one this device
+    /// can't show.
+    static let repackagedPicturePatience = 10.0
+
+    /// A stream repackaged because its picture didn't show, whose picture still doesn't. Repackaged, a 4K HEVC stream
+    /// played its sound over a black screen on an iPad (A13) until the viewer gave up, twice (#2737): nothing checked a
+    /// repackaged stream's picture any more, and the waiting screen made way on the sound alone. Once it has played
+    /// `repackagedPicturePatience` seconds in front of the viewer without a frame drawn, it is a line this device can't
+    /// show: the next line, the catalog's next line, else a message saying so. Frames are only drawn for a picture on
+    /// screen, so time in the background or without a player view (a headless session) doesn't count.
+    private func watchRepackagedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
+        guard pictureWatchItem != ObjectIdentifier(item) else { return }
+        pictureWatchItem = ObjectIdentifier(item)
+        pictureWatch?.cancel()
+        #if DEBUG
+        // `-qaPictureNeverDraws 1`: the repackaged picture counts as never drawn, to see what follows on a Simulator.
+        let ignoresFrames = UserDefaults.standard.bool(forKey: "qaPictureNeverDraws")
+        #else
+        let ignoresFrames = false
+        #endif
+        pictureWatch = Task { [weak self] in
+            var dark = 0.0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, !Task.isCancelled, self.generation == active, self.item === item, self.player.currentItem === item else { return }
+                // Only frames drawn count, as in `checkSegmentedPicture`: a layer can call itself ready for a picture it
+                // never draws (#2032).
+                if !ignoresFrames, item.tracks.contains(where: { $0.assetTrack?.mediaType == .video && $0.isEnabled && $0.currentVideoFrameRate > 0 }) {
+                    Diagnostics.shared.record(.info, "player", "repackaged picture draws after=\(String(format: "%.1f", dark))s")
+                    return
+                }
+                // Over AirPlay the picture is drawn on the other screen, not here.
+                guard self.player.timeControlStatus == .playing, !self.player.isExternalPlaybackActive,
+                      self.pictureReadiness.hasObserver, Self.inFront else { continue }
+                dark += 0.5
+                guard dark >= Self.repackagedPicturePatience else { continue }
+                self.repackagedPictureFailed(item, channel: channel, url: url)
+                return
+            }
+        }
+    }
+
+    private func repackagedPictureFailed(_ item: AVPlayerItem, channel: Channel, url: URL) {
+        let size = item.presentationSize
+        Diagnostics.shared.record(.warning, "player", "repackaged picture never drew host=\(Remux.transfer(for: url)?.host ?? url.host() ?? "-") "
+            + "size=\(Int(size.width))x\(Int(size.height)) after=\(Int(Self.repackagedPicturePatience))s")
+        player.pause()
+        let failure = TVError.unsupported("the picture doesn't show on this device")
+        if tryNextLine(after: failure) { return }
+        if tryCatalogFallback(after: failure, channel: channel) { return }
+        loading = false
+        errorSymbol = "play.slash.fill"
+        error = L10n.text("This device couldn't show this video's picture, only its sound. Try another line.")
+    }
+
+    /// Whether the app is in front, where a picture on screen draws frames.
+    private static var inFront: Bool {
+        #if os(macOS)
+        NSApplication.shared.occlusionState.contains(.visible)
+        #else
+        UIApplication.shared.applicationState == .active
+        #endif
     }
 
     /// Keeps at most one ungrouped audio track playing and refreshes the track picker whenever `item.tracks` populates
@@ -1974,6 +2047,7 @@ import IOKit.pwr_mgt
                         else { self.checkingPicture = false; self.restorePositionIfNeeded(item); self.revealPictureIfReady(); self.revealAudioIfPlaying() }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
+                    if self.repackagedForPicture { self.watchRepackagedPicture(item, channel: channel, url: url, generation: activeGeneration) }
                 }
                 if status == .failed {
                     if self.rescueFailed(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
@@ -2262,6 +2336,7 @@ import IOKit.pwr_mgt
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         lineWatch?.cancel(); lineWatch = nil
+        pictureWatch?.cancel(); pictureWatch = nil; pictureWatchItem = nil; repackagedForPicture = false
         sampler?.cancel(); sampler = nil
         transfer = Transfer(); steps = []
         error = nil; errorDetails = nil; errorSymbol = "play.slash.fill"; switchNotice = nil
