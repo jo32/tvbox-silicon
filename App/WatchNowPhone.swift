@@ -440,8 +440,9 @@ struct WatchNowPhoneSkeletonRow: View {
     }
 }
 
-/// A favorite in the Favorites row: videos and episodes by their cover; channels, songs and drive files on a plate the
-/// same size, with their logo, artwork or symbol. Press and hold removes it.
+/// A favorite in the Favorites row: videos and episodes by their cover; a song by its square artwork across the plate,
+/// over the same artwork blurred, as Music fills a tall card; channels and drive files on a plate the same size, with
+/// their logo or symbol. Press and hold removes it.
 private struct WatchNowPhoneFavorite: View {
     @Environment(Store.self) private var store
     let item: FavoriteItem
@@ -468,7 +469,11 @@ private struct WatchNowPhoneFavorite: View {
             }
         case .music(let track):
             plate(title: track.title, detail: track.artistLine, action: { store.music.play(track) }) {
-                MusicArtwork(url: track.artwork, size: 88)
+                // A small cover in the middle of a grey plate looked like a cover that failed to fill.
+                ZStack {
+                    PosterImage(url: track.artwork, symbol: "music.note").blur(radius: 20).opacity(0.9)
+                    PosterImage(url: track.artwork, symbol: "music.note").aspectRatio(1, contentMode: .fit)
+                }
             }
         case .cloud(let file):
             let cloud = CloudFile(id: file.fileID, name: file.fileName, isFolder: false, size: file.size)
@@ -494,6 +499,7 @@ private struct WatchNowPhoneFavorite: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.primary.opacity(0.08))
                     .aspectRatio(2.0 / 3, contentMode: .fit)
                     .overlay { art() }
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 WatchNowPhoneCaption(title: title, detail: detail)
             }
             .frame(width: WatchNowPhoneCover.width)
