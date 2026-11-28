@@ -75,6 +75,7 @@ typealias MusicTrack = TVCore.MusicTrack
     private var task: Task<Void, Never>?
     private var startWatch: Task<Void, Never>?
     private var lyricsTask: Task<Void, Never>?
+    private var artworkTask: Task<Void, Never>?
     private var cache = MusicStreamCache()
     private var recovery = MusicRecovery()
     private var interruption = MusicInterruption()
@@ -531,6 +532,7 @@ typealias MusicTrack = TVCore.MusicTrack
         #if os(tvOS)
         // AVKit's transport bar and info panel show the song from these.
         item.externalMetadata = Self.metadata(for: track)
+        loadArtwork(for: track, item: item, run: run)
         #endif
         itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let failed = item.status == .failed, detail = item.error.map { String(describing: type(of: $0)) + " " + (($0 as NSError).code.description) }
@@ -939,6 +941,7 @@ typealias MusicTrack = TVCore.MusicTrack
     #endif
 
     private func tearDownItem() {
+        artworkTask?.cancel()
         cancelSleepFade()
         // A seek lands through the item it was made on. Replacing that item while the seek is out leaves its
         // completion to be dropped, since the generation has moved on, so clear it here or the clock stays
@@ -952,6 +955,25 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     #if os(tvOS)
+    /// The media box on Apple TV shows the cover from the item's artwork metadata, which `metadata(for:)` cannot
+    /// fill: the cover loads over the network. Fetch it and add it to the item once it arrives, so the box shows
+    /// the album cover instead of a blank area (#2640). The small app icon in the corner is the system's own
+    /// badge and may remain.
+    private func loadArtwork(for track: MusicTrack, item: AVPlayerItem, run: UUID) {
+        artworkTask?.cancel()
+        guard let url = track.artwork else { return }
+        artworkTask = Task { [weak self, weak item] in
+            guard let bitmap = await PosterPalette.image(url), !Task.isCancelled,
+                  let data = UIImage(cgImage: bitmap).pngData(),
+                  let self, self.generation == run, let item, player.currentItem === item else { return }
+            let artwork = AVMutableMetadataItem()
+            artwork.identifier = .commonIdentifierArtwork
+            artwork.value = data as NSData
+            artwork.extendedLanguageTag = "und"
+            item.externalMetadata = (item.externalMetadata ?? []) + [artwork.copy() as! AVMetadataItem]
+        }
+    }
+
     private static func metadata(for track: MusicTrack) -> [AVMetadataItem] {
         func entry(_ identifier: AVMetadataIdentifier, _ value: String?) -> AVMetadataItem? {
             guard let value, !value.isEmpty else { return nil }
