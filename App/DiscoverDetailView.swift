@@ -9,6 +9,9 @@ struct DiscoverDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var appColorScheme
     let item: TMDBCatalog.Item
+    /// The name the card this page opened from had, when that was Douban's (#2744). Sources list a title under the
+    /// name it was released here under ("可能的爱"), which TMDB's zh-TW name for it ("假如愛有如果") never matches.
+    var doubanName: String? = nil
     @State private var model = DiscoverDetailModel()
     @State private var seasonNumber: Int?
     @State private var season: TMDBMatch.Season?
@@ -39,6 +42,14 @@ struct DiscoverDetailView: View {
         return sources?.chosen?.video.synopsis ?? ""
     }
     private var dark: Bool { model.paint?.isDark ?? true }
+    /// The name Search Sources and the page's search look the title up by: Douban's when the card was Douban's (#2744),
+    /// else TMDB's. The page still shows the TMDB name.
+    var searchName: String { doubanSearchName ?? item.name }
+    /// Douban's name when it can be searched for: one that isn't blank.
+    private var doubanSearchName: String? {
+        guard let name = doubanName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+        return name
+    }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
     private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
     #if os(iOS)
@@ -312,7 +323,7 @@ struct DiscoverDetailView: View {
         Button {
             episode = nil
             if store.subscription == nil { store.section = .settings }
-            else { store.searchVideos(item.name) }
+            else { store.searchVideos(searchName) }
         } label: {
             Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 54)
@@ -333,7 +344,7 @@ struct DiscoverDetailView: View {
         }
         let work = followItem
         guard !work.name.isEmpty else { return }
-        let model = sources ?? DiscoverSources.of(work)
+        let model = sources ?? DiscoverSources.of(work, name: doubanSearchName)
         if sources == nil { sources = model }
         model.start(store)
         // The details may already be in (a page reopened): match on TMDB's other names too (#2608).
@@ -350,7 +361,7 @@ struct DiscoverDetailView: View {
         }
         #endif
         if let sources {
-            DiscoverSourceEpisodes(sources: sources, item: followItem, appColorScheme: appColorScheme, selectedSeason: $seasonNumber,
+            DiscoverSourceEpisodes(sources: sources, item: followItem, searchName: searchName, appColorScheme: appColorScheme, selectedSeason: $seasonNumber,
                                    seasonControl: { number in seasons.isEmpty ? nil : AnyView(catalogSeasonMenu(number)) }) { number in
                 if number == nil || number == catalogSeason {
                     catalogEpisodes(showsSeasonControl: number == nil)
@@ -759,19 +770,28 @@ private struct DiscoverSeasonPicker: View {
     private static var recent: [String] = []
 
     /// The title's sources; the last dozen titles opened keep theirs.
-    static func of(_ item: TMDBCatalog.Item) -> DiscoverSources {
-        recent.removeAll { $0 == item.key }
-        recent.append(item.key)
-        if let sources = kept[item.key] { return sources }
-        let sources = DiscoverSources(item)
-        kept[item.key] = sources
+    /// `name` is the Douban name the page opened from, when it had one (#2744): the search and the match ask for the
+    /// title by it, and TMDB's names are matched too.
+    static func of(_ item: TMDBCatalog.Item, name: String? = nil) -> DiscoverSources {
+        // The name is part of the key: the same title opened from a Douban card and from a TMDB one searches for it
+        // by different names, and neither entry's search should answer for the other.
+        let name = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let douban = (name?.isEmpty == false) ? name : nil
+        let key = "\(item.key)|\(douban ?? "")"
+        recent.removeAll { $0 == key }
+        recent.append(key)
+        if let sources = kept[key] { return sources }
+        let sources = DiscoverSources(item, name: douban)
+        kept[key] = sources
         if recent.count > 12 { kept[recent.removeFirst()] = nil }
         return sources
     }
 
-    private init(_ item: TMDBCatalog.Item) {
-        keyword = item.name
-        wanted = SourceTitleMatch.Wanted(names: [item.name, item.originalName], year: item.year)
+    private init(_ item: TMDBCatalog.Item, name: String?) {
+        let search = name ?? item.name
+        keyword = search
+        // Douban's name first, TMDB's kept: a source may list the title under either (#2744).
+        wanted = SourceTitleMatch.Wanted(names: [search, item.name, item.originalName], year: item.year)
     }
 
     /// The page is on screen: the first time it searches; later it carries on a search the page left unfinished.
@@ -879,6 +899,8 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
     @Environment(Store.self) private var store
     let sources: DiscoverSources
     let item: TMDBCatalog.Item
+    /// The name Search Sources looks the title up by (#2744): Douban's when the page came from a Douban card.
+    let searchName: String
     let appColorScheme: ColorScheme
     @Binding var selectedSeason: Int?
     let seasonControl: (Int) -> AnyView?
@@ -914,7 +936,7 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                             Text(L10n.text(selectedSeason == nil ? "None of your sources has this title." : "None of your sources has this season."))
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Button {
-                                if sources.matches.isEmpty { store.searchVideos(item.name) } else { changing = true }
+                                if sources.matches.isEmpty { store.searchVideos(searchName) } else { changing = true }
                             } label: {
                                 Label(L10n.text(sources.matches.isEmpty ? "Search Sources" : "Change Source"), systemImage: "magnifyingglass")
                             }
@@ -1356,7 +1378,7 @@ extension DiscoverDetailView {
 
     private func tvFindSources() {
         episode = nil
-        if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.name) }
+        if store.subscription == nil { store.section = .settings } else { store.searchVideos(searchName) }
     }
 
     func tvEpisodeScreen(_ value: TMDBMatch.EpisodeInfo) -> some View {
