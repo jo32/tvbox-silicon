@@ -269,7 +269,7 @@ public protocol AgentDescribedTool: AgentTool {
     }
 }
 
-/// Where a conversation is kept between launches: Application Support/Assistant/conversation.json (Caches on the TV,
+/// Where a conversation is kept between launches: Application Support/com.tvbox.yingxia/Assistant/conversation.json (Caches on the TV,
 /// where apps may keep nothing else), the last 50 messages.
 public struct AgentConversationStore: Sendable {
     public static let limit = 50
@@ -282,7 +282,7 @@ public struct AgentConversationStore: Sendable {
         #else
         let location: FileManager.SearchPathDirectory = .applicationSupportDirectory
         #endif
-        let folder = FileManager.default.urls(for: location, in: .userDomainMask)[0].appendingPathComponent("Assistant", isDirectory: true)
+        let folder = FileManager.default.urls(for: location, in: .userDomainMask)[0].appendingPathComponent("com.tvbox.yingxia/Assistant", isDirectory: true)
         return AgentConversationStore(file: folder.appendingPathComponent("conversation.json"))
     }
 
