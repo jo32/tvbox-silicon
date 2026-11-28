@@ -2203,7 +2203,17 @@ import IOKit.pwr_mgt
                 "danmakuState": catalogDanmaku.automaticState, "cached": catalogDanmaku.fromCache,
                 "introEnd": skipSettings.introEnd, "outroLength": skipSettings.outroLength,
                 "introStart": skipSettings.introStart, "outroTail": skipSettings.outroTail,
-                "requestedResumePosition": requestedResumePosition ?? 0, "restoredPosition": restoredPosition ?? 0]
+                "requestedResumePosition": requestedResumePosition ?? 0, "restoredPosition": restoredPosition ?? 0,
+                "audioTracks": mediaTracks.audio.map { group in group.options.map(group.name) } ?? [],
+                "audioSelected": mediaTracks.audio.flatMap { group in mediaTracks.selected(in: group).map(group.name) } ?? "",
+                "ungroupedAudio": audioChoices.count]
+            // `-qaAudioTrack <n>`: the nth option of the Audio menu, chosen once it is there, as the menu would but
+            // without remembering it (that writes a preference the user's own copy of the app reads).
+            let pick = UserDefaults.standard.integer(forKey: "qaAudioTrack")
+            if pick > 0, let group = mediaTracks.audio, group.options.indices.contains(pick - 1),
+               mediaTracks.selected(in: group) != group.options[pick - 1] {
+                mediaTracks.select(group.options[pick - 1], in: group)
+            }
             try? JSONSerialization.data(withJSONObject: report).write(to: URL.cachesDirectory.appending(path: "qa-playback.json"), options: .atomic)
         }
         #endif
