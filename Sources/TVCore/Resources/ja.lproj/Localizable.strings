@@ -2468,3 +2468,6 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
 "Keep Controls Visible" = "コントロールを常に表示";
 "Count back from the end" = "終わりから数える";
+"Download Offline" = "オフラインにダウンロード";
+"Offline: %lld" = "オフライン：%lld";
+"Save Chapters for Offline Reading" = "オフラインで読むための章の保存";

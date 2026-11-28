@@ -10,8 +10,23 @@ public enum NovelLibrary {
         URL.applicationSupportDirectory.appending(path: "com.tvbox.yingxia/Novels", directoryHint: .isDirectory)
         #endif
     }
-    /// Tables of contents and chapter texts, which can always be read again from the source.
-    static var cache: URL { URL.cachesDirectory.appending(path: "com.tvbox.yingxia/NovelText", directoryHint: .isDirectory) }
+    /// Where a book's offline copy lives: its table of contents and the chapters the reader saved (#1816).
+    ///
+    /// On every system that has Application Support that is where it goes, so the operating system never reclaims
+    /// a downloaded chapter when space runs out: then a book still reads with no network. Apple TV's Caches is
+    /// kept instead (it has no Application Support) and is trimmed to `textLimit` by `NovelBooks` so the reader's
+    /// shelf does not grow without bound there.
+    static var cache: URL {
+        #if os(tvOS)
+        URL.cachesDirectory.appending(path: "com.tvbox.yingxia/NovelText", directoryHint: .isDirectory)
+        #else
+        URL.applicationSupportDirectory.appending(path: "com.tvbox.yingxia/NovelText", directoryHint: .isDirectory)
+        #endif
+    }
+
+    /// The space a book's saved chapters may take before `NovelBooks` drops its least-read ones. Generous: a chapter
+    /// is a few tens of kilobytes, so this is thousands of chapters.
+    static let textLimit = 256 * 1024 * 1024
 
     /// A book on the shelf, and where reading stopped in it.
     public struct ShelfBook: Codable, Hashable, Sendable, Identifiable {
@@ -319,7 +334,8 @@ public actor NovelBooks {
     }
 
     /// A chapter's text, saved once read. `chapters` is the table of contents it belongs to (for the next chapter's
-    /// address, which some sources' paging needs).
+    /// address, which some sources' paging needs). When the network answers nothing, a copy already saved (#1816)
+    /// is read instead: a downloaded book still turns its pages offline.
     public func content(_ book: NovelBook, chapters: [NovelChapter], index: Int, refresh: Bool = false) async throws -> NovelContent {
         guard chapters.indices.contains(index) else { throw TVError.unsupported(L10n.text("This chapter is not in the table of contents.")) }
         let chapter = chapters[index]
@@ -329,17 +345,47 @@ public actor NovelBooks {
         if let running = reading[key] { return try await running.value }
         let next = chapters[(index + 1)...].first { !$0.isVolume }
         let task = Task { () throws -> NovelContent in
-            let source = try await Self.source(book.sourceKey)
-            var content = try await NovelRuntime.shared.content(source, book: book, chapter: chapter, next: next)
-            if content.title.isEmpty { content.title = chapter.title }
-            guard !content.paragraphs.isEmpty else { throw TVError.unsupported(L10n.text("The source returned an empty chapter.")) }
-            try? FileManager.default.createDirectory(at: Self.folder(book), withIntermediateDirectories: true)
-            if let data = try? JSONEncoder().encode(content) { try? data.write(to: file, options: .atomic) }
-            return content
+            do {
+                let source = try await Self.source(book.sourceKey)
+                var content = try await NovelRuntime.shared.content(source, book: book, chapter: chapter, next: next)
+                if content.title.isEmpty { content.title = chapter.title }
+                guard !content.paragraphs.isEmpty else { throw TVError.unsupported(L10n.text("The source returned an empty chapter.")) }
+                try? FileManager.default.createDirectory(at: Self.folder(book), withIntermediateDirectories: true)
+                if let data = try? JSONEncoder().encode(content) { try? data.write(to: file, options: .atomic) }
+                Self.maybeTrim()
+                return content
+            } catch {
+                // Offline: a saved copy is better than nothing, when there is one.
+                if let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode(NovelContent.self, from: data) { return saved }
+                throw error
+            }
         }
         reading[key] = task
         defer { reading[key] = nil }
         return try await task.value
+    }
+
+    /// Saves the chapters in `indexes` (skipping the already-on-disk ones) so the book reads with no network (#1816).
+    /// A quiet read, like `prefetch`: failures on one chapter do not stop the rest. Returns how many it saved.
+    public func downloadChapters(_ book: NovelBook, chapters: [NovelChapter], _ indexes: [Int]) async -> Int {
+        var saved = 0
+        for index in indexes where chapters.indices.contains(index) {
+            guard !chapters[index].isVolume else { continue }
+            if hasContent(book, chapters[index]) { continue }
+            do {
+                _ = try await content(book, chapters: chapters, index: index)
+                saved += 1
+            } catch {
+                continue
+            }
+        }
+        return saved
+    }
+
+    /// The table of contents' address, worked out offline when the book's saved copy has it.
+    public func savedContent(_ book: NovelBook, _ chapter: NovelChapter) -> NovelContent? {
+        let data = try? Data(contentsOf: Self.contentFile(book, chapter))
+        return data.flatMap { try? JSONDecoder().decode(NovelContent.self, from: $0) }
     }
 
     /// Reads the next few chapters ahead, quietly, so turning to them is instant.
@@ -356,5 +402,50 @@ public actor NovelBooks {
     /// Forgets a book's saved table of contents and chapters.
     public func clear(_ book: NovelBook) {
         try? FileManager.default.removeItem(at: Self.folder(book))
+    }
+
+    // MARK: Space
+
+    private static let trimGate = NSLock()
+    private static var lastTrim = Date.distantPast
+
+    /// On systems that keep the reader's text in the system cache (Apple TV), the least-read chapters give way once
+    /// the copies take more than `NovelLibrary.textLimit`, so the shelf does not grow without bound there (#1816).
+    private static func maybeTrim() {
+        #if os(tvOS)
+        guard Date().timeIntervalSince(lastTrim) > 600 else { return }
+        trimGate.withLock { lastTrim = Date() }
+        Self.trim()
+        #else
+        // Application Support is not reclaimed by the system; there is nothing to drop.
+        #endif
+    }
+
+    /// Oldest book folders first until the reader's text is under `NovelLibrary.textLimit`.
+    private static func trim() {
+        let root = NovelLibrary.cache
+        let manager = FileManager.default
+        guard let books = try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        var entries = books.compactMap { book -> (URL, Date)? in
+            guard let values = try? book.resourceValues(forKeys: [.contentModificationDateKey]) else { return nil }
+            return (book, values.contentModificationDate ?? .distantPast)
+        }
+        var total = 0
+        for book in books { total += Int64(book.size()) }
+        guard total > Int64(NovelLibrary.textLimit) else { return }
+        entries.sort { $0.1 < $1.1 }
+        for entry in entries where total > Int64(NovelLibrary.textLimit) * 8 / 10 {
+            let size = Int64(entry.0.size())
+            try? manager.removeItem(at: entry.0)
+            total -= size
+        }
+    }
+}
+
+extension URL {
+    /// The total size of the files directly under this directory; 0 when it is not a directory.
+    fileprivate func size() -> Int64 {
+        let files = (try? FileManager.default.contentsOfDirectory(at: self, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        return files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
     }
 }
