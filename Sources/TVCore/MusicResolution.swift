@@ -389,8 +389,10 @@ public struct MusicResolver: Sendable {
         let usable = Self.usable(found, for: preference)
         var widerFailure: MusicProviderError?
         // Every channel failed: the same recording in another catalog may have one that works.
+        // Stay inside the selection budget so a failing song never outruns iOS's background grace (#2531).
         if usable.isEmpty, let companions, deadline.timeIntervalSinceNow > 2,
-           let wider = await companions.find(track), wider.ids.count > track.ids.count {
+           let wider = await companions.find(track, timeout: min(6, deadline.timeIntervalSinceNow - 1.5)),
+           wider.ids.count > track.ids.count {
             var rest = self; rest.budget = deadline.timeIntervalSinceNow
             let tried = Set(attempts.map(\.candidate.id)).union(excluding)
             do {
@@ -557,11 +559,21 @@ public struct MusicCompanionFinder: Sendable {
     let catalogs: [any MusicCatalogSource]
     public init(catalogs: [any MusicCatalogSource]) { self.catalogs = catalogs }
 
-    public func find(_ track: MusicTrack) async -> MusicTrack? {
+    public func find(_ track: MusicTrack, timeout: TimeInterval = 6) async -> MusicTrack? {
+        let missing = catalogs.filter { track.ids[$0.platform] == nil }
+        guard !missing.isEmpty, timeout > 0.5 else { return nil }
+        let query = ([track.title] + track.artists.prefix(1)).joined(separator: " ")
+        let answers = await withTaskGroup(of: (Int, [MusicTrack]?).self) { group in
+            for (index, catalog) in missing.enumerated() {
+                group.addTask { (index, try? await MusicHTTP.withTimeout(timeout) { try await catalog.search(query, page: 1) }) }
+            }
+            var found: [Int: [MusicTrack]] = [:]
+            for await (index, results) in group { if let results { found[index] = results } }
+            return found
+        }
         var wider = track
-        for catalog in catalogs where track.ids[catalog.platform] == nil {
-            let query = ([track.title] + track.artists.prefix(1)).joined(separator: " ")
-            guard let results = try? await MusicHTTP.withTimeout(6, { try await catalog.search(query, page: 1) }),
+        for (index, catalog) in missing.enumerated() {
+            guard let results = answers[index],
                   let match = results.first(where: { MusicMatching.sameRecording(wider, $0) != nil }) else { continue }
             wider = MusicMatching.merge([[wider], [match]]).first ?? wider
             Diagnostics.shared.record(.info, "music", "companion \(catalog.platform.rawValue) found: \(wider.evidence.joined(separator: ","))")
@@ -620,5 +632,12 @@ public struct MusicRecovery: Sendable {
     public static func canResume(from previous: MusicProbeResult, to next: MusicProbeResult) -> Bool {
         guard let a = previous.duration, let b = next.duration else { return false }
         return abs(a - b) <= MusicMatching.durationTolerance(max(a, b))
+    }
+
+    /// Whether another channel's stream may take over at `seconds`: before playback has started
+    /// (`seconds < 1`) there is no mid-song position to preserve, so any playable stream starts
+    /// cleanly from 0 even when a probe left its duration unknown (#2531).
+    public static func canContinue(at seconds: Double, from previous: MusicProbeResult, to next: MusicProbeResult) -> Bool {
+        seconds < 1 || canResume(from: previous, to: next)
     }
 }
