@@ -1169,26 +1169,57 @@ import IOKit.pwr_mgt
 
     func setSpeed(_ speed: Float) {
         clearBoost()
-        player.defaultRate = speed
-        if player.rate != 0 { player.rate = speed }
+        setDefaultSpeed(speed)
+        if player.rate != 0 { player.rate = player.defaultRate }
+    }
+
+    /// The fastest the item plays (`PlaybackSpeed.withoutFastForward` for one that can't fast-forward), or nil.
+    private(set) var speedLimit: Float?
+    /// The speed chosen in the menu while the item plays slower (`speedLimit`); nil while it plays as chosen.
+    private(set) var speedWanted: Float?
+    /// The speed chosen in the menu. AVPlayer's default rate, which `play()` starts at, follows it as far as the
+    /// item allows, and goes back up to it with the next item that can play faster.
+    var chosenSpeed: Float { speedWanted ?? player.defaultRate }
+    @ObservationIgnored private var speedLimitObservations: [NSKeyValueObservation] = []
+    private func setDefaultSpeed(_ speed: Float) {
+        let playable = PlaybackSpeed.playable(speed, limit: speedLimit)
+        speedWanted = playable < speed ? speed : nil
+        player.defaultRate = playable
+    }
+    /// Whether the item can play faster than 2× is known once it is ready: a slideshow at 3× from an HLS stream without
+    /// I-frame playlists (#2550, #2679) becomes 2×, and a file gets the chosen speed back.
+    private func followSpeedLimit() {
+        guard let item = player.currentItem, item.status == .readyToPlay else { return }
+        let limit = PlaybackSpeed.limit(fastForward: item.canPlayFastForward)
+        guard limit != speedLimit else { return }
+        let chosen = chosenSpeed
+        speedLimit = limit
+        setDefaultSpeed(chosen)
+        if let limit { Diagnostics.shared.record(.info, "player", "speed up to \(limit)x: no fast forward") }
+        if let boostAsked { throttle = SpeedBoost.Throttle(wanted: Double(PlaybackSpeed.playable(boostAsked, limit: limit))) }
+        if throttle != nil { applyBoost() } else if player.rate != 0, player.rate != player.defaultRate { player.rate = player.defaultRate }
     }
 
     /// Another rate while the picture is held (`SpeedBoost`); nil plays at the chosen speed again. It never becomes
     /// the chosen speed, so the speed menu and a later play keep the one picked there. Pausing ends it.
-    /// Up to 4× even where the item says it can't fast-forward: an HLS stream without I-frame playlists says so, yet
-    /// plays at 3× and 4× in full, as the menu's speeds do. A connection too slow for it holds it lower
-    /// (`SpeedBoost.Throttle`, issue #364); `boostWanted` is then the rate the hold asked for.
+    /// Up to 4×, or 2× for an item that can't fast-forward (`speedLimit`). A connection too slow for it holds it lower
+    /// (`SpeedBoost.Throttle`, issue #364); `boostWanted` is then the rate the hold asked for, and `boostAtLimit`
+    /// tells which of the two holds it back.
     private(set) var boost: Float?
     private(set) var boostWanted: Float?
+    private(set) var boostAtLimit = false
+    @ObservationIgnored private var boostAsked: Float?
     @ObservationIgnored private var throttle: SpeedBoost.Throttle?
     func setBoost(_ rate: Float?) {
         guard rate == nil || !paused else { return }
-        throttle = rate.map { SpeedBoost.Throttle(wanted: Double($0), after: throttle) }
+        boostAsked = rate
+        throttle = rate.map { SpeedBoost.Throttle(wanted: Double(PlaybackSpeed.playable($0, limit: speedLimit)), after: throttle) }
         applyBoost()
     }
     private func applyBoost() {
         boost = throttle.map { Float($0.rate) }
-        boostWanted = throttle.flatMap { $0.limited ? Float($0.wanted) : nil }
+        boostWanted = boost.flatMap { rate in boostAsked.flatMap { $0 > rate ? $0 : nil } }
+        boostAtLimit = boostWanted != nil && throttle?.limited == false
         guard player.rate != 0 else { return }
         let rate = boost ?? player.defaultRate
         // With video buffered ahead, straight on at the new speed (#1457): a plain `rate` lets AVPlayer first wait
@@ -1211,7 +1242,7 @@ import IOKit.pwr_mgt
         if let itemAhead { return itemAhead + cloudAhead }
         return cloudAhead > 0 ? cloudAhead : nil
     }
-    private func clearBoost() { throttle = nil; boost = nil; boostWanted = nil }
+    private func clearBoost() { throttle = nil; boostAsked = nil; boost = nil; boostWanted = nil; boostAtLimit = false }
     /// Once a second while a hold plays faster than normal: slower before the buffered video runs out, and faster
     /// again while the download keeps up.
     private func throttleBoost(_ item: AVPlayerItem) {
@@ -1228,6 +1259,17 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(ahead.map { "\(Int($0))s" } ?? "-")")
         applyBoost()
     }
+    #if DEBUG
+    /// `-qaRateLog 1`: once a second, the speed AVPlayer plays at and how the picture keeps up with it.
+    private func logRate(_ item: AVPlayerItem) {
+        let video = item.tracks.first { $0.isEnabled && $0.assetTrack?.mediaType == .video }
+        let event = item.accessLog()?.events.last
+        let status = player.timeControlStatus == .playing ? "playing" : player.timeControlStatus == .paused ? "paused" : "waiting(\(player.reasonForWaitingToPlay?.rawValue ?? "-"))"
+        Diagnostics.shared.record(.info, "player.rate", String(format: "at=%.2f rate=%.2f default=%.2f %@ fps=%.1f dropped=%ld ahead=%@ ff=%@ pitch=%@",
+            player.currentTime().seconds, player.rate, player.defaultRate, status, video?.currentVideoFrameRate ?? -1, event?.numberOfDroppedVideoFrames ?? -1,
+            bufferedAhead().map { String(format: "%.1f", $0) } ?? "-", item.canPlayFastForward ? "yes" : "no", item.audioTimePitchAlgorithm.rawValue))
+    }
+    #endif
     private var generation = UUID()
     init() {
         let player = AVQueuePlayer()
@@ -1267,6 +1309,22 @@ import IOKit.pwr_mgt
                 self.queueMoved()
             }
         }
+        // An item's speed limit (`followSpeedLimit`) is known once it is ready, for every episode the queue plays.
+        speedLimitObservations = [
+            player.observe(\.currentItem?.status, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor [weak self] in self?.followSpeedLimit() }
+            },
+            player.observe(\.currentItem?.canPlayFastForward, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor [weak self] in self?.followSpeedLimit() }
+            },
+        ]
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "qaRateLog") {
+            speedLimitObservations.append(player.observe(\.timeControlStatus, options: [.new]) { player, _ in
+                Diagnostics.shared.record(.info, "player.rate", "status=\(player.timeControlStatus.rawValue) reason=\(player.reasonForWaitingToPlay?.rawValue ?? "-") rate=\(player.rate)")
+            })
+        }
+        #endif
         // A style chosen while a video plays (the Mac shows Settings beside the player) also reaches AVPlayer's own
         // subtitles, drawn in Picture in Picture.
         styleObserver = NotificationCenter.default.addObserver(forName: SubtitleStyle.changed, object: nil, queue: .main) { [weak self] _ in
@@ -1656,7 +1714,7 @@ import IOKit.pwr_mgt
         #if DEBUG
         // `-qaSpeed <rate>` plays at that speed, as picking it in the speed menu does.
         let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
-        if qaSpeed > 0 { player.defaultRate = qaSpeed }
+        if qaSpeed > 0 { setDefaultSpeed(qaSpeed) }
         #endif
         if pendingResume == nil {
             if !recoveryPause.consumeStayPaused() { player.play() }
@@ -1665,6 +1723,16 @@ import IOKit.pwr_mgt
         // `-qaSeek <seconds>` starts playback there, for screenshots.
         let qaSeek = UserDefaults.standard.double(forKey: "qaSeek")
         if qaSeek > 0 { player.seek(to: CMTime(seconds: qaSeek, preferredTimescale: 600)) }
+        // `-qaBoost <rate>`: eight seconds in, plays at that speed for ten seconds, as a touch and hold does.
+        let qaBoost = UserDefaults.standard.float(forKey: "qaBoost")
+        if qaBoost > 0 {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(8))
+                self?.setBoost(qaBoost)
+                try? await Task.sleep(for: .seconds(10))
+                self?.setBoost(nil)
+            }
+        }
         #endif
     }
 
@@ -2110,6 +2178,9 @@ import IOKit.pwr_mgt
         if pendingResume == nil, !restoringPosition { markClock() }
         updateSkipping(item)
         throttleBoost(item)
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "qaRateLog") { logRate(item) }
+        #endif
         catchUpLive(item)
         queueUpcomingIfDue(item)
         if let url = playing?.url { CENCStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
@@ -2309,9 +2380,9 @@ import IOKit.pwr_mgt
         // lines keep the speed picked in the player (#1015, #1076). Channels without a title (live playlists, a
         // pasted address) keep the speed as before; live rooms play at 1×.
         if live {
-            player.defaultRate = 1
+            setDefaultSpeed(1)
         } else if let scope = channel.skipScope, scope != speedScope, let start = PlaybackSpeed.chosen() {
-            player.defaultRate = start
+            setDefaultSpeed(start)
         }
         if channel.skipScope != nil { speedScope = channel.skipScope }
         if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }

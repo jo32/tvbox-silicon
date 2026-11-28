@@ -225,7 +225,7 @@ struct MobilePlayerView: View {
         }
         .onAppear {
             clock.attach(session.player)
-            speed = session.player.defaultRate
+            speed = session.chosenSpeed
             nowPlaying.start(session)
             nowPlaying.update(title: channel.name, session: session)
             tvBrowser.start()
@@ -694,7 +694,7 @@ struct MobilePlayerView: View {
                     HStack(spacing: 6) {
                         if boost.locked { Image(systemName: "lock.fill") }
                         Text(Self.speedLabel(rate))
-                        // Held lower than asked: the connection can't keep up with the faster speed.
+                        // Held lower than asked: the video or the connection can't keep up with the faster speed.
                         if let wanted = session.boostWanted { Text(Self.speedLabel(wanted)).strikethrough().opacity(0.55) }
                         Image(systemName: "forward.fill")
                     }
@@ -712,7 +712,7 @@ struct MobilePlayerView: View {
                 .accessibilityValue(Self.speedLabel(rate))
                 .accessibilityIdentifier("player.boost")
                 if session.boostWanted != nil {
-                    Text(L10n.text("Slowed down to keep up with the connection"))
+                    Text(session.boostAtLimit ? L10n.text("This video plays at up to %@", Self.speedLabel(rate)) : L10n.text("Slowed down to keep up with the connection"))
                         .font(.caption).shadow(color: .black.opacity(0.6), radius: 4)
                         .accessibilityHidden(true)
                 } else if holding && !boost.locked {
@@ -950,12 +950,7 @@ struct MobilePlayerView: View {
             }
             // With a seek bar the speed has its own button beside it (`speedButton`).
             if !session.isLive, !session.hasTimeline {
-                Menu(L10n.text("Playback Speed")) {
-                    Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
-                        ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                }
+                Menu(L10n.text("Playback Speed")) { speedPicker }
             }
             // A series' intro and outro (#1488), here with the player's other settings, on the video page too.
             if session.canSkip, !session.isLive {
@@ -990,6 +985,16 @@ struct MobilePlayerView: View {
     private static let speeds: [Float] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+    /// The speeds, under a line saying so when the video can't play as fast as some of them (`PlaybackSession.speedLimit`).
+    @ViewBuilder private var speedPicker: some View {
+        let picker = Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
+            ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
+        }
+        .pickerStyle(.inline)
+        // A line of its own: iOS leaves out the titles of a menu's sections.
+        if let limit = session.speedLimit { Text(L10n.text("This video plays at up to %@", Self.speedLabel(limit))) }
+        picker
     }
 
     // MARK: Middle and bottom
@@ -1098,21 +1103,21 @@ struct MobilePlayerView: View {
 
     /// The speed, by the seek bar: a tap lists them all, from a quarter to four times.
     private var speedButton: some View {
-        Menu {
-            Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
-                ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
+        let playing = PlaybackSpeed.playable(speed, limit: session.speedLimit)
+        return Menu { speedPicker } label: {
+            HStack(spacing: 4) {
+                Text(Self.speedLabel(playing))
+                // Slower than chosen: the video can't play that fast (`PlaybackSession.speedLimit`).
+                if playing < speed { Text(Self.speedLabel(speed)).strikethrough().opacity(0.55) }
             }
-            .pickerStyle(.inline)
-        } label: {
-            Text(Self.speedLabel(speed))
-                .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(.white)
-                .lineLimit(1).fixedSize()
-                .frame(minWidth: 36).padding(.horizontal, 6).frame(height: 36)
-                .contentShape(Capsule())
+            .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(.white)
+            .lineLimit(1).fixedSize()
+            .frame(minWidth: 36).padding(.horizontal, 6).frame(height: 36)
+            .contentShape(Capsule())
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         .accessibilityLabel(L10n.text("Playback Speed"))
-        .accessibilityValue(Self.speedLabel(speed))
+        .accessibilityValue(Self.speedLabel(playing))
         .accessibilityIdentifier("player.speed")
     }
 

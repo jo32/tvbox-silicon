@@ -33,6 +33,24 @@ public enum PlaybackSpeed {
         defaults.set(speed, forKey: key)
     }
 
+    /// The fastest an item that can't fast-forward plays: HLS without I-frame playlists, as nearly every online m3u8
+    /// is, and every stream this app repackages as HLS on the device (MKV, DASH, FLV). Above 2× AVPlayer scans such a
+    /// stream instead of playing it: it drops the buffered video, fetches the segments again and shows a few frames a
+    /// second, so 3× played as a slideshow (#2550, #2679) and a 2.5× hold kept stopping to buffer (#2601). A file
+    /// plays at 3× and 4× in full.
+    public static let withoutFastForward: Float = 2
+
+    /// The fastest an item plays: nil for no limit, or while whether it can fast-forward isn't known yet.
+    public static func limit(fastForward: Bool?) -> Float? {
+        fastForward == false ? withoutFastForward : nil
+    }
+
+    /// `rate` as fast as `limit` allows.
+    public static func playable(_ rate: Float, limit: Float?) -> Float {
+        guard let limit, rate > limit else { return rate }
+        return limit
+    }
+
     /// A short label for a speed, matching the player menu ("1×", "1.5×", …).
     public static func speedLabel(_ speed: Float) -> String {
         speed == 1 ? "1×" : String(format: "%g×", speed)

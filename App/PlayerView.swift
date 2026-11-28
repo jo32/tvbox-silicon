@@ -95,7 +95,7 @@ struct PlaybackView: View {
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
-                                 speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
+                                 speed: playbackSpeed, speedLimit: session.speedLimit, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
                                  external: session.externalSubtitles, ownSubtitles: session.hasOwnSubtitles, chooseSubtitle: session.chooseSubtitle, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  skipping: session.canSkip ? session.skipSettings : nil, setSkipping: { session.applySkipSettings($0) },
                                  markSkip: { session.markSkip(intro: $0) },
@@ -107,7 +107,7 @@ struct PlaybackView: View {
                                  titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store)),
                                  findDanmaku: danmakuFinder,
                                  onReadyForDisplay: { session.setDisplayReady($0) }).ignoresSafeArea()
-                    .onAppear { playbackSpeed = session.player.defaultRate }
+                    .onAppear { playbackSpeed = session.chosenSpeed }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
             // loads (a dead live channel) left no way out but quitting the app. This takes focus and closes instead.
@@ -991,6 +991,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var info: Binding<Bool> = .constant(false)
     /// The speed picked in the Playback Speed menu, which `setSpeed` makes the player's default rate.
     var speed: Float = 1
+    /// The fastest the video plays (`PlaybackSession.speedLimit`), or nil.
+    var speedLimit: Float? = nil
     var setSpeed: @MainActor (Float) -> Void = { _ in }
     /// Fill Screen: the picture is cropped to the whole screen rather than fitted inside it, as on iPhone.
     var fills: Binding<Bool> = .constant(false)
@@ -1232,7 +1234,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
-            items.append(UIMenu(title: L10n.text("Playback Speed") + " · " + Self.speedLabel(speed), image: UIImage(systemName: "gauge.with.dots.needle.67percent"), children: options))
+            // The speed it plays at: 2× when 3× is chosen for a video that can't play faster (`speedLimit`).
+            let playing = PlaybackSpeed.playable(speed, limit: speedLimit)
+            items.append(UIMenu(title: L10n.text("Playback Speed") + " · " + Self.speedLabel(playing), image: UIImage(systemName: "gauge.with.dots.needle.67percent"), children: options))
         }
         if lines.count > 1 {
             let choose = chooseLine, line = line
@@ -2145,7 +2149,7 @@ private struct DesktopPlaybackView: View {
         .onAppear {
             floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh()
             clock.attach(session.player)
-            speed = session.player.defaultRate
+            speed = session.chosenSpeed
             pip.subtitles = session.subtitles
             pip.enhancer = session.enhancer
         }
@@ -2401,23 +2405,30 @@ private struct DesktopPlaybackView: View {
 
     /// The speed, by the seek bar: a click lists them all, from a quarter to four times.
     private var speedButton: some View {
-        Menu {
-            Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
+        let playing = PlaybackSpeed.playable(speed, limit: session.speedLimit)
+        // Says so when the video can't play as fast as some of the speeds (`PlaybackSession.speedLimit`).
+        let title = session.speedLimit.map { L10n.text("This video plays at up to %@", Self.speedLabel($0)) } ?? L10n.text("Playback Speed")
+        return Menu {
+            Picker(title, selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
                 ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
             }
             .pickerStyle(.inline)
         } label: {
-            Text(Self.speedLabel(speed))
-                .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(.white)
-                .lineLimit(1).fixedSize()
-                .frame(minWidth: 36).padding(.horizontal, 6).frame(height: 36)
-                .contentShape(Capsule())
+            HStack(spacing: 4) {
+                Text(Self.speedLabel(playing))
+                // Slower than chosen: the video can't play that fast.
+                if playing < speed { Text(Self.speedLabel(speed)).strikethrough().opacity(0.55) }
+            }
+            .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(.white)
+            .lineLimit(1).fixedSize()
+            .frame(minWidth: 36).padding(.horizontal, 6).frame(height: 36)
+            .contentShape(Capsule())
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         .fixedSize()
-        .help(L10n.text("Playback Speed"))
+        .help(title)
         .accessibilityLabel(L10n.text("Playback Speed"))
-        .accessibilityValue(Self.speedLabel(speed))
+        .accessibilityValue(Self.speedLabel(playing))
     }
 
     private var pipPlaceholder: some View {
