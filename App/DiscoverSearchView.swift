@@ -144,10 +144,6 @@ struct DiscoverSearchView: View {
     }
     private var bottomChrome: some View {
         HStack(spacing: 8) {
-            if !focused && filter == nil {
-                Button { dismiss() } label: { Image(systemName: "safari.fill").font(.system(size: 26)).frame(width: 48, height: 48).glassSurface(.regular, in: Circle()) }
-                    .accessibilityLabel(L10n.text("Close")).accessibilityIdentifier("discover.search.close")
-            }
             HStack(spacing: 12) {
                 if filter == nil {
                     Menu {
