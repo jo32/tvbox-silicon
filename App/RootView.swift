@@ -44,8 +44,8 @@ struct RootView: View {
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
-    // Untyped so it can hold both More-tab sections and Route pages.
-    @State private var morePath = NavigationPath()
+    // Untyped so it can hold both More-tab sections and Route pages, with one stable `openRoute` for its life (#272).
+    @State private var moreStack = RoutePath()
     @State private var moreSection: AppSection = .settings
     #if os(iOS)
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
@@ -219,7 +219,7 @@ struct RootView: View {
             // tvOS 17 and 18: a section in More opens there, whether a button or the Now Playing tab moved it in.
             .onChange(of: store.section) { _, section in openInMore(section) }
             .onChange(of: tvMore) { _, more in
-                if more.isEmpty && store.section == .more { store.section = morePath.isEmpty ? .home : moreSection }
+                if more.isEmpty && store.section == .more { store.section = moreStack.path.isEmpty ? .home : moreSection }
                 else { openInMore(store.section) }
             }
             #endif
@@ -235,20 +235,20 @@ struct RootView: View {
             // `initial`: the launch page (#1673) can be a section under More before any change happens.
             .onChange(of: store.section, initial: true) { _, section in
                 if phoneTabs && inMore.contains(section) {
-                    moreSection = section; morePath = NavigationPath([section])
+                    moreSection = section; moreStack.path = NavigationPath([section])
                     store.section = .more
                 }
             }
             // Closing iPhone Duo narrows the side bar back to four: a section that just left it opens inside More.
             .onChange(of: barSlots) { _, _ in
                 if phoneTabs && inMore.contains(store.section) {
-                    moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
+                    moreSection = store.section; moreStack.path = NavigationPath([store.section]); store.section = .more
                 }
             }
             .onChange(of: phoneTabs) { _, phone in
-                if !phone && store.section == .more { store.section = morePath.isEmpty ? .settings : moreSection }
+                if !phone && store.section == .more { store.section = moreStack.path.isEmpty ? .settings : moreSection }
                 else if phone && inMore.contains(store.section) {
-                    moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
+                    moreSection = store.section; moreStack.path = NavigationPath([store.section]); store.section = .more
                 }
             }
             #endif
@@ -309,19 +309,20 @@ struct RootView: View {
 
     @ViewBuilder private func tabPage(_ item: AppSection) -> some View {
         if item == .more {
-            NavigationStack(path: $morePath) {
+            @Bindable var moreStack = moreStack
+            NavigationStack(path: $moreStack.path) {
                 content(.more).routeDestinations()
                     // Any section can be moved into More, so any can be pushed here.
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
-            .environment(\.openRoute, RouteOpener { morePath.append($0) })
+            .environment(\.openRoute, moreStack.opener)
         } else { RouteStack { content(item).tvDefaultControls() } }
     }
 
     #if os(tvOS)
     private func openInMore(_ section: AppSection) {
         guard tvMore.contains(section) else { return }
-        moreSection = section; morePath = NavigationPath([section]); store.section = .more
+        moreSection = section; moreStack.path = NavigationPath([section]); store.section = .more
     }
     #endif
 

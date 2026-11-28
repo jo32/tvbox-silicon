@@ -557,7 +557,7 @@ struct FormSettingsView: View {
     #endif
     #if os(iOS)
     @State private var addingSubscription = false
-    @State private var showsFeedback = false
+    @Environment(\.openRoute) private var openRoute
     @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     @AppStorage(PhoneTabs.collapsesKey) private var collapsesTabBar = true
@@ -625,7 +625,10 @@ struct FormSettingsView: View {
             // Two tiles side by side, so the way to the developer reads as a place, not two more rows.
             Section {
                 HStack(spacing: 12) {
-                    Button { showsFeedback = true } label: {
+                    // Pushed onto the stack's path via `openRoute`, not `navigationDestination(isPresented:)`: on
+                    // iOS 17 a boolean destination on a pushed Settings page inside a path-bound NavigationStack
+                    // loops layout/updates forever until jetsam kills the app (#2527).
+                    Button { openRoute?(Route { AnyView(FeedbackView()) }) } label: {
                         SettingsTile(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
                                      subtitle: L10n.text("Report a problem or share an idea"))
                     }
@@ -1231,7 +1234,6 @@ struct FormSettingsView: View {
         }
         #if os(iOS)
         .sheet(isPresented: $addingSubscription) { AddSubscriptionSheet() }
-        .navigationDestination(isPresented: $showsFeedback) { FeedbackView() }
         #if DEBUG
         // `-qaAddSubscription 1` opens the sheet for screenshots.
         .onAppear { if UserDefaults.standard.bool(forKey: "qaAddSubscription") { addingSubscription = true } }
