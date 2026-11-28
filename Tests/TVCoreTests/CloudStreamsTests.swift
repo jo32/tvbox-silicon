@@ -55,6 +55,11 @@ struct CloudStreamsTests {
         let quickTime = Data([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20])
         #expect(try CloudStreams.contentType(quickTime, name: "a.mp4") == AVFileType.mov.rawValue)
         #expect(throws: TVError.self) { try CloudStreams.contentType(Data([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0]), name: "a.mp4") }
+        // A drive CDN's verification page or JSON error body is not a video (#2728).
+        #expect(throws: TVError.self) { try CloudStreams.contentType(Data("<!doctype html><html>".utf8), name: "a.mp4") }
+        #expect(throws: TVError.self) { try CloudStreams.contentType(Data("<html><body>verify</body>".utf8), name: "a.mp4") }
+        #expect(throws: TVError.self) { try CloudStreams.contentType(Data("{\"error\": \"not found\"}".utf8), name: "a.mp4") }
+        #expect(throws: TVError.self) { try CloudStreams.contentType(Data([0xEF, 0xBB, 0xBF] + Array("<head>".utf8)), name: "a.mp4") }
         #expect(try CloudStreams.contentType(Data(repeating: 0x47, count: 16), name: "a.bin") == "public.mpeg-2-transport-stream")
         #expect(try CloudStreams.contentType(Data(repeating: 1, count: 16), name: "a.mov") == AVFileType.mov.rawValue)
     }
