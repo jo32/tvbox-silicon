@@ -67,7 +67,7 @@ struct PlaybackWaitView: View {
     var body: some View {
         GeometryReader { proxy in
             let picture = Self.picture(in: proxy.size)
-            let layout = Self.layout(size: proxy.size, picture: picture, starting: starting)
+            let layout = Self.layout(size: proxy.size, picture: picture)
             ZStack {
                 if starting {
                     // Behind an error only the colours stay, so the message has the stage to itself.
@@ -140,11 +140,9 @@ struct PlaybackWaitView: View {
         var wordsBottom: CGFloat = 0
         /// One line: the hint joins the message, so nothing changes height when it appears.
         var inlineCaption = false
-        /// The words in the middle of the player, with nothing to hang from.
-        var centred = false
     }
 
-    @MainActor private static func layout(size: CGSize, picture: CGRect, starting: Bool) -> WaitLayout {
+    @MainActor private static func layout(size: CGSize, picture: CGRect) -> WaitLayout {
         #if os(iOS)
         // AVKit puts its play button over the middle of the picture: the card is centred on it, in both orientations.
         let axis = controlsAxis(width: size.width), centre = picture.midY
@@ -161,9 +159,9 @@ struct PlaybackWaitView: View {
         let card = CGRect(x: axis - picture.width * 0.3, y: centre - half, width: picture.width * 0.6, height: half * 2)
         return WaitLayout(card: card, axis: axis, wordsBottom: wordsBottom, inlineCaption: true)
         #elseif os(macOS)
-        // While the video first loads the controls are hidden and the words take the middle. A stall mid-video keeps
-        // play/pause and ±10 there (68 pt high), so the words hang under them.
-        guard !starting else { return WaitLayout(card: picture, axis: size.width / 2, centred: true) }
+        // Play/pause and ±10 (68 pt high) sit in the middle whenever the controls are up, and they come up with any
+        // mouse move, while the video first loads too: the words always hang under them, so they never overlap and
+        // don't jump when the controls come and go.
         return WaitLayout(card: picture, axis: size.width / 2, wordsTop: size.height / 2 + 34 + 22)
         #else
         // AVKit spins its own wheel in the middle: the words stay low, above the transport bar.
@@ -225,8 +223,7 @@ struct PlaybackWaitView: View {
             VStack(spacing: 0) {
                 if let top = layout.wordsTop { Color.clear.frame(height: top) } else { Spacer(minLength: 0) }
                 stack
-                if layout.centred { Spacer(minLength: 0) }
-                else if layout.wordsTop == nil { Color.clear.frame(height: layout.wordsBottom) } else { Spacer(minLength: 0) }
+                if layout.wordsTop == nil { Color.clear.frame(height: layout.wordsBottom) } else { Spacer(minLength: 0) }
             }
             .frame(width: size.width, height: size.height)
             .offset(x: layout.axis - size.width / 2)
