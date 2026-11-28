@@ -2503,7 +2503,6 @@
 "Signed in. You can return to Yingxia." = "Signed in. You can return to Yingxia.";
 "Sign-in didn't finish. You can return to Yingxia." = "Sign-in didn't finish. You can return to Yingxia.";
 
-
 /* The assistant (App/Agent). */
 "Assistant" = "Assistant";
 "Open Assistant" = "Open Assistant";
@@ -2621,6 +2620,7 @@
 "Connection" = "Connection";
 "OpenAI, or any server that speaks its API. The key stays in this device's Keychain and is never synced." = "OpenAI, or any server that speaks its API. The key stays in this device's Keychain and is never synced.";
 "Using ChatGPT plan" = "Using ChatGPT plan";
+"Uses your ChatGPT plan and its usage limits. You sign in on OpenAI's page; this app never sees your password." = "Uses your ChatGPT plan and its usage limits. You sign in on OpenAI's page; this app never sees your password.";
 "Plan usage wasn't allowed. Sign in again and allow it, or use an API key." = "Plan usage wasn't allowed. Sign in again and allow it, or use an API key.";
 "Manage Usage" = "Manage Usage";
 "Sign in with ChatGPT" = "Sign in with ChatGPT";

@@ -224,6 +224,8 @@ struct AssistantSettingsView: View {
                     Text(result).foregroundStyle(model.testFailed ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.secondary))
                 } else if model.kind == .apiKey {
                     Text(L10n.text("OpenAI, or any server that speaks its API. The key stays in this device's Keychain and is never synced."))
+                } else {
+                    Text(L10n.text("Uses your ChatGPT plan and its usage limits. You sign in on OpenAI's page; this app never sees your password."))
                 }
             }
 

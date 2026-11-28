@@ -2503,7 +2503,6 @@
 "Signed in. You can return to Yingxia." = "已登入。現在可以返回映匣了。";
 "Sign-in didn't finish. You can return to Yingxia." = "登入未完成。可以返回映匣了。";
 
-
 /* The assistant (App/Agent). */
 "Assistant" = "助理";
 "Open Assistant" = "打開助理";
@@ -2621,6 +2620,7 @@
 "Connection" = "連線";
 "OpenAI, or any server that speaks its API. The key stays in this device's Keychain and is never synced." = "OpenAI，或任何相容其介面的伺服器。金鑰只儲存在這部裝置的鑰匙圈中，不會同步。";
 "Using ChatGPT plan" = "使用 ChatGPT 方案";
+"Uses your ChatGPT plan and its usage limits. You sign in on OpenAI's page; this app never sees your password." = "使用你的 ChatGPT 方案，並受其用量限制。登入在 OpenAI 的頁面上完成，本 App 不會看到你的密碼。";
 "Plan usage wasn't allowed. Sign in again and allow it, or use an API key." = "未允許使用方案額度。請重新登入並允許，或改用 API 金鑰。";
 "Manage Usage" = "管理用量";
 "Sign in with ChatGPT" = "使用 ChatGPT 登入";

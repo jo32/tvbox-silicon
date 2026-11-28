@@ -100,8 +100,11 @@ private struct AssistantHost: ViewModifier {
     func body(content: Content) -> some View {
         @Bindable var assistant = assistant
         #if os(iOS)
-        let docked = sizeClass == .regular && width >= 700
-        let panelWidth = docked ? min(400, (width * 0.45).rounded()) : width
+        // iPad: a 400 pt panel. It docks beside the page when the page keeps room for its own layout (landscape),
+        // and floats over it otherwise (portrait, Split View). iPhone: the whole width.
+        let side = sizeClass == .regular && width >= 700
+        let panelWidth = side ? min(400, (width * 0.45).rounded()) : width
+        let docked = side && width - panelWidth >= 640
         let shown = assistant.pull ?? (assistant.isOpen ? 1 : 0)
         content
             .onAppear { assistant.attach(store) }
@@ -114,9 +117,9 @@ private struct AssistantHost: ViewModifier {
                         .frame(width: panelWidth)
                         .overlay(alignment: .leading) {
                             // A vertical hairline: a bare Divider here would run across the panel.
-                            if docked { Rectangle().fill(Color(uiColor: .separator)).frame(width: 0.5).ignoresSafeArea() }
+                            if side { Rectangle().fill(Color(uiColor: .separator)).frame(width: 0.5).ignoresSafeArea() }
                         }
-                        .shadow(color: .black.opacity(docked || shown < 1 ? 0.18 * shown : 0), radius: 18)
+                        .shadow(color: .black.opacity(side || shown < 1 ? 0.18 * shown : 0), radius: 18)
                         .offset(x: (1 - shown) * (panelWidth + 24))
                         .allowsHitTesting(shown > 0.01)
                         .accessibilityHidden(!assistant.isOpen)

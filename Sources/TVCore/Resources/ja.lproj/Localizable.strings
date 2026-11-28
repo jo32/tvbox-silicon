@@ -2503,7 +2503,6 @@
 "Signed in. You can return to Yingxia." = "サインインしました。映匣に戻れます。";
 "Sign-in didn't finish. You can return to Yingxia." = "サインインが完了しませんでした。映匣に戻れます。";
 
-
 /* The assistant (App/Agent). */
 "Assistant" = "アシスタント";
 "Open Assistant" = "アシスタントを開く";
@@ -2621,6 +2620,7 @@
 "Connection" = "接続";
 "OpenAI, or any server that speaks its API. The key stays in this device's Keychain and is never synced." = "OpenAI、またはその API に対応したサーバ。キーはこのデバイスのキーチェーンにだけ保存され、同期されません。";
 "Using ChatGPT plan" = "ChatGPT プランを使用中";
+"Uses your ChatGPT plan and its usage limits. You sign in on OpenAI's page; this app never sees your password." = "ChatGPT プランとその利用上限を使います。サインインは OpenAI のページで行うので、このアプリがパスワードを知ることはありません。";
 "Plan usage wasn't allowed. Sign in again and allow it, or use an API key." = "プランの利用が許可されていません。もう一度サインインして許可するか、API キーを使ってください。";
 "Manage Usage" = "使用状況を管理";
 "Sign in with ChatGPT" = "ChatGPT でサインイン";
