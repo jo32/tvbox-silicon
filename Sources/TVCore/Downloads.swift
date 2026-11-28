@@ -121,7 +121,23 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     /// Addresses of downloaded episodes for the player: `tvbox-download://<id>`.
     public static let scheme = "tvbox-download"
 
-    public private(set) var items: [DownloadItem] = []
+    public private(set) var items: [DownloadItem] = [] {
+        didSet {
+            if updatingProgress {
+                let pending = items.filter(\.isPending)
+                if pending != pendingItems { pendingItems = pending }
+            } else {
+                syncBuckets()
+            }
+        }
+    }
+    /// Downloads still running, waiting, paused or failed.
+    public private(set) var pendingItems: [DownloadItem] = []
+    /// Finished downloads on this device. Updated only when completed downloads actually change, so progress ticks
+    /// don't invalidate views showing cached videos.
+    public private(set) var completedItems: [DownloadItem] = []
+    /// Whether the library has no downloads at all, so views don't observe progress ticks just to check emptiness.
+    public private(set) var isEmpty = true
     /// Bytes per second for each running download, smoothed over a few seconds.
     public private(set) var rates: [String: Double] = [:]
     /// Disk use, refreshed by `measure()`.
@@ -153,6 +169,19 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     @ObservationIgnored private var samples: [String: (date: Date, bytes: Int64)] = [:]
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var savedAt = Date.distantPast
+    @ObservationIgnored private var indexByID: [String: Int] = [:]
+    @ObservationIgnored private var indexBySource: [SourceKey: Int] = [:]
+    @ObservationIgnored private var updatingProgress = false
+
+    private struct SourceKey: Hashable {
+        let siteKey: String
+        let videoID: String
+        let flag: String
+        let episodeID: String
+        init(_ source: DownloadSource) {
+            siteKey = source.siteKey; videoID = source.videoID; flag = source.flag; episodeID = source.episodeID
+        }
+    }
 
     public init(root: URL = DownloadLibrary.defaultRoot, defaults: UserDefaults = .standard) {
         self.root = root; self.defaults = defaults
@@ -203,12 +232,20 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         return item
     }
 
-    public func item(for source: DownloadSource) -> DownloadItem? { items.first { $0.source.key == source.key } }
-    public func item(id: String) -> DownloadItem? { items.first { $0.id == id } }
+    public func item(for source: DownloadSource) -> DownloadItem? {
+        let current = items
+        guard let index = indexBySource[SourceKey(source)], current.indices.contains(index) else { return nil }
+        return current[index]
+    }
+    public func item(id: String) -> DownloadItem? {
+        let current = items
+        guard let index = indexByID[id], current.indices.contains(index) else { return nil }
+        return current[index]
+    }
 
     public func recordPlayback(id: String, profile: String, position: Double, duration: Double, now: Date = Date()) {
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0,
-              let index = items.firstIndex(where: { $0.id == id && $0.status == .completed }) else { return }
+              let index = indexByID[id], items.indices.contains(index), items[index].status == .completed else { return }
         let position = duration > 0 ? min(position, duration) : position
         var checkpoints = items[index].watchProgress ?? [:]
         if let previous = checkpoints[profile], abs(previous.position - position) < 0.25, previous.duration == duration { return }
@@ -348,13 +385,20 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     /// Copies running downloads' counters into their items and works out speeds.
     private func tick() {
         let now = Date()
+        var updated = items
+        var changed = false
         for (id, entry) in running {
             let value = entry.meter.snapshot
-            update(id) { item in
+            if let index = indexByID[id], updated.indices.contains(index) {
+                var item = updated[index]
                 item.received = value.received; item.completedParts = value.parts; item.totalParts = value.total
                 if item.kind == .hls, value.parts > 0, value.total > 0 {
                     item.expected = Int64(Double(value.received) / Double(value.parts) * Double(value.total))
                 } else if let expected = value.expected { item.expected = expected }
+                if item != updated[index] {
+                    updated[index] = item
+                    changed = true
+                }
             }
             if let last = samples[id], now.timeIntervalSince(last.date) > 0.5 {
                 let rate = max(0, Double(value.received - last.bytes) / now.timeIntervalSince(last.date))
@@ -362,12 +406,38 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
             }
             samples[id] = (now, value.received)
         }
+        if changed {
+            updatingProgress = true
+            defer { updatingProgress = false }
+            items = updated
+        }
         if now.timeIntervalSince(savedAt) > 5 { save() }
     }
 
     private func update(_ id: String, _ change: (inout DownloadItem) -> Void) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = indexByID[id], items.indices.contains(index) else { return }
         change(&items[index])
+    }
+
+    private func syncBuckets() {
+        var byID: [String: Int] = [:]
+        var bySource: [SourceKey: Int] = [:]
+        byID.reserveCapacity(items.count)
+        bySource.reserveCapacity(items.count)
+        var pending: [DownloadItem] = []
+        var completed: [DownloadItem] = []
+        for (index, item) in items.enumerated() {
+            if byID[item.id] == nil { byID[item.id] = index }
+            let key = SourceKey(item.source)
+            if bySource[key] == nil { bySource[key] = index }
+            if item.isPending { pending.append(item) } else { completed.append(item) }
+        }
+        indexByID = byID
+        indexBySource = bySource
+        let empty = items.isEmpty
+        if empty != isEmpty { isEmpty = empty }
+        if pending != pendingItems { pendingItems = pending }
+        if completed != completedItems { completedItems = completed }
     }
 
     // MARK: Playback
@@ -445,15 +515,40 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 
     /// Measures the downloads on disk and the space left on the device.
     public func measure() async {
-        forgetMissing()
-        let root = root, ids = items.map(\.id)
-        let sizes = await Task.detached { ids.map { (id: $0, size: Self.allocatedSize(root.appending(path: $0))) } }.value
-        for entry in sizes {
-            if let item = item(id: entry.id), item.status == .completed { update(entry.id) { $0.size = entry.size } }
+        let root = root
+        let snapshot = items.map { (id: $0.id, completed: $0.status == .completed, media: $0.media) }
+        let measured = await Task.detached {
+            var missing: [String] = []
+            var sizes: [String: Int64] = [:]
+            var total: Int64 = 0
+            for entry in snapshot {
+                let dir = root.appending(path: entry.id)
+                if entry.completed {
+                    guard let media = entry.media, FileManager.default.fileExists(atPath: dir.appending(path: media).path) else {
+                        missing.append(entry.id)
+                        continue
+                    }
+                }
+                let size = Self.allocatedSize(dir)
+                sizes[entry.id] = size
+                total += size
+            }
+            let values = try? root.resourceValues(forKeys: [.volumeTotalCapacityKey])
+            let usage = Usage(downloads: total, available: Self.availableCapacity(at: root),
+                              capacity: values?.volumeTotalCapacity.map(Int64.init))
+            return (missing: missing, sizes: sizes, usage: usage)
+        }.value
+        if !measured.missing.isEmpty { remove(measured.missing) }
+        var updated = items
+        var changed = false
+        for index in updated.indices where updated[index].status == .completed {
+            if let size = measured.sizes[updated[index].id], updated[index].size != size {
+                updated[index].size = size
+                changed = true
+            }
         }
-        let values = try? root.resourceValues(forKeys: [.volumeTotalCapacityKey])
-        usage = Usage(downloads: sizes.reduce(0) { $0 + $1.size }, available: Self.availableCapacity(at: root),
-                      capacity: values?.volumeTotalCapacity.map(Int64.init))
+        if changed { items = updated }
+        usage = measured.usage
     }
 
     nonisolated static func availableCapacity(at url: URL) -> Int64? {
