@@ -724,7 +724,8 @@ struct MobilePlayerView: View {
         }
     }
 
-    /// Play, skip and the seek bar wait for the stream: while it connects or after it fails, only the top row shows.
+    /// Play, skip and the seek bar wait for the stream: while it connects or after it fails, only the top row shows —
+    /// except while loading with no timeline yet, when the bottom row's step buttons (full screen included) show.
     private var showsTransport: Bool { !session.loading && session.error == nil }
     /// At the top of a watch page: smaller controls, and the page has the title.
     private var inline: Bool { layout == .inline }
@@ -745,6 +746,10 @@ struct MobilePlayerView: View {
                 Spacer(minLength: 0)
                 if showsTransport {
                     if !inline { infoRow.opacity(scrubbingBar ? 0 : 1).animation(.easeOut(duration: 0.15), value: scrubbingBar) }
+                    bottomRow
+                } else if session.loading && !session.hasTimeline {
+                    // The seek bar has nothing to seek yet, but the step buttons already work: show the
+                    // bottom row's no-timeline form so full screen is reachable while the stream connects (#2678).
                     bottomRow
                 }
             }
