@@ -72,6 +72,33 @@ struct AssistantToolbarButton: View {
 }
 #endif
 
+#if !os(tvOS)
+extension View {
+    /// A page pushed on a section's stack (a title's page, a setting's page): the toolbar's sparkles, as on the
+    /// section's own page, so the assistant is a tap away wherever the viewer went.
+    func assistantPushedPage() -> some View { modifier(AssistantPushedPage()) }
+}
+
+private struct AssistantPushedPage: ViewModifier {
+    @Environment(AssistantController.self) private var assistant
+    @AppStorage(AgentSettings.enabledKey) private var enabled = false
+    #if os(macOS)
+    private let isMac = true
+    #else
+    private let isMac = false
+    #endif
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                // On the Mac the open panel's own header has the close button instead.
+                if enabled && !(isMac && assistant.isOpen) {
+                    ToolbarItem(placement: .primaryAction) { AssistantToolbarButton() }
+                }
+            }
+    }
+}
+#endif
+
 #if os(macOS)
 extension View {
     /// The panel as the Mac's inspector, beside the page.
@@ -80,22 +107,6 @@ extension View {
             AssistantPanel()
                 .inspectorColumnWidth(min: 320, ideal: 380, max: 560)
         }
-    }
-
-    /// A page pushed on the Mac's detail stack: the toolbar's sparkles, as on the section's own page.
-    func assistantPushedPage() -> some View { modifier(AssistantPushedPage()) }
-}
-
-private struct AssistantPushedPage: ViewModifier {
-    @Environment(AssistantController.self) private var assistant
-    @AppStorage(AgentSettings.enabledKey) private var enabled = false
-    func body(content: Content) -> some View {
-        content
-            .toolbar {
-                if enabled && !assistant.isOpen {
-                    ToolbarItem(placement: .primaryAction) { AssistantToolbarButton() }
-                }
-            }
     }
 }
 #endif

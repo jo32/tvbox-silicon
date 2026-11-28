@@ -688,7 +688,7 @@ extension View {
         #if os(macOS) || os(tvOS)
         modifier(MacRouteDestinations())
         #else
-        navigationDestination(for: Route.self) { $0.build() }
+        navigationDestination(for: Route.self) { $0.build().assistantPushedPage() }
         #endif
     }
 }
