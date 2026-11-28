@@ -553,7 +553,10 @@ public struct CatalogClient: Sendable {
     }
     public func playback(_ episode: Episode) async throws -> Channel {
         let plan = try await preparePlayback(episode)
-        return try await resolvePlayback(plan, choice: plan.choices[0])
+        // Keep the quality picked for this source across episodes: the next episode re-prepares its own choices,
+        // whose first entry is the lowest quality, so falling back to choices[0] dropped the viewer's pick (#2806).
+        let choice = RememberedQuality.remembered(for: site.key).flatMap { name in plan.choices.first { $0.name == name } } ?? plan.choices[0]
+        return try await resolvePlayback(plan, choice: choice)
     }
 
     static func playbackClick(site: Site, result: [String: JSONValue]?) -> String {
@@ -647,6 +650,9 @@ public struct CatalogClient: Sendable {
     /// Neither exists on Apple TV, which throws the existing web-detection error.
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
+        // Remember the quality actually played for this source, so the next episode keeps it (#2806). Only sources
+        // with a real choice get a memory: a one-choice source has nothing to keep and shouldn't overwrite it.
+        if plan.choices.count > 1 { RememberedQuality.remember(choice.name, for: site.key) }
         // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
         if let url = URL(string: choice.address), url.scheme == CENCStreams.scheme || url.scheme == DashStreams.scheme {
             return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:],
