@@ -264,12 +264,15 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     /// The next song, or the first again when the whole queue repeats.
-    func next() {
+    func next() { advance(resettingFailures: true) }
+
+    private func advance(resettingFailures: Bool) {
         guard var queue else { return }
         if queue.advance() == nil {
             guard repeatMode == .all, queue.tracks.count > 1, queue.jump(to: 0) != nil else { return }
         }
         self.queue = queue
+        if resettingFailures { consecutiveFailures = 0 }
         loadCurrent(at: nil)
     }
 
@@ -324,6 +327,7 @@ typealias MusicTrack = TVCore.MusicTrack
         if currentSeconds > MusicQueue.restartThreshold || queue?.hasPrevious != true { seek(to: 0); return }
         guard var queue, queue.back() != nil else { return }
         self.queue = queue
+        consecutiveFailures = 0
         loadCurrent(at: nil)
     }
 
@@ -737,7 +741,7 @@ typealias MusicTrack = TVCore.MusicTrack
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(1.5))
                 guard let self, self.generation == run else { return }
-                self.next()
+                self.advance(resettingFailures: false)
             }
             return
         }
@@ -777,10 +781,11 @@ typealias MusicTrack = TVCore.MusicTrack
                     guard self.generation == next else { return }
                     chosen.untried = self.alternatives.filter { $0 != candidate }
                     self.record(chosen.attempts)
-                    if candidate == selection.candidate || MusicRecovery.canResume(from: previous, to: chosen.probe) {
-                        self.start(chosen, at: at, run: next)
+                    if candidate == selection.candidate || MusicRecovery.canContinue(at: at, from: previous, to: chosen.probe) {
+                        self.start(chosen, at: at >= 1 ? at : nil, run: next)
                     } else {
                         // Another version must not take over at the same second: the viewer decides.
+                        self.tearDownItem()
                         self.selection = chosen
                         self.fail(MusicProviderError.differentRecording(chosen.probe.duration ?? 0),
                                   message: L10n.text("The other channel has a different version. Choose a channel to continue."))

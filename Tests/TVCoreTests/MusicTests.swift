@@ -486,6 +486,26 @@ private struct SourcesProvider: MusicStreamAlternatives {
     #expect(Date().timeIntervalSince(start) < 3)
 }
 
+/// #2531: slow companion catalogs run in parallel and stay inside the resolver's budget so a failing
+/// song does not outrun iOS's background grace before skipping to the next song.
+@Test func companionSearchRespectsTheSelectionBudget() async throws {
+    let track = qqTrack("晴天", ["周杰伦"], duration: 269.4, id: "qq1")
+    let missing = FakeProvider(id: .vkeys, platforms: [.qq]) { _ in throw MusicProviderError.noResource }
+    let slowCatalogs: [any MusicCatalogSource] = [MusicPlatform.netease, .migu, .kuwo].map { platform in
+        FakeCatalog(platform: platform) { _ in
+            try await Task.sleep(for: .seconds(10))
+            return []
+        }
+    }
+    let resolver = MusicResolver(routes: .test, providers: [missing], prober: MusicProber(transport: audioTransport(), inspector: nil),
+                                 health: MusicHealth(file: nil), companions: MusicCompanionFinder(catalogs: slowCatalogs), budget: 2.5)
+    let start = Date()
+    await #expect(throws: MusicProviderError.noResource) {
+        _ = try await resolver.select(track, preference: .losslessPreferred)
+    }
+    #expect(Date().timeIntervalSince(start) < 3.5)
+}
+
 @Test func cancellingASelectionBlamesNoChannel() async throws {
     let health = MusicHealth(file: nil)
     let track = qqTrack("青花瓷", ["周杰伦"], duration: 239.35, id: "002qU5aY3Qu24y")
@@ -543,6 +563,12 @@ private final class Counter: @unchecked Sendable {
     #expect(MusicRecovery.canResume(from: short, to: short))
     #expect(!MusicRecovery.canResume(from: short, to: other))
     #expect(!MusicRecovery.canResume(from: short, to: unknown))
+    // #2531: before sound starts, a fallback channel starts cleanly from 0 even when duration is unknown.
+    #expect(MusicRecovery.canContinue(at: 0, from: short, to: unknown))
+    #expect(MusicRecovery.canContinue(at: 0, from: short, to: other))
+    #expect(!MusicRecovery.canContinue(at: 30, from: short, to: unknown))
+    #expect(!MusicRecovery.canContinue(at: 30, from: short, to: other))
+    #expect(MusicRecovery.canContinue(at: 30, from: short, to: short))
 }
 
 @Test func theNextSongIsPreparedNearTheEndAndUsedOnlyWhileFresh() {

@@ -1,6 +1,5 @@
 import SwiftUI
 import ImageIO
-import CoreImage
 import TVCore
 #if os(macOS)
 import AppKit
@@ -1082,12 +1081,24 @@ struct SectionHeader: View {
 enum PosterPalette {
     static func average(_ url: URL, headers: [String: String] = [:]) async -> Color? {
         guard let bitmap = try? await PosterLoader.shared.load(PosterResource(url: url, headers: headers)) else { return nil }
-        let image = CIImage(cgImage: bitmap.image)
-        guard let output = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: image, kCIInputExtentKey: CIVector(cgRect: image.extent)])?.outputImage else { return nil }
-        var pixel = [UInt8](repeating: 0, count: 4)
-        CIContext(options: [.workingColorSpace: NSNull()]).render(output, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                                                               format: .RGBA8, colorSpace: nil)
-        return Color(red: Double(pixel[0]) / 255, green: Double(pixel[1]) / 255, blue: Double(pixel[2]) / 255)
+        // Drawn on the CPU with Core Graphics, never a Metal CIContext: MusicNowPlayingScreen runs this
+        // when the song changes in the background, where Metal GPU work terminates an iOS app (#2531).
+        let side = 16
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(bitmap.image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drawn else { return nil }
+        var red = 0, green = 0, blue = 0
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            red += Int(pixels[index]); green += Int(pixels[index + 1]); blue += Int(pixels[index + 2])
+        }
+        let scale = Double(side * side * 255)
+        return Color(red: Double(red) / scale, green: Double(green) / scale, blue: Double(blue) / scale)
     }
 
     #if os(macOS)
