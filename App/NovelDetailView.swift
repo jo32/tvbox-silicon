@@ -67,7 +67,11 @@ struct NovelDetailView: View {
         do {
             let filled = try await NovelBooks.shared.details(book)
             details = filled
-            chapters = try await NovelBooks.shared.chapters(filled, refresh: refresh || entry == nil)
+            // A book already on the shelf used to read only its saved table of contents, so new chapters never
+            // showed until it was removed and re-added (#2742): refresh on open too. Offline, chapters() still
+            // falls back to the saved copy.
+            chapters = try await NovelBooks.shared.chapters(filled, refresh: true)
+            store.syncChapterCount(chapters.count, for: filled)
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "qaNovelRead"), reading == nil { readOn() }
             #endif
