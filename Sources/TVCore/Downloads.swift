@@ -157,6 +157,18 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
             schedule()
         }
     }
+    /// Cache on Wi-Fi only: off Wi-Fi, downloads wait for Wi-Fi instead of spending cellular data (#2746).
+    public var wifiOnly: Bool {
+        didSet {
+            guard wifiOnly != oldValue else { return }
+            defaults.set(wifiOnly, forKey: "downloadsWifiOnly")
+            // The session's cellular rule is fixed at creation, so start a fresh session with the new rule:
+            // transfers already running hold the old session and finish on it.
+            session.finishTasksAndInvalidate()
+            session = Self.makeSession(wifiOnly: wifiOnly)
+            schedule()
+        }
+    }
     /// Resolves an episode to its current media address; set by the app, which knows the sources.
     @ObservationIgnored public var resolver: (@MainActor @Sendable (DownloadItem) async throws -> Channel)?
     /// Called each time a download starts running. The iOS app uses it to keep downloads going in the background.
@@ -164,7 +176,7 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 
     public let root: URL
     @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let session: URLSession
+    @ObservationIgnored private var session: URLSession
     @ObservationIgnored private var running: [String: (run: UUID, task: Task<Void, Never>, meter: DownloadMeter)] = [:]
     @ObservationIgnored private var samples: [String: (date: Date, bytes: Int64)] = [:]
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -183,14 +195,23 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         }
     }
 
-    public init(root: URL = DownloadLibrary.defaultRoot, defaults: UserDefaults = .standard) {
-        self.root = root; self.defaults = defaults
+    private static func makeSession(wifiOnly: Bool) -> URLSession {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.httpMaximumConnectionsPerHost = 8
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
-        session = URLSession(configuration: configuration)
+        // With waitsForConnectivity, a cellular ban holds the transfer until Wi-Fi appears instead of
+        // failing it; without the ban the session behaves exactly as before.
+        configuration.allowsCellularAccess = !wifiOnly
+        configuration.waitsForConnectivity = wifiOnly
+        return URLSession(configuration: configuration)
+    }
+
+    public init(root: URL = DownloadLibrary.defaultRoot, defaults: UserDefaults = .standard) {
+        self.root = root; self.defaults = defaults
+        wifiOnly = defaults.bool(forKey: "downloadsWifiOnly")
+        session = Self.makeSession(wifiOnly: wifiOnly)
         let stored = defaults.integer(forKey: "downloadsSimultaneous")
         simultaneous = stored > 0 ? min(stored, 4) : 2
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

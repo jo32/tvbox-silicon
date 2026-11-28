@@ -112,6 +112,8 @@ private struct DownloadQueueSection: View {
                 }
                 .menuStyle(.button).buttonStyle(.borderless).fixedSize()
                 Divider().frame(height: 12)
+                Toggle(L10n.text("Wi-Fi Only"), isOn: Binding(get: { library.wifiOnly }, set: { library.wifiOnly = $0 }))
+                Divider().frame(height: 12)
                 if allPaused {
                     Button(L10n.text("Resume All")) { library.resumeAll() }.buttonStyle(.borderless)
                 } else {
@@ -147,6 +149,7 @@ private struct DownloadQueueSection: View {
                     FittingLabel(title: L10n.text("%lld at a time", library.simultaneous), symbol: "square.stack.3d.down.right")
                 }
                 .controlButton()
+                Toggle(L10n.text("Wi-Fi Only"), isOn: Binding(get: { library.wifiOnly }, set: { library.wifiOnly = $0 }))
                 if allPaused {
                     Button { library.resumeAll() } label: { FittingLabel(title: L10n.text("Resume All"), symbol: "play.fill") }.controlButton()
                 } else {
