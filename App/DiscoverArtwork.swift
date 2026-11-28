@@ -203,7 +203,7 @@ struct DiscoverBackdrop: View {
                     DiscoverTrailer(trailer: trailer).frame(width: width, height: heroHeight).clipped()
                 }
                 LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
-                LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: Color(red: 0.018, green: 0.028, blue: 0.035), location: 1)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: Color(red: 0.018, green: 0.028, blue: 0.035), location: 1)], startPoint: .top, endPoint: .bottom)
             }
             .frame(width: width, height: heroHeight)
             .offset(y: -max(0, scrollY) * 0.6)
