@@ -81,6 +81,63 @@ import Testing
         #expect(await waiting.value == nil)
         #expect(await calls.value == 1)
     }
+
+    @Test func cancelledCardsDoNotDelayLaterPosters() async {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let calls = Counter()
+        let posters = CloudPosters(cacheURL: folder.appending(path: "posters.json"), spacing: .milliseconds(80)) { query in
+            await calls.add()
+            return results([("tv", query, query, 2026, 1)])
+        }
+        // First lookup consumes one real slot.
+        #expect(await posters.work(for: MediaName("多喜一家人", isFile: false))?.name == "多喜一家人")
+        // 20 cards queue up as if the viewer scrolled past or left a folder, then cancel before their turn.
+        let abandoned = (1...20).map { index in
+            Task { await posters.work(for: MediaName("剧集\(index)", isFile: false)) }
+        }
+        try? await Task.sleep(for: .milliseconds(15))
+        for task in abandoned { task.cancel() }
+        for task in abandoned { #expect(await task.value == nil) }
+        // The next visible card only waits the one real spacing interval, not 20 phantom slots (1.6s+).
+        let start = ContinuousClock.now
+        let found = await posters.work(for: MediaName("小欢喜", isFile: false))
+        let elapsed = ContinuousClock.now - start
+        #expect(found?.name == "小欢喜")
+        #expect(elapsed < .milliseconds(500))
+        #expect(await calls.value == 2)
+    }
+
+    @Test func episodesSharingOneTitleCoalesceWithoutConsumingExtraSlots() async {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let calls = Counter()
+        let posters = CloudPosters(cacheURL: folder.appending(path: "posters.json"), spacing: .milliseconds(80)) { query in
+            await calls.add()
+            try? await Task.sleep(for: .milliseconds(20))
+            return results([("tv", query, query, 2026, 42)])
+        }
+        // Seed the pacing gate so the episode burst arrives while waiting for the next slot.
+        #expect(await posters.work(for: MediaName("繁花", isFile: false))?.name == "繁花")
+        let start = ContinuousClock.now
+        let works = await withTaskGroup(of: CloudPosters.Work?.self) { group in
+            for episode in 1...12 {
+                group.addTask {
+                    await posters.work(for: MediaName(title: "多喜一家人", season: 1, episode: episode))
+                }
+            }
+            var list: [CloudPosters.Work?] = []
+            for await work in group { list.append(work) }
+            return list
+        }
+        // A follow-up distinct title should also start after just one more slot, not 12.
+        let next = await posters.work(for: MediaName("小欢喜", isFile: false))
+        let elapsed = ContinuousClock.now - start
+        #expect(works.allSatisfy { $0?.name == "多喜一家人" })
+        #expect(next?.name == "小欢喜")
+        #expect(await calls.value == 3)
+        #expect(elapsed < .milliseconds(600))
+    }
 }
 
 private actor Counter {

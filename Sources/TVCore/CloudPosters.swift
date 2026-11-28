@@ -23,11 +23,19 @@ public actor CloudPosters {
         let saved: Date
     }
 
+    private struct Waiter {
+        let id: UUID
+        let key: String
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
     private let cacheURL: URL
     private let search: @Sendable (String) async throws -> [TMDBMatch.SearchResult]
     private let spacing: Duration
     private var entries: [String: Entry]?
     private var running: [String: Task<Work?, Never>] = [:]
+    private var pacing = false
+    private var waiters: [Waiter] = []
     private var nextStart = ContinuousClock.now
     private var writing: Task<Void, Never>?
     /// Entries kept; the oldest go first.
@@ -55,36 +63,112 @@ public actor CloudPosters {
     /// caller went away (its card scrolled off) before its turn.
     public func work(for name: MediaName) async -> Work? {
         guard name.isTitle, TMDBMatch.enabled else { return nil }
-        if let kept = kept(name) { return kept }
         let key = Self.key(name)
-        if let task = running[key] { return await task.value }
-        // Waits its turn; a card that leaves the screen meanwhile gives its turn up.
-        let start = max(ContinuousClock.now, nextStart)
-        nextStart = start + spacing
-        try? await Task.sleep(until: start, clock: .continuous)
-        if Task.isCancelled { return nil }
-        if let kept = kept(name) { return kept }
-        if let task = running[key] { return await task.value }
-        let search = self.search
-        let task = Task<Work?, Never> { [weak self] in
-            do {
-                let found = Self.best(try await search(Self.query(name)), for: name)
-                await self?.keep(found, for: key)
-                return found
-            } catch {
-                // Too many requests or no network: nothing is kept, and the next search waits a minute.
-                await self?.pause(error)
+        while true {
+            if let kept = kept(name) { return kept }
+            if let task = running[key] { return await task.value }
+            guard await waitTurn(for: key, name: name) else {
+                if let kept = kept(name) { return kept }
+                if let task = running[key] { return await task.value }
                 return nil
             }
+            if let kept = kept(name) { wakeNextWaiter(); return kept }
+            if let task = running[key] { wakeNextWaiter(); return await task.value }
+            if Task.isCancelled { wakeNextWaiter(); return nil }
+            nextStart = ContinuousClock.now + spacing
+            let search = self.search
+            let task = Task<Work?, Never> { [weak self] in
+                do {
+                    let found = Self.best(try await search(Self.query(name)), for: name)
+                    await self?.keep(found, for: key)
+                    return found
+                } catch {
+                    // Too many requests or no network: nothing is kept, and the next search waits.
+                    await self?.pause(error)
+                    return nil
+                }
+            }
+            running[key] = task
+            // Same-key waiters join `running[key]` at once; the next distinct title takes the pacing gate.
+            wakeWaiters(for: key)
+            wakeNextWaiter()
+            let found = await task.value
+            running[key] = nil
+            return found
         }
-        running[key] = task
-        let found = await task.value
-        running[key] = nil
-        return found
+    }
+
+    /// Waits for this caller's turn at the pacing gate without advancing `nextStart`, so scrolled-away cards and
+    /// duplicate names never leave dead slots behind.
+    private func waitTurn(for key: String, name: MediaName) async -> Bool {
+        while true {
+            if Task.isCancelled || kept(name) != nil || running[key] != nil {
+                wakeNextWaiter()
+                return false
+            }
+            if !pacing {
+                pacing = true
+                while ContinuousClock.now < nextStart {
+                    try? await Task.sleep(until: nextStart, clock: .continuous)
+                    if Task.isCancelled || kept(name) != nil || running[key] != nil {
+                        pacing = false
+                        wakeNextWaiter()
+                        return false
+                    }
+                }
+                pacing = false
+                return true
+            }
+            let id = UUID()
+            let resumed = await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    enqueueWaiter(id: id, key: key, continuation: continuation)
+                }
+            } onCancel: {
+                Task { await self.cancelWaiter(id) }
+            }
+            if !resumed {
+                wakeNextWaiter()
+                return false
+            }
+        }
+    }
+
+    private func enqueueWaiter(id: UUID, key: String, continuation: CheckedContinuation<Bool, Never>) {
+        if Task.isCancelled {
+            continuation.resume(returning: false)
+            return
+        }
+        if !pacing || running[key] != nil {
+            continuation.resume(returning: true)
+            return
+        }
+        waiters.append(Waiter(id: id, key: key, continuation: continuation))
+    }
+
+    private func cancelWaiter(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(returning: false)
+    }
+
+    private func wakeWaiters(for key: String) {
+        var remaining: [Waiter] = []
+        var woken: [Waiter] = []
+        for waiter in waiters {
+            if waiter.key == key { woken.append(waiter) } else { remaining.append(waiter) }
+        }
+        waiters = remaining
+        for waiter in woken { waiter.continuation.resume(returning: true) }
+    }
+
+    private func wakeNextWaiter() {
+        guard !pacing, !waiters.isEmpty else { return }
+        waiters.removeFirst().continuation.resume(returning: true)
     }
 
     private func pause(_ error: Error) {
-        nextStart = max(nextStart, ContinuousClock.now + .seconds(60))
+        let wait: Duration = (error as? TMDBMatch.Failure)?.message == "HTTP 429" ? .seconds(60) : .seconds(5)
+        nextStart = max(nextStart, ContinuousClock.now + wait)
         Diagnostics.shared.record(.info, "files", "poster search paused: \(error.localizedDescription)")
     }
 
