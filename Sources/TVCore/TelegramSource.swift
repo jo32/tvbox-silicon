@@ -103,6 +103,11 @@ public enum TelegramSource {
     private static func play(_ address: String, endpoint: TelegramEndpoint, http: HTTPClient) async throws -> [String: JSONValue] {
         let header: JSONValue = .object(["Referer": .string("https://t.me/"), "User-Agent": .string(HTTPClient.userAgent)])
         if CatalogClient.isDirectMedia(address) { return ["parse": .number(0), "url": .string(address), "header": header] }
+        // A Netdisk share link is a cloud file behind a login and an extraction code, not a web video.
+        // Web detection can never turn it into a playable address, so say so instead of timing out.
+        if Self.isNetdiskShareLink(address) {
+            throw TVError.unsupported(L10n.text("This line is a cloud-drive share link, not a playable video. Open it in the drive's app, save the file to your own drive, then play it from Cloud Files."))
+        }
         if let url = try? WebAddress.resolve(address) {
             // Only Telegram's own pages go through the source's entry; an external "main line" is read directly,
             // so the entry never sees addresses that aren't Telegram's.
@@ -112,6 +117,18 @@ public enum TelegramSource {
             }
         }
         return ["parse": .number(1), "url": .string(address), "header": header]
+    }
+
+    /// Cloud-drive share links (`/s/…`) point to files behind a login, not to web videos. They have
+    /// no media URL for the sniffer to find, so they are rejected here with an actionable message
+    /// instead of burning the 15-second detection clock. The hosts are the drives Yingxia supports
+    /// under Cloud Files, where a saved copy of the file can be played.
+    private static func isNetdiskShareLink(_ address: String) -> Bool {
+        guard let url = URL(string: address), let host = url.host()?.lowercased() else { return false }
+        let hosts = ["pan.baidu.com", "yun.baidu.com", "www.aliyundrive.com", "aliyundrive.com",
+                     "pan.quark.cn", "drive.uc.cn", "www.123pan.com", "115.com"]
+        guard hosts.contains(host) || host.hasSuffix(".pan.baidu.com") else { return false }
+        return url.path.hasPrefix("/s/")
     }
 
     /// The preview page's posts, newest first.
