@@ -1436,9 +1436,12 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     case keep
     case fitScreen
     case half
+    case threeQuarters
     case one
+    case oneAndQuarter
     case oneAndHalf
     case double
+    case triple
 
     static let key = "macPlayerWindowSize"
 
@@ -1447,9 +1450,12 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         case .keep: L10n.text("Keep Last Size")
         case .fitScreen: L10n.text("Fit Screen")
         case .half: "0.5×"
+        case .threeQuarters: "0.75×"
         case .one: "1×"
+        case .oneAndQuarter: "1.25×"
         case .oneAndHalf: "1.5×"
         case .double: "2×"
+        case .triple: "3×"
         }
     }
 
@@ -1458,9 +1464,12 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         switch self {
         case .keep, .fitScreen: nil
         case .half: 0.5
+        case .threeQuarters: 0.75
         case .one: 1
+        case .oneAndQuarter: 1.25
         case .oneAndHalf: 1.5
         case .double: 2
+        case .triple: 3
         }
     }
 }
