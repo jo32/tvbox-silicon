@@ -1073,7 +1073,12 @@ struct TMDBEpisodeTile: View {
                     }
                 }
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
+                // The accent ring alone vanishes against a dark still in light mode, where the classic accent is
+                // near-black (#2743): a white hairline under it keeps the current episode readable in both modes.
+                .coverOverlay { if current {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white, lineWidth: 3)
+                        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) }
+                } }
             let episodeTitle = info.map(\.name).flatMap { $0.isEmpty || $0 == name || Self.isPlaceholder($0) ? nil : $0 }
             // TMDB's scraped title is the primary line when there is one; the resource's name moves to the caption,
             // so the episode is still found by its file name.
