@@ -303,6 +303,7 @@ struct LXSourcePage: View {
     @State private var confirmsRemoval = false
     /// Until when this source is asked after the others, having failed or timed out lately (#1374).
     @State private var coolingUntil: Date?
+    @State private var updating = false
     var body: some View {
         let current = store.lxSources.first { $0.id == source.id } ?? source
         let enabled = Binding(get: { current.enabled }, set: { LXSourceLibrary.shared.setEnabled(source.id, $0) })
@@ -321,6 +322,17 @@ struct LXSourcePage: View {
         return base.isEmpty ? status : base + "\n" + status
     }
 
+    /// Fetches the source's script again from its address and replaces it in place (#1436). The page shows the new
+    /// version and catalogs when the store's sources refresh.
+    private func updateSource() {
+        guard !updating else { return }
+        updating = true
+        Task {
+            defer { updating = false }
+            _ = try? await LXSourceLibrary.shared.update(source.id)
+        }
+    }
+
     @ViewBuilder private func page(_ current: LXSource, enabled: Binding<Bool>) -> some View {
         #if os(tvOS)
         TVSettingsSubpage(symbol: "music.note", title: current.info.name, subtitle: current.origin?.absoluteString) {
@@ -328,6 +340,9 @@ struct LXSourcePage: View {
                 TVSettingsToggle(title: L10n.text("Use This Source"), detail: detail(current), isOn: enabled)
             }
             TVSettingsSection {
+                if current.origin != nil {
+                    TVSettingsAction(title: L10n.text("Update Source")) { updateSource() }
+                }
                 TVSettingsAction(title: L10n.text("Remove Source"), destructive: true) { confirmsRemoval = true }
             }
         }
@@ -346,6 +361,7 @@ struct LXSourcePage: View {
                     LabeledContent(L10n.text("Address")) {
                         Text(origin.absoluteString).lineLimit(3).multilineTextAlignment(.trailing).textSelection(.enabled)
                     }
+                    Button(L10n.text("Update Source")) { updateSource() }
                 }
             }
             Section {

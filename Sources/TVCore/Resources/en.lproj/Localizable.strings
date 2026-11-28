@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";
 "Keep Controls Visible" = "Keep Controls Visible";
 "Count back from the end" = "Count back from the end";
+"Updated \"%@\"." = "Updated \"%@\".";
+"Update \"%@\"" = "Update \"%@\"";
+"Update Source" = "Update Source";
+"This source was imported from a file, so there is no address to update it from." = "This source was imported from a file, so there is no address to update it from.";

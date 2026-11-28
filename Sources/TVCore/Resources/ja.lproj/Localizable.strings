@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
 "Keep Controls Visible" = "コントロールを常に表示";
 "Count back from the end" = "終わりから数える";
+"Updated \"%@\"." = "「%@」を更新しました。";
+"Update \"%@\"" = "「%@」を更新";
+"Update Source" = "ソースを更新";
+"This source was imported from a file, so there is no address to update it from." = "このソースはファイルからインポートされたため、更新用のアドレスがありません。";

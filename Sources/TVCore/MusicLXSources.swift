@@ -226,6 +226,20 @@ public final class LXSourceLibrary: @unchecked Sendable {
         Task { await LXSourceRuntime.shared.close(id) }
     }
 
+    /// Fetches the source's script again from its address and replaces it in place (#1436): the version, the catalogs
+    /// it covers, and the runtime all come from the newer text. A source with no address (imported from a file) has
+    /// nothing to fetch, so it cannot be updated.
+    @discardableResult
+    public func update(_ id: String, runtime: LXSourceRuntime = .shared) async throws -> LXSource {
+        guard let source = sources.first(where: { $0.id == id }), let origin = source.origin else {
+            throw TVError.unsupported(L10n.text("This source was imported from a file, so there is no address to update it from."))
+        }
+        let script = try await Self.download(origin)
+        // `add` with the same origin replaces the entry in place when the text changed, re-runs it, and rewrites the
+        // file; the same text only turns it back on.
+        return try await add(script: script, origin: origin, runtime: runtime)
+    }
+
     /// The script, fetched again from its origin when the system cleared the copy.
     func script(for source: LXSource) async throws -> String {
         if let data = try? Data(contentsOf: file(source.id)) { return String(decoding: data, as: UTF8.self) }

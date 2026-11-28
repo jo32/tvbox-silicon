@@ -747,6 +747,22 @@ struct MusicScrubber: View {
         withAnimation(.smooth) { sources = LXSourceLibrary.shared.sources }
     }
 
+    /// A source's `origin` is the address it came from; only then can its script be fetched again (#1436).
+    func canUpdate(_ source: LXSource) -> Bool { source.origin != nil }
+
+    func update(_ source: LXSource) {
+        guard canUpdate(source), !busy else { return }
+        busy = true; message = nil; failed = false
+        Task {
+            do {
+                let updated = try await LXSourceLibrary.shared.update(source.id)
+                sources = LXSourceLibrary.shared.sources
+                message = L10n.text("Updated “%@”.", updated.info.name)
+            } catch { report(error) }
+            busy = false
+        }
+    }
+
     func isFirst(_ source: LXSource) -> Bool { sources.first?.id == source.id }
 
     static func detail(_ source: LXSource) -> String {
@@ -783,6 +799,9 @@ struct MusicLXSourcesSection: View {
                 TVSettingsToggle(title: source.info.name, detail: MusicLXSourcesModel.detail(source), isOn: model.enabled(source))
                 if !model.isFirst(source) {
                     TVSettingsAction(title: L10n.text("Move “%@” to Top", source.info.name)) { model.moveToTop(source) }
+                }
+                if model.canUpdate(source) {
+                    TVSettingsAction(title: L10n.text("Update “%@”", source.info.name)) { model.update(source) }
                 }
                 TVSettingsAction(title: L10n.text("Remove “%@”", source.info.name), destructive: true) { model.remove(source) }
             }
@@ -822,6 +841,9 @@ struct MusicLXSourcesSection: View {
                 .contextMenu {
                     if !model.isFirst(source) {
                         Button { model.moveToTop(source) } label: { Label(L10n.text("Move to Top"), systemImage: "pin") }
+                    }
+                    if model.canUpdate(source) {
+                        Button { model.update(source) } label: { Label(L10n.text("Update"), systemImage: "arrow.clockwise") }
                     }
                     Button(role: .destructive) { model.remove(source) } label: { Label(L10n.text("Remove"), systemImage: "trash") }
                 }
