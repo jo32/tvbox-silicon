@@ -361,9 +361,7 @@ struct AssistantDemo {
             AgentMessage(role: .tool, text: #"{"items":[{"title":"Default Speed","page":"Settings › Playback","value":"1×"}]}"#, toolCallID: speed.id,
                          // Real setting ids, so tapping them opens their rows.
                          cards: [AgentCard(id: "start_speed", title: L10n.text("Start Speed"), subtitle: L10n.text("Playback"),
-                                           play: ["id": .string("start_speed")], action: "settings_open", symbol: "gearshape", square: true),
-                                 AgentCard(id: "auto_play_next_episode", title: L10n.text("Auto-play next episode"), subtitle: L10n.text("Playback"),
-                                           play: ["id": .string("auto_play_next_episode")], action: "settings_open", symbol: "gearshape", square: true)]),
+                                           play: ["id": .string("start_speed")], action: "settings_open", symbol: "gearshape", square: true)]),
             AgentMessage(role: .assistant, text: "It's in **Settings › Playback › Default Speed**, now `1×`. You can also change it in the player."),
         ]
     }

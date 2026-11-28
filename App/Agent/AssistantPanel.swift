@@ -505,12 +505,17 @@ private struct AssistantVideoCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 cover
                     .overlay(alignment: .top) {
+                        // Over the picture only (not its title), dimmed, with the spinner in its middle. Sized by a
+                        // shape rather than by the spinner, which shrank it to a spinner in the picture's corner.
                         if starting {
-                            ProgressView().appControlSize(.small)
-                                .frame(maxWidth: .infinity).aspectRatio(aspect, contentMode: .fit)
-                                .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(.black.opacity(0.45))
+                                .aspectRatio(aspect, contentMode: .fit)
+                                .overlay { ProgressView().tint(.white) }
+                                .transition(.opacity)
                         }
                     }
+                    .animation(.easeOut(duration: 0.2), value: starting)
                 if let subtitle = card.subtitle, !subtitle.isEmpty {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 }
