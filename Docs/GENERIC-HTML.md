@@ -30,12 +30,13 @@ Add one entry to any TVBox subscription:
 | `encoding` | Response charset, e.g. `utf-8`, `gbk`. Default `utf-8`. |
 | `header` / `headers` | Extra request headers. `@base` expands to the site root. |
 | `class` | How to read home-page categories (selector + `id`/`name` field rules). |
-| `list` | How to read video cards (`selector` + `fields`). |
+| `list` | How to read video cards (`selector`, `fields`, optional `limit`, `lastPage`, `pageSize`). |
 | `categoryUrl` | Template for a category page. `{id}`, `{pg}`, `{base}`. |
+| `category.list` | Optional list override for category pages (for sites whose layout differs from home). |
 | `detailUrl` | Template for a detail page. `{id}`, `{base}`. |
 | `detail` | Detail-page `fields`, plus `playFrom` / `playUrl` for episode lists. |
-| `play` | `url` rule that extracts the media link from the detail page. |
-| `search` | `url` template for search. `{wd}` is the URL-encoded keyword. |
+| `play` | `url` rule for the media link, optional `header` overrides for play requests. |
+| `search` | `url` template for search and optional `list` override. `{wd}` is the URL-encoded keyword, `{pg}` the page. |
 
 ### Field rules
 
@@ -45,11 +46,17 @@ A field rule is either a selector string (reads trimmed text of the first match)
 |---|---|
 | `selector` | Scope inside each item; omit to use the item itself. |
 | `attr` | Read an attribute (e.g. `href`, `src`) instead of text. |
+| `html` | Read inner HTML instead of text (e.g. to keep `<b>` tags in a description). |
+| `index` | Take the Nth match; negative values count from the end. Default: first. |
+| `join` | Concatenate all matches with this separator (`true` uses `", "`). |
 | `regex` | Apply a regex and take capture group 1. |
 | `tpl` | Substitute the value into a template (`{v}` is the value). |
 | `base` | Resolve the value as an absolute URL against `url`. |
+| `default` | Fallback text when the rule matches nothing. |
 
-`list.fields` values map to TVBox fields: `vod_id`, `vod_name`, `vod_pic`, `vod_remarks`.
+`list.fields` values map to TVBox fields: `vod_id`, `vod_name`, `vod_pic`, `vod_remarks`. Any other `vod_*` key (e.g. `vod_actor`, `vod_content`) is passed through to the detail object as well.
+
+URL templates understand `{base}`, `{id}`, `{wd}`, `{pg}` and `{v}`. Pagination works with a template such as `/list/{id}-{pg}.html`; `{pg}` is 1-based.
 
 ### Minimal example
 
@@ -84,7 +91,8 @@ A field rule is either a selector string (reads trimmed text of the first match)
 
 ## Notes
 
-- Duplicate `vod_id` values are dropped; a card without an id or name is skipped.
-- Episode groups from `playFrom`/`playUrl` are joined into `vod_play_from` / `vod_play_url` in TVBox `$$$`/`#` form. A single id falls back to the detail URL.
-- `play()` re-fetches the detail page with a mobile User-Agent and extracts the media link with the `play.url` rule.
+- Duplicate `vod_id` values are dropped; a card without an id or name is skipped. `list.limit` caps how many cards are kept.
+- Episode groups from `playFrom`/`playUrl` are joined into `vod_play_from` / `vod_play_url` in TVBox `$$$`/`#` form. A single id falls back to the detail URL. Each line's first episode URL is cached so `play(flag, id)` can fall back to it when `play.url` finds no media link.
+- `play()` re-fetches the detail page with a mobile User-Agent and extracts the media link with the `play.url` rule. Values in `play.header` are merged into its request headers (`@base` expands to the site root).
+- `home()` fetches the home page once and reuses the HTML for both categories and the list.
 - Sites with server-side rendering are required; pages that build their list purely in client-side JavaScript cannot be scraped.

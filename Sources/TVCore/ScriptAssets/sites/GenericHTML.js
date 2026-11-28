@@ -26,10 +26,15 @@
 //   "selector"                       -> trimmed text of the first match
 //   { "selector": "...",             -> scope inside each item (defaults to the item itself)
 //     "attr": "href",                -> read an attribute instead of text
+//     "html": true,                  -> read inner HTML instead of text
+//     "index": 1,                    -> take the Nth match (negative counts from the end)
+//     "join": ", ",                  -> concatenate all matches with this separator
 //     "regex": "group(1)",           -> apply a regex and take capture group 1
 //     "tpl": "/play/{v}.html",       -> substitute the value into a URL template
-//     "base": true }                 -> resolve the value as an absolute URL against the site
-// URL templates use {base} (the configured url), {id}, {wd} and {v} (a field value).
+//     "base": true,                  -> resolve the value as an absolute URL against the site
+//     "default": "未知"              -> fallback when no value was found
+//   }
+// URL templates use {base}, {id}, {wd}, {pg} and {v} (a field value).
 
 import { parseHTML, textOf, absolute } from './_lite.js';
 
@@ -38,6 +43,7 @@ const MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleW
 
 let cfg = {};
 let base = '';
+let routes = {};
 
 function configFrom(ext) {
     if (!ext) throw new Error('通用 HTML 源缺少配置 (ext)');
@@ -50,7 +56,7 @@ function configFrom(ext) {
 }
 
 /** Build request headers, expanding `@base` placeholders in configured values. */
-function headers(mobile = false) {
+function headers(mobile = false, extra = null) {
     const out = { 'User-Agent': DEFAULT_UA };
     const custom = cfg.header || cfg.headers || {};
     for (const [key, value] of Object.entries(custom)) {
@@ -58,13 +64,16 @@ function headers(mobile = false) {
     }
     if (mobile) out['User-Agent'] = MOBILE_UA;
     if (!out['Referer']) out['Referer'] = base + '/';
+    for (const [key, value] of Object.entries(extra || {})) {
+        out[key] = String(value).replace(/@base/g, base + '/');
+    }
     return out;
 }
 
-function get(url, mobile = false) {
+function get(url, mobile = false, extraHeaders = null) {
     if (!url) return '';
     try {
-        const response = globalThis.req(url, { headers: headers(mobile), encoding: cfg.encoding || 'utf-8', timeout: 20000 });
+        const response = globalThis.req(url, { headers: headers(mobile, extraHeaders), encoding: cfg.encoding || 'utf-8', timeout: 20000 });
         return response && response.content ? String(response.content) : '';
     } catch {
         return '';
@@ -78,31 +87,51 @@ function url(value) {
     return absolute(base, text.replace(/\{base\}/g, base));
 }
 
-/** Fill a template such as "/play/{id}.html" or "{base}/search?wd={wd}". */
+/** Fill a template such as "/play/{id}.html" or "/list/{id}-{pg}.html". */
 function fill(template, values) {
-    return String(template || '').replace(/\{(base|id|wd|v)\}/g, (_, key) =>
+    return String(template || '').replace(/\{(base|id|wd|v|pg)\}/g, (_, key) =>
         key === 'base' ? base : String(values[key] ?? ''));
+}
+
+/** Apply a configured regex, taking capture group 1 when present. */
+function applyRegex(value, pattern) {
+    if (!pattern) return String(value || '').trim();
+    try {
+        const match = new RegExp(pattern).exec(String(value || ''));
+        return match ? String(match[1] ?? match[0] ?? '').trim() : '';
+    } catch { return ''; }
 }
 
 /** Extract one value from a cheerio scope using a rule (string selector or object). */
 function pick($, scope, rule, values = {}) {
     if (rule == null) return '';
     const spec = typeof rule === 'string' ? { selector: rule } : rule;
-    const node = spec.selector
-        ? (scope && scope.find ? scope.find(spec.selector).first() : $(spec.selector).first())
-        : (scope && scope.length ? scope.first() : null);
+    let nodes = spec.selector
+        ? (scope && scope.find ? scope.find(spec.selector) : $(spec.selector))
+        : (scope && scope.length ? scope : $());
+
+    if (spec.index != null) {
+        const raw = Number(spec.index) || 0;
+        const i = raw < 0 ? Math.max(0, nodes.length + raw) : raw;
+        nodes = nodes.eq(i);
+    }
+
+    const read = node => {
+        const el = $(node);
+        const text = spec.html ? String(el.html() || '') : spec.attr ? String(el.attr(spec.attr) || '').trim() : textOf(el);
+        return applyRegex(text, spec.regex);
+    };
+
     let value = '';
-    if (node && node.length) {
-        value = spec.attr ? String(node.attr(spec.attr) || '').trim() : textOf(node);
+    if (spec.join != null) {
+        value = nodes.toArray().map(read).filter(Boolean).join(spec.join === true ? ', ' : String(spec.join));
+    } else if (nodes.length) {
+        value = read(nodes.eq(0));
     }
-    if (spec.regex) {
-        try {
-            const match = new RegExp(spec.regex).exec(value);
-            value = match ? String(match[1] ?? match[0] ?? '').trim() : '';
-        } catch { /* an invalid regex yields no value */ }
-    }
+
     if (spec.tpl) value = fill(spec.tpl, { ...values, v: value });
     if (spec.base) value = url(value);
+    if (!value && spec.default != null) value = String(spec.default);
     return value;
 }
 
@@ -141,15 +170,19 @@ function categoryURL(tid, pg) {
 
 function searchURL(wd, pg) {
     const template = (cfg.search && cfg.search.url) || '/search?wd={wd}';
-    return url(fill(template, { wd: encodeURIComponent(wd), pg: pg > 1 ? pg : 1 }));
+    return url(fill(template, { wd: encodeURIComponent(wd), pg: pg > 1 ? pg : 1, v: wd }));
 }
 
-function page(html, pg) {
+/** Parse a list page; `listCfg` lets search/category override the default list selectors. */
+function page(html, pg, listCfg) {
     const $ = parseHTML(html);
-    const list = items($, cfg.list && cfg.list.selector, cfg.list && cfg.list.fields);
-    const last = cfg.list && cfg.list.lastPage ? pick($, null, cfg.list.lastPage) : '';
+    const lc = listCfg || cfg.list || {};
+    const limit = Number(lc.limit) > 0 ? Number(lc.limit) : Infinity;
+    const list = items($, lc.selector, lc.fields, limit);
+    const lastRule = lc.lastPage || (cfg.list && cfg.list.lastPage);
+    const last = lastRule ? pick($, null, lastRule) : '';
     const pagecount = Math.max(1, Number(last) || (list.length ? pg : 1));
-    return { page: pg, pagecount, limit: 20, total: list.length, list };
+    return { page: pg, pagecount, limit: lc.pageSize ? Number(lc.pageSize) || 20 : 20, total: list.length, list };
 }
 
 export default {
@@ -157,10 +190,12 @@ export default {
         cfg = configFrom(ext);
         base = String(cfg.url || cfg.base || '').trim().replace(/\/+$/, '');
         if (!/^https?:\/\//i.test(base)) throw new Error('通用 HTML 源需要以 http(s) 开头的 url');
+        routes = {};
     },
 
     home() {
-        const $ = parseHTML(get(base + '/'));
+        const html = get(base + '/');
+        const $ = parseHTML(html);
         const classes = [];
         if (cfg.class && cfg.class.selector) {
             $(cfg.class.selector).each((_, el) => {
@@ -170,12 +205,13 @@ export default {
                 if (id && name) classes.push({ type_id: id, type_name: name });
             });
         }
-        return { class: classes, ...page(get(base + '/'), 1) };
+        return { class: classes, ...page(html, 1) };
     },
 
     category(tid, pg) {
         const p = Math.max(1, Number(pg) || 1);
-        return page(get(categoryURL(tid, p)), p);
+        const listCfg = (cfg.category && cfg.category.list) || cfg.list;
+        return page(get(categoryURL(tid, p)), p, listCfg);
     },
 
     detail(id) {
@@ -189,19 +225,26 @@ export default {
 
         const groups = [];
         const d = cfg.detail || {};
+        const flags = [];
+        const urls = [];
         if (d.playFrom && d.playUrl) {
-            const names = [], urls = [];
-            $(d.playFrom.selector || d.playFrom).each((_, el) => names.push(textOf($(el))));
+            if (d.playFrom.selector || typeof d.playFrom === 'string') {
+                $(typeof d.playFrom === 'string' ? d.playFrom : d.playFrom.selector).each((_, el) =>
+                    flags.push(applyRegex(textOf($(el)), d.playFrom.regex)));
+            } else {
+                flags.push(pick($, null, d.playFrom) || '播放');
+            }
             $(d.playUrl.selector || d.playUrl).each((_, el) => {
                 const scope = $(el);
                 let href = d.playUrl.attr ? String(scope.attr(d.playUrl.attr) || '') : textOf(scope);
-                if (d.playUrl.regex) {
-                    try { const m = new RegExp(d.playUrl.regex).exec(href); href = m ? String(m[1] || m[0] || '') : ''; } catch { /* ignore */ }
-                }
+                href = applyRegex(href, d.playUrl.regex);
                 urls.push(url(href));
             });
-            const flags = names.length ? names : ['播放'];
-            groups.push(flags.join('$$$'), urls.filter(Boolean).join('#'));
+            const names = flags.length ? flags : ['播放'];
+            groups.push(names.join('$$$'), urls.filter(Boolean).join('#'));
+            // Remember the first URL of each line so play(flag, id) can fall back to it.
+            routes = {};
+            names.forEach((name, i) => { if (urls[i] && name) routes[name] = urls[i]; });
         }
         video.vod_play_from = groups[0] || cfg.playFrom || '播放';
         video.vod_play_url = groups[1] || url(id);
@@ -210,14 +253,16 @@ export default {
 
     search(wd, pg) {
         const p = Math.max(1, Number(pg) || 1);
-        return page(get(searchURL(wd, p)), p);
+        const listCfg = (cfg.search && cfg.search.list) || cfg.list;
+        return page(get(searchURL(wd, p)), p, listCfg);
     },
 
     play(flag, id) {
         const rule = (cfg.play && cfg.play.url) || {};
-        const html = get(detailURL(id), true);
+        const extra = (cfg.play && cfg.play.header) || null;
+        const html = get(detailURL(id), true, extra);
         const $ = parseHTML(html);
         const address = pick($, null, rule);
-        return { parse: 0, url: url(address || id), header: headers(true) };
+        return { parse: 0, url: url(address || routes[flag] || id), header: headers(true, extra) };
     }
 };
