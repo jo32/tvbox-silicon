@@ -124,6 +124,18 @@ struct DanmakuStylePickers: View {
         DanmakuMotionPickers()
     }
 }
+
+/// The same pickers, fed by values frozen when the player menu opened instead of the live model: a comment
+/// arriving while the menu is open churns the model and rebuilds the menu list (#2571).
+struct DanmakuStyleSnapshotPickers: View {
+    var fontSize: Binding<Double>
+    var opacity: Binding<Double>
+
+    var body: some View {
+        DanmakuTextStylePickers(fontSize: fontSize, opacity: opacity)
+        DanmakuMotionPickers()
+    }
+}
 #endif
 
 private struct DanmakuTextStylePickers: View {
