@@ -13,6 +13,7 @@ struct DiscoverDetailView: View {
     /// name it was released here under ("可能的爱"), which TMDB's zh-TW name for it ("假如愛有如果") never matches.
     var doubanName: String? = nil
     @State private var model = DiscoverDetailModel()
+    @State private var doubanScore: DoubanRating.Score?
     @State private var seasonNumber: Int?
     @State private var season: TMDBMatch.Season?
     @State private var loadingSeason = false
@@ -66,6 +67,11 @@ struct DiscoverDetailView: View {
         .onAppear { onScreen = true; startSources() }
         .onDisappear { onScreen = false; stopSources() }
         .task(id: item.key) { await model.load(item) }
+        .task(id: item.key) {
+            doubanScore = nil
+            let score = await CatalogRatingTitle(item).doubanScore()
+            if !Task.isCancelled { doubanScore = score }
+        }
         .onChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
         }
@@ -250,13 +256,7 @@ struct DiscoverDetailView: View {
                     .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.overview")
-            if let rating = details?.rating ?? item.rating {
-                HStack(spacing: 5) {
-                    TMDBBadge()
-                    Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 12, design: .rounded))
-                    if let votes = details?.voteCount { Text("(\(votes))").font(.system(size: 11, design: .rounded)).opacity(0.6) }
-                }
-            }
+            ratings(spacing: 5, scoreSize: 12, voteSize: 11)
             if model.loading, details == nil { ProgressView().padding(10) }
         }
         .padding(.horizontal, 20).padding(.bottom, 0)
@@ -264,6 +264,33 @@ struct DiscoverDetailView: View {
         .frame(maxWidth: 640)
         #endif
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func ratings(spacing: CGFloat, scoreSize: CGFloat, voteSize: CGFloat) -> some View {
+        let tmdbRating = details?.rating ?? item.rating
+        if tmdbRating != nil || doubanScore != nil {
+            HStack(spacing: 2 * spacing) {
+                if let tmdbRating {
+                    HStack(spacing: spacing) {
+                        TMDBBadge()
+                        Text(tmdbRating, format: .number.precision(.fractionLength(1)))
+                        if let votes = details?.voteCount {
+                            Text("(\(votes))").font(.system(size: voteSize, design: .rounded)).opacity(0.6)
+                        }
+                    }
+                }
+                if let doubanScore {
+                    HStack(spacing: spacing) {
+                        Text(doubanScore.label).fontWeight(.semibold)
+                        Text(doubanScore.value, format: .number.precision(.fractionLength(1)))
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("rating.douban.\(item.key)")
+                }
+            }
+            .font(.system(size: scoreSize, design: .rounded))
+        }
     }
 
     private var metadata: String {
@@ -1331,13 +1358,7 @@ extension DiscoverDetailView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
                     Text(metadata).font(.system(size: 26)).opacity(0.65).lineLimit(1)
-                    if let rating = details?.rating ?? item.rating {
-                        HStack(spacing: 10) {
-                            TMDBBadge()
-                            Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 26, design: .rounded))
-                            if let votes = details?.voteCount { Text("(\(votes))").font(.system(size: 22, design: .rounded)).opacity(0.6) }
-                        }
-                    }
+                    ratings(spacing: 10, scoreSize: 26, voteSize: 22)
                     if model.loading, details == nil { ProgressView() }
                 }.frame(maxWidth: 1150, alignment: .leading)
             }
@@ -1510,10 +1531,7 @@ extension DiscoverDetailView {
                     tvLandscape(value.backdrop ?? value.poster, width: 380) {
                         Text(value.name).font(.system(size: 26, weight: .semibold)).lineLimit(1)
                         HStack(spacing: 10) {
-                            if let rating = value.rating {
-                                Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
-                                    .labelStyle(DiscoverTVStarLabel())
-                            }
+                            CatalogRatings(item: value)
                             if let year = value.year { Text(String(year)).opacity(0.6) }
                         }.font(.system(size: 22))
                         Text(value.overview).font(.system(size: 22)).lineLimit(2).opacity(0.6)
@@ -1573,13 +1591,6 @@ private struct DiscoverTVTrailerPlayer: UIViewControllerRepresentable {
         coordinator.task?.cancel()
         controller.player?.pause()
         controller.player?.replaceCurrentItem(with: nil)
-    }
-}
-
-/// A yellow star beside the rating, as on Rex's cards.
-private struct DiscoverTVStarLabel: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 4) { configuration.icon.foregroundStyle(.yellow); configuration.title }
     }
 }
 

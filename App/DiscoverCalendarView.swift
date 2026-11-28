@@ -71,7 +71,9 @@ struct DiscoverCalendarView: View {
                 if let day, !day.items.isEmpty {
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(224), spacing: 51, alignment: .top), count: 6), spacing: 66) {
                         ForEach(day.items) { item in
-                            DiscoverAiringLink(item: item) { DiscoverAiringTile(item: item, next: item.id == next, width: 224) }
+                            DiscoverAiringLink(item: item) {
+                                DiscoverAiringTile(item: item, next: item.id == next, width: 224, tmdbScores: week?.source == "tmdb")
+                            }
                                 .accessibilityIdentifier("calendar.item.\(item.id)")
                         }
                     }.padding(.top, 54)
@@ -138,7 +140,9 @@ struct DiscoverCalendarView: View {
                 if let day, !day.items.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: DiscoverLayout.posterWidth), spacing: DiscoverLayout.spacing)], alignment: .leading, spacing: 22) {
                         ForEach(day.items) { item in
-                            DiscoverAiringLink(item: item) { DiscoverAiringTile(item: item, next: item.id == next) }
+                            DiscoverAiringLink(item: item) {
+                                DiscoverAiringTile(item: item, next: item.id == next, tmdbScores: week?.source == "tmdb")
+                            }
                                 .accessibilityIdentifier("calendar.item.\(item.id)")
                         }
                     }
@@ -224,8 +228,11 @@ enum DiscoverAiring {
 
     #if os(tvOS)
     /// A title for the TV's native shelf.
-    static func entry(_ item: TMDBCalendar.Item, next: Bool) -> DiscoverTVNativeShelf.Entry {
-        DiscoverTVNativeShelf.Entry(key: item.id, title: item.title, detail: caption(item), image: item.cover, highlight: next)
+    static func entry(_ item: TMDBCalendar.Item, next: Bool, tmdbScores: Bool) -> DiscoverTVNativeShelf.Entry {
+        let work = tmdbScores ? item.tmdb.map(item.catalogItem) : nil
+        let detail = work.map { $0.rating.map(CatalogRatings.tmdbCaption) ?? "" } ?? caption(item)
+        return DiscoverTVNativeShelf.Entry(key: item.id, title: item.title, detail: detail, image: item.cover,
+                                           highlight: next, ratingItem: work)
     }
     #endif
 
@@ -248,6 +255,7 @@ struct DiscoverAiringTile: View {
     let item: TMDBCalendar.Item
     var next = false
     var width: CGFloat = DiscoverLayout.posterWidth
+    var tmdbScores = false
     var body: some View {
         #if os(tvOS)
         VStack(spacing: 5) {
@@ -256,7 +264,7 @@ struct DiscoverAiringTile: View {
                 .coverOverlay(alignment: .topLeading) { badge.padding(12) }
             VStack(spacing: 0) {
                 Text(item.title).font(.system(size: DiscoverLayout.caption))
-                Text(DiscoverAiring.caption(item)).font(.system(size: DiscoverLayout.secondary, weight: .medium))
+                caption.font(.system(size: DiscoverLayout.secondary, weight: .medium))
                     .foregroundStyle(next ? Brand.accent : .white.opacity(0.5))
             }.lineLimit(1).cardCaption()
         }.frame(width: width)
@@ -269,13 +277,25 @@ struct DiscoverAiringTile: View {
                 .overlay(alignment: .topLeading) { badge.padding(6) }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.system(size: DiscoverLayout.caption)).lineLimit(1)
-                Text(DiscoverAiring.caption(item)).lineLimit(1)
+                caption.lineLimit(1)
                     .font(.system(size: DiscoverLayout.secondary, design: .rounded)).monospacedDigit()
                     .foregroundStyle(next ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary.opacity(0.56)))
             }.frame(maxWidth: .infinity, alignment: .leading).frame(height: DiscoverLayout.captionHeight)
         }
         .accessibilityElement(children: .combine)
         #endif
+    }
+
+    @ViewBuilder private var caption: some View {
+        if tmdbScores, let work = item.tmdb {
+            #if os(tvOS)
+            CatalogRatings(item: item.catalogItem(work)).frame(minHeight: DiscoverLayout.secondary + 2)
+            #else
+            CatalogRatings(item: item.catalogItem(work), stacked: true).frame(minHeight: 26)
+            #endif
+        } else {
+            Text(DiscoverAiring.caption(item))
+        }
     }
 
     @ViewBuilder private var badge: some View {

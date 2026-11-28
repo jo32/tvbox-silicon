@@ -386,14 +386,16 @@ struct DiscoverView: View {
 
     /// Today's anime or series from the one before the next to air, as a shelf; its heading opens the week.
     @ViewBuilder private func airing(_ kind: TMDBCalendar.Kind) -> some View {
-        if let today = model.calendar[kind]?.today(), !today.items.isEmpty {
+        if let week = model.calendar[kind], let today = week.today(), !today.items.isEmpty {
             let next = DiscoverAiring.next(today.items)
+            let tmdbScores = week.source == "tmdb"
             VStack(alignment: .leading, spacing: 0) {
                 #if os(tvOS)
                 // The native row, as the TMDB shelves: Left from the first title brings out See All (the week page).
                 sectionHeading(kind.shelfTitle)
                 let items = DiscoverAiring.fromNow(today.items)
-                DiscoverTVNativeShelf(entries: items.map { DiscoverAiring.entry($0, next: $0.id == next) }, identifier: "calendar.\(kind.rawValue)") { index in
+                DiscoverTVNativeShelf(entries: items.map { DiscoverAiring.entry($0, next: $0.id == next, tmdbScores: tmdbScores) },
+                                      identifier: "calendar.\(kind.rawValue)") { index in
                     if let index {
                         let item = items[index]
                         openRoute?(Route { AnyView(DiscoverAiring.destination(item)) })
@@ -409,7 +411,8 @@ struct DiscoverView: View {
                     LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
                         ForEach(DiscoverAiring.fromNow(today.items)) { item in
                             DiscoverAiringLink(item: item) {
-                                DiscoverAiringTile(item: item, next: item.id == next).frame(width: DiscoverLayout.posterWidth)
+                                DiscoverAiringTile(item: item, next: item.id == next, tmdbScores: tmdbScores)
+                                    .frame(width: DiscoverLayout.posterWidth)
                             }
                             .accessibilityIdentifier("discover.calendar.\(item.id)")
                         }
@@ -1101,12 +1104,7 @@ private struct DiscoverHero: View {
                 Text("「\(item.name)」" + item.overview)
                     .font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.center)
                     .frame(height: 34, alignment: .top).padding(.top, 5)
-                HStack(spacing: 4) {
-                    if let rating = item.rating {
-                        TMDBBadge()
-                        Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 11))
-                    }
-                }.frame(height: 14).padding(.top, 5)
+                CatalogRatings(item: item).font(.system(size: 11)).frame(height: 14).padding(.top, 5)
             }
             .padding(.horizontal, 30).padding(.bottom, 42)
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -1132,11 +1130,13 @@ struct DiscoverTile: View {
                 HStack(spacing: 5) {
                     if let year = item.year { Text(String(year)) }
                     if landscape, !item.genreNames.isEmpty { Text(item.genreNames).lineLimit(1) }
-                    if showsRating, let rating = item.rating {
-                        Text("★ " + rating.formatted(.number.precision(.fractionLength(1))))
-                    }
                 }.font(.system(size: DiscoverLayout.secondary, design: .rounded)).foregroundStyle(.primary.opacity(0.56))
-            }.frame(maxWidth: .infinity, alignment: .leading).frame(height: DiscoverLayout.captionHeight)
+                if showsRating {
+                    CatalogRatings(item: item, stacked: !landscape).font(.system(size: DiscoverLayout.secondary, design: .rounded))
+                        .frame(minHeight: 26)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: DiscoverLayout.captionHeight + (showsRating ? 13 : 0), alignment: .topLeading)
         }
         .accessibilityElement(children: .combine)
     }
@@ -1328,14 +1328,15 @@ struct DiscoverTVGrid<Chips: View, Footer: View>: View {
     }
 
     private func tile(_ item: TMDBCatalog.Item) -> some View {
-        let caption = [item.date ?? item.year.map(String.init),
-                       showsRating ? item.rating.map { "★ " + $0.formatted(.number.precision(.fractionLength(1))) } : nil]
-            .compactMap { $0 }.joined(separator: " · ")
+        let caption = item.date ?? item.year.map(String.init) ?? " "
         return VStack(spacing: 5) {
             PosterImage(url: item.poster).frame(width: 224, height: 336)
             VStack(spacing: 0) {
                 Text(item.name).font(.system(size: 29))
-                Text(caption.isEmpty ? " " : caption).font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+                Text(caption).font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+                if showsRating {
+                    CatalogRatings(item: item).font(.system(size: 19)).frame(minHeight: 23)
+                }
             }.lineLimit(1).cardCaption()
         }.frame(width: 224)
     }

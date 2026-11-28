@@ -2,6 +2,110 @@ import ImageIO
 import SwiftUI
 import TVCore
 
+extension DoubanRating.Score {
+    var label: String {
+        season == 1 ? L10n.text("Douban Season 1") : L10n.text("Douban")
+    }
+
+    var caption: String { "\(label) \(value.formatted(.number.precision(.fractionLength(1))))" }
+}
+
+struct CatalogRatingTitle: Hashable, Sendable {
+    let id: Int
+    let type: TMDBMatch.MediaType
+    let name: String
+    let originalName: String
+    let year: Int?
+
+    init(_ item: TMDBCatalog.Item) {
+        (id, type, name, originalName, year) = (item.id, item.mediaType, item.name, item.originalName, item.year)
+    }
+
+    init(_ details: TMDBMatch.Details) {
+        (id, type, name, originalName, year) = (details.id, details.mediaType, details.name, details.originalName, details.year)
+    }
+
+    func doubanScore() async -> DoubanRating.Score? {
+        await CatalogRatingLookups.shared.score(for: self)
+    }
+}
+
+/// Keep scrolling lists from starting a burst of network calls. Visible views can share the same request.
+private actor CatalogRatingLookups {
+    static let shared = CatalogRatingLookups()
+    private var pending: [CheckedContinuation<Void, Never>] = []
+    private var active: [CatalogRatingTitle: Task<DoubanRating.Score?, Never>] = [:]
+    private let limit = 3
+
+    func score(for title: CatalogRatingTitle) async -> DoubanRating.Score? {
+        while active.count >= limit && active[title] == nil && !Task.isCancelled {
+            await withCheckedContinuation { pending.append($0) }
+        }
+        guard !Task.isCancelled else { resumeNext(); return nil }
+        if let existing = active[title] { resumeNext(); return await existing.value }
+        let task = Task {
+            await DoubanRating.score(tmdbID: title.id, mediaType: title.type, name: title.name,
+                                     originalName: title.originalName, year: title.year)
+        }
+        active[title] = task
+        let score = await task.value
+        active[title] = nil
+        resumeNext()
+        return score
+    }
+
+    private func resumeNext() {
+        if active.count < limit && !pending.isEmpty { pending.removeFirst().resume() }
+    }
+}
+
+/// Both providers are labeled so a score can be read on its own or in a compact card.
+struct CatalogRatings: View {
+    let item: TMDBCatalog.Item
+    var stacked = false
+    var starSize: CGFloat?
+    @State private var result: (CatalogRatingTitle, DoubanRating.Score)?
+
+    var body: some View {
+        let title = CatalogRatingTitle(item)
+        let douban = result?.0 == title ? result?.1 : nil
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 1)) : AnyLayout(HStackLayout(spacing: 8))
+        layout {
+            if let tmdb = item.rating, tmdb > 0 {
+                HStack(spacing: 4) {
+                    if let starSize {
+                        HStack(spacing: 1) {
+                            ForEach(0..<5) { index in
+                                let fill = tmdb / 2 - Double(index)
+                                Image(systemName: fill >= 1 ? "star.fill" : fill > 0 ? "star.leadinghalf.filled" : "star")
+                                    .font(.system(size: starSize))
+                                    .foregroundStyle(fill > 0 ? Color.yellow : .secondary)
+                            }
+                        }
+                    }
+                    Text(Self.tmdbCaption(tmdb)).foregroundStyle(.yellow)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.tmdbCaption(tmdb))
+            }
+            if let douban {
+                Text(douban.caption).fontWeight(.semibold)
+                    .accessibilityIdentifier("rating.douban.\(item.key)")
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .task(id: title) {
+            let score = await title.doubanScore()
+            if !Task.isCancelled { result = score.map { (title, $0) } }
+        }
+    }
+
+    nonisolated static func tmdbCaption(_ score: Double) -> String {
+        "TMDB \(score.formatted(.number.precision(.fractionLength(1))))"
+    }
+}
+
 /// A video page's TMDB details (`TMDBMatch`): what this device already knows shows at once; otherwise the lookup runs
 /// while the page is open and its steps show, since a title nobody opened before takes some seconds.
 @MainActor @Observable final class TMDBLookup {
@@ -12,9 +116,10 @@ import TVCore
     /// The latest step worth showing: "thinking" between steps keeps the one before.
     private(set) var step: TMDBMatch.Step = .starting
     private(set) var details: TMDBMatch.Details? { didSet { refreshDouban() } }
-    /// Douban's score for the matched work, when Wikidata links it to one (#505).
+    /// Douban's score for the matched work.
     private(set) var douban: DoubanRating.Score?
-    private var doubanFor: String?
+    private var doubanFor: CatalogRatingTitle?
+    @ObservationIgnored private var doubanTask: Task<Void, Never>?
     private(set) var answer: TMDBMatch.Answer?
     /// The viewer chose the work (or "none of these") for this video.
     private(set) var chosen = false
@@ -25,14 +130,16 @@ import TVCore
     var facts: String { details?.facts(douban: douban) ?? "" }
 
     private func refreshDouban() {
-        guard let details else { douban = nil; doubanFor = nil; return }
-        let tag = "\(details.mediaType.rawValue)-\(details.id)"
+        let tag = details.map(CatalogRatingTitle.init)
         guard tag != doubanFor else { return }
+        doubanTask?.cancel()
         doubanFor = tag; douban = nil
-        let (id, type) = (details.id, details.mediaType)
-        Task {
-            let score = await DoubanRating.score(tmdbID: id, mediaType: type)
-            if doubanFor == tag { withAnimation(.smooth(duration: 0.3)) { douban = score } }
+        guard let tag else { return }
+        doubanTask = Task { [weak self] in
+            let score = await tag.doubanScore()
+            if !Task.isCancelled, let self, self.doubanFor == tag {
+                withAnimation(.smooth(duration: 0.3)) { self.douban = score }
+            }
         }
     }
 
@@ -201,9 +308,6 @@ extension TMDBMatch.Step {
 }
 
 extension TMDBMatch.Details {
-    /// "2024 · 剧情 / 古装 · 2 季 · ★ 8.1": what kind of work it is, in a line.
-    var facts: String { facts(douban: nil) }
-
     func facts(douban: DoubanRating.Score?) -> String {
         var parts: [String] = []
         if let year { parts.append(String(year)) }
@@ -215,8 +319,8 @@ extension TMDBMatch.Details {
             let minutes = Int(runtime.rounded())
             parts.append(minutes >= 60 ? L10n.text("%lldh %lldm", minutes / 60, minutes % 60) : L10n.text("%lld min", minutes))
         }
-        if let rating, voteCount >= 10 { parts.append("★ " + String(format: "%.1f", rating)) }
-        if let douban { parts.append(L10n.text("Douban") + " " + String(format: "%.1f", douban.value)) }
+        if let rating, voteCount >= 10 { parts.append(CatalogRatings.tmdbCaption(rating)) }
+        if let douban { parts.append(douban.caption) }
         return parts.joined(separator: " · ")
     }
 
@@ -761,7 +865,9 @@ struct TMDBBanner<Actions: View>: View {
     let unmatched: String
     @ViewBuilder let actions: Actions
     @State private var logoAspect: CGFloat?
+    @State private var rating: (CatalogRatingTitle, DoubanRating.Score)?
     var body: some View {
+        let work = CatalogRatingTitle(details)
         GeometryReader { proxy in
             let width = proxy.size.width
             ZStack(alignment: .bottomLeading) {
@@ -773,7 +879,8 @@ struct TMDBBanner<Actions: View>: View {
                                startPoint: .leading, endPoint: .trailing)
                 VStack(alignment: .leading, spacing: TMDBBannerMetrics.spacing) {
                     title(width: width)
-                    let facts = [details.facts, unmatched].filter { !$0.isEmpty }.joined(separator: " · ")
+                    let facts = [details.facts(douban: rating?.0 == work ? rating?.1 : nil), unmatched]
+                        .filter { !$0.isEmpty }.joined(separator: " · ")
                     if !facts.isEmpty { Text(facts).font(TMDBBannerMetrics.factsFont).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
                     if !details.tagline.isEmpty {
                         Text(details.tagline).font(TMDBBannerMetrics.factsFont.italic()).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
@@ -787,6 +894,10 @@ struct TMDBBanner<Actions: View>: View {
         }
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
         .clipShape(RoundedRectangle(cornerRadius: TMDBBannerMetrics.corner, style: .continuous))
+        .task(id: work) {
+            let score = await work.doubanScore()
+            if !Task.isCancelled { rating = score.map { (work, $0) } }
+        }
     }
 
     @ViewBuilder private func title(width: CGFloat) -> some View {
