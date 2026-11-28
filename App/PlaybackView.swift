@@ -1396,6 +1396,7 @@ import IOKit.pwr_mgt
         let active = generation
         jumpResume = Task { @MainActor [weak self] in
             let end = Date().addingTimeInterval(SeekResume.window)
+            var nudge = SeekResume.Nudge()
             while Date() < end {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled, let self, self.generation == active, let item = self.player.currentItem,
@@ -1406,7 +1407,8 @@ import IOKit.pwr_mgt
                 let now = self.player.currentTime()
                 let loaded = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
                 let ahead = loaded.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
-                guard SeekResume.shouldPlay(ahead: ahead, remaining: item.duration.seconds - now.seconds) else { continue }
+                guard SeekResume.shouldPlay(ahead: ahead, remaining: item.duration.seconds - now.seconds),
+                      nudge.shouldPlay(position: now.seconds, ahead: ahead, now: ProcessInfo.processInfo.systemUptime) else { continue }
                 Diagnostics.shared.record(.info, "player", "jump resume ahead=\(String(format: "%.1f", ahead))s")
                 self.player.playImmediately(atRate: self.player.rate)
             }
