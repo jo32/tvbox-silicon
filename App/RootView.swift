@@ -122,6 +122,7 @@ struct RootView: View {
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
                     .overlay { ThemedTitleBand() }
+                    .assistantHost()
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .onChange(of: store.hidesSidebar) { _, hide in
@@ -149,7 +150,7 @@ struct RootView: View {
             #else
             // The system tab bar on every size class: iOS 26 floats it over content and
             // collapses extra sections into More, which a hand-built bar imitated poorly.
-            platformTabs
+            platformTabs.assistantHost()
             #endif
         }
         .onChange(of: store.section) { _, section in
@@ -381,8 +382,8 @@ struct SectionPage: View {
     let section: AppSection
     var body: some View {
         switch section {
-        case .home: HomeView()
-        case .discover: DiscoverView()
+        case .home: HomeView().assistantEntry(.home)
+        case .discover: DiscoverView().assistantEntry(.discover)
         case .search: GlobalSearchView()
         case .live: LiveView()
         case .music: MusicView()

@@ -218,18 +218,22 @@ struct DiscoverView: View {
         #endif
         #if os(tvOS)
         .overlay(alignment: .topTrailing) {
-            Button { searchShown = true } label: {
-                Image(systemName: "text.magnifyingglass").font(.system(size: 28))
-                    .frame(width: 76, height: 76).glassSurface(.regular, in: Circle())
-            }.tileButton()
-                .focused($tvFocus, equals: .search)
-                .onMoveCommand { direction in
-                    if direction == .down, heroShown, !featured.isEmpty {
-                        tvFocus = .page(featured.firstIndex { $0.key == heroState.id } ?? 0)
+            HStack(spacing: 24) {
+                // The assistant, once turned on in Settings (App/Agent).
+                AssistantTVButton()
+                Button { searchShown = true } label: {
+                    Image(systemName: "text.magnifyingglass").font(.system(size: 28))
+                        .frame(width: 76, height: 76).glassSurface(.regular, in: Circle())
+                }.tileButton()
+                    .focused($tvFocus, equals: .search)
+                    .onMoveCommand { direction in
+                        if direction == .down, heroShown, !featured.isEmpty {
+                            tvFocus = .page(featured.firstIndex { $0.key == heroState.id } ?? 0)
+                        }
                     }
-                }
-                .accessibilityLabel(L10n.text("Search Catalog"))
-                .accessibilityIdentifier("discover.home.search")
+                    .accessibilityLabel(L10n.text("Search Catalog"))
+                    .accessibilityIdentifier("discover.home.search")
+            }
                 .padding(.trailing, 50)
                 .frame(maxWidth: .infinity, alignment: .trailing).focusSection()
                 .padding(.top, 50)

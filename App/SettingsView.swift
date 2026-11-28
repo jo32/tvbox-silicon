@@ -552,6 +552,7 @@ struct FormSettingsView: View {
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage("app.appearance") private var appearance = "system"
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
+    @AppStorage(AgentSettings.enabledKey) private var assistantOn = false
     #if os(macOS)
     @State private var choosesFile = false
     #endif
@@ -868,6 +869,11 @@ struct FormSettingsView: View {
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
                     .settingsAnchor(.watchNow)
+                FormLink(symbol: "sparkles", tint: Brand.cyan, title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) {
+                    AssistantSettingsView()
+                }
+                .accessibilityIdentifier("settings.assistant")
+                .settingsAnchor(.assistant)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
@@ -917,6 +923,11 @@ struct FormSettingsView: View {
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
                     .settingsAnchor(.watchNow)
+                FormLink(symbol: "sparkles", tint: Brand.cyan, title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) {
+                    AssistantSettingsView()
+                }
+                .accessibilityIdentifier("settings.assistant")
+                .settingsAnchor(.assistant)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
@@ -1361,6 +1372,7 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case profiles
     case iCloudSync
     case watchNow
+    case assistant
     case appIcon
     case colorTheme
     case appearance
@@ -1664,6 +1676,8 @@ private extension FormSettingsView {
 
         add(.watchNow, title: L10n.text("Watch Now"), section: secGeneral,
             keywords: ["home", "watch now", "recommendations", "首页", "推荐", "立即观看"])
+        add(.assistant, title: L10n.text("Assistant"), section: secGeneral, subtitle: L10n.text(assistantOn ? "On" : "Off"),
+            keywords: ["assistant", "ai", "chatgpt", "openai", "gpt", "chat", "api key", "model", "助手", "智能", "人工智能", "聊天", "助理", "アシスタント"])
         if AppIcons.isAvailable {
             add(.appIcon, title: L10n.text("App Icon"), section: secGeneral, subtitle: AppIcons.shared.title,
                 keywords: ["icon", "logo", "图标"])
@@ -2757,6 +2771,7 @@ struct TVSettingsView: View {
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     @State private var skipsIntros = false
     @AppStorage(PlaybackSkipLookup.enabledKey) private var looksUpSkipTimes = false
+    @AppStorage(AgentSettings.enabledKey) private var assistantOn = false
 
     var body: some View {
         TVSettingsLayout {
@@ -2805,6 +2820,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                TVSettingsLink(title: L10n.text("Assistant"), value: L10n.text(assistantOn ? "On" : "Off")) { AssistantSettingsView() }
                 TVSettingsLink(title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                 TVSettingsLink(title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) { ColorThemeSettingsView() }
             }

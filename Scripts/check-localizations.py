@@ -38,8 +38,9 @@ for language, table in tables.items():
         assert arguments(key) == arguments(value), f"Format mismatch: {language} {key}"
         if language == "en":
             assert value == english_labels.get(key, key), f"English source drift: {key}"
-for folder in (root / "App", root / "Sources/TVCore"):
-    for path in folder.glob("*.swift"):
+# App's subfolders too (App/Agent); TVCore's top level only.
+for paths in ((root / "App").rglob("*.swift"), (root / "Sources/TVCore").glob("*.swift")):
+    for path in paths:
         for literal in re.findall(r'L10n.text\(("(?:[^"\\]|\\.)*")', path.read_text()):
             # Swift spells Unicode escapes as \u{201C}; normalize them before JSON decodes the quoted literal.
             literal = re.sub(r'\\u\{([0-9a-fA-F]+)\}', lambda match: json.dumps(chr(int(match[1], 16)))[1:-1], literal)
