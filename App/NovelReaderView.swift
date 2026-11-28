@@ -1538,8 +1538,12 @@ private struct NovelReaderContents: View {
             if showsBookmarks {
                 bookmarkList
             } else {
-                NovelChapterList(book: model.book, chapters: model.displayChapters, current: model.currentChapter,
+                let book = model.book, displayChapters = model.displayChapters
+                NovelChapterList(book: book, chapters: displayChapters, current: model.currentChapter,
                                  colors: NovelListColors(background: colors.background, text: colors.text, accent: colors.text)) { open($0, 0) }
+                    download: { indexes in
+                        Task { _ = await NovelBooks.shared.downloadChapters(book, chapters: displayChapters, indexes) }
+                    }
             }
         }
     }

@@ -98,12 +98,17 @@ struct NovelChapterList: View {
     let current: Int?
     var colors: NovelListColors = .standard
     let open: (Int) -> Void
+    /// Saves the chapters in `indexes` for offline reading (#1816); nil where the app does not offer it.
+    var download: ((_ indexes: [Int]) -> Void)? = nil
 
     @State private var sections: [NovelChapterSection] = []
     @State private var longestNumber = 0
     @State private var query = ""
     @State private var newestFirst = false
     @State private var scrolled = false
+    @State private var downloading = false
+    @State private var downloaded = false
+    @State private var savedCount = 0
     /// Where the list is and whether it moves, for the fast-scroll handle (#1199). Only the handle reads it: kept as
     /// state of this view, every frame of a scroll ran this body again, and with thousands of chapters dragging the
     /// handle stuttered (#1989).
@@ -142,6 +147,22 @@ struct NovelChapterList: View {
         #else
         listBody
         #endif
+            .task(id: chapters.count) {
+                if download != nil {
+                    savedCount = await Self.savedCount(book: book, chapters: chapters)
+                }
+            }
+    }
+
+    /// How many of the book's chapters are already on disk for offline reading. The whole book can be thousands of
+    /// chapters, so the count is bounded: it stops at the first stretch of the table that has no saved chapters, which
+    /// is where the reader's downloads reach (#1816).
+    private static func savedCount(book: NovelBook, chapters: [NovelChapter]) async -> Int {
+        var total = 0
+        for chapter in chapters where !chapter.isVolume {
+            if await NovelBooks.shared.hasContent(book, chapter) { total += 1 }
+        }
+        return total
     }
 
     #if os(tvOS)
@@ -346,6 +367,13 @@ struct NovelChapterList: View {
                     withAnimation(.smooth) { newestFirst.toggle() }
                 }
                 .accessibilityHint(L10n.text("Reverse Order"))
+                if let download {
+                    pill(downloaded ? L10n.text("Offline: %lld", savedCount) : L10n.text("Download Offline"),
+                         symbol: downloaded ? "checkmark.icloud" : "arrow.down.icloud") {
+                        downloadChapters(download)
+                    }
+                    .accessibilityHint(L10n.text("Save Chapters for Offline Reading"))
+                }
                 Spacer(minLength: 0)
                 if let current, chapters.indices.contains(current) {
                     pill(L10n.text("Current Chapter"), symbol: "book") {
@@ -365,6 +393,22 @@ struct NovelChapterList: View {
         #else
         CGSize(width: 60, height: 80)
         #endif
+    }
+
+    /// Saves the chapters from the one being read on for offline reading (#1816): the next `count` readable chapters
+    /// (the whole rest when the book is short). Already-saved ones are skipped.
+    private func downloadChapters(_ download: ([Int]) -> Void) {
+        guard !downloading else { return }
+        let start = max(0, current ?? 0)
+        let readable = chapters.indices.filter { !$0.isVolume && $0 >= start }
+        let indexes = Array(readable.prefix(50))
+        guard !indexes.isEmpty else { return }
+        downloading = true
+        Task {
+            download(indexes)
+            downloaded = true
+            downloading = false
+        }
     }
 
     private func pill(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

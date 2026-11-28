@@ -2468,3 +2468,6 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片头不填开始即从头开始，片尾不填结束即到结尾。留空一段的时间表示不跳过该段，时间格式为 分:秒。";
 "Keep Controls Visible" = "始终显示控件";
 "Count back from the end" = "从结尾倒数";
+"Download Offline" = "离线下载";
+"Offline: %lld" = "离线：%lld";
+"Save Chapters for Offline Reading" = "保存章节以便离线阅读";
