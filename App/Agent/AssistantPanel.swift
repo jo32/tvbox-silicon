@@ -48,7 +48,7 @@ struct AssistantPanel: View {
                     // so it starts where the panel does, as the header does on iPhone and iPad.
                     Label(L10n.text("Assistant"), systemImage: "sparkles").labelStyle(.titleAndIcon)
                         .font(.headline)
-                        .frame(width: max(80, width - 124), alignment: .leading)
+                        .frame(width: max(80, width - 99), alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
                 }
                 .withoutGlassCapsule()
