@@ -18,7 +18,17 @@ public struct PlaybackDropRecovery: Sendable {
 
     /// The wait before the episode opens again at `position` after `failure`, or nil when the error should show.
     public mutating func delay(after failure: Error?, position: Double) -> Duration? {
-        guard Self.isDrop(failure), position.isFinite else { return nil }
+        guard Self.isDrop(failure) else { return nil }
+        return next(position: position)
+    }
+
+    /// The wait before the episode opens again at `position` after its bytes stopped coming with no error at all
+    /// (`SilentStall`), or nil once the attempts are used up. It counts with the drops: a link that keeps going quiet
+    /// is reopened as often as one that keeps dropping, no more.
+    public mutating func delayAfterStall(position: Double) -> Duration? { next(position: position) }
+
+    private mutating func next(position: Double) -> Duration? {
+        guard position.isFinite else { return nil }
         if let reopenedAt, abs(position - reopenedAt) >= Self.recovered { attempts = 0 }
         guard attempts < Self.delays.count else { return nil }
         reopenedAt = position

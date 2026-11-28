@@ -482,6 +482,8 @@ import IOKit.pwr_mgt
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
     private var dropRecovery = PlaybackDropRecovery()
     private var reopenedAfterDrop = false
+    /// How long a drive file has waited with no bytes coming (`reopenIfSilent`, #2109).
+    @ObservationIgnored private var silentStall = SilentStall()
     /// Remembers whether playback was already paused when a reconnect started, so it stays paused (#1641).
     private var recoveryPause = PlaybackRecoveryPause()
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
@@ -914,6 +916,36 @@ import IOKit.pwr_mgt
             try? await Task.sleep(for: delay)
             guard let self, self.generation == active, !Task.isCancelled else { return }
             if position > 1 { self.pendingResume = position }
+            self.configure(channel, url: url, generation: active)
+        }
+        return true
+    }
+
+    /// A drive file AVPlayer waits on while its stream brings in nothing and nothing fails (`SilentStall`, #2109): the
+    /// stream lets go of the downloads it waited on and the episode opens again where it was, as after a dropped
+    /// connection (`resumeAfterDrop`) and counted with those. Closing the player and opening the episode again was the
+    /// only way on before.
+    private func reopenIfSilent(_ item: AVPlayerItem, received: Int64, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard url.scheme == CloudStreams.scheme, !isLive, !savedDownload else { return false }
+        let waiting = item.status == .readyToPlay && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+            && player.reasonForWaitingToPlay == .toMinimizeStalls && pendingResume == nil && !restoringPosition && !seekingSegment
+        guard silentStall.update(waiting: waiting, received: received, now: ProcessInfo.processInfo.systemUptime) else { return false }
+        let current = player.currentTime().seconds
+        let host = transfer.host ?? "-"
+        guard current.isFinite, let delay = dropRecovery.delayAfterStall(position: current) else {
+            Diagnostics.shared.record(.warning, "player", "stalled host=\(host) next to no bytes for \(Int(SilentStall.limit))s; reopened \(dropRecovery.attempts) times already")
+            return false
+        }
+        reopenedAfterDrop = true; retrying(via: "stall")
+        detachItem(); observation = nil; loading = true
+        note(L10n.text("The connection dropped. Reconnecting"))
+        let attempt = dropRecovery.attempts
+        preparation = Task { [weak self] in
+            let report = await CloudStreams.restart(url) ?? "-"
+            Diagnostics.shared.record(.warning, "player", "stalled host=\(host) at=\(Int(current))s next to no bytes for \(Int(SilentStall.limit))s attempt=\(attempt) \(report); reopening")
+            try? await Task.sleep(for: delay)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            if current > 1 { self.pendingResume = current }
             self.configure(channel, url: url, generation: active)
         }
         return true
@@ -1551,7 +1583,7 @@ import IOKit.pwr_mgt
         attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false; rescues = 0
         stopRescue(); rescueAttempt = PlaybackRescue.Attempt()
-        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false; recoveryPause.clear()
+        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false; recoveryPause.clear(); silentStall.reset()
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -2153,6 +2185,7 @@ import IOKit.pwr_mgt
             if (400..<600).contains(error.errorStatusCode) { next.httpStatus = error.errorStatusCode }
             next.failure = error.errorComment ?? "\(error.errorDomain) \(error.errorStatusCode)"
         }
+        if reopenIfSilent(item, received: next.received, channel: channel, url: url, generation: activeGeneration) { return false }
         if transfer.received == 0, next.received > 0 { note(L10n.text("Receiving video from %@", Self.server(next.host))) }
         if let failure = next.failure, failure != transfer.failure { note(L10n.text("Trouble with %@ (%@), trying again", Self.server(next.host), failure)) }
         transfer = next

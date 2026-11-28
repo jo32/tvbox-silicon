@@ -97,6 +97,13 @@ public enum CloudStreams {
         return (stream.counter.value, stream.host)
     }
 
+    /// Lets go of the downloads and refresh of `url`'s stream after the player waited on it with no bytes coming
+    /// (`SilentStall`, #2109), and says what they were; nil for an address that isn't a stream.
+    public static func restart(_ url: URL) async -> String? {
+        guard let stream = CloudStreamStore.shared.stream(url) else { return nil }
+        return await stream.restart()
+    }
+
     /// Seconds of video already cached ahead of AVPlayer's reads in memory (#2175).
     public static func bufferedAhead(for url: URL) -> Double {
         CloudStreamStore.shared.stream(url)?.bufferedAhead.withLock { $0 } ?? 0
@@ -333,6 +340,8 @@ actor CloudByteStream {
     /// a reader asking again at once (AVPlayer, FFmpeg) doesn't turn a dead link into a storm of requests.
     private var streak = FailureStreak(threshold: 2, base: CloudByteStream.retryBase * 2, ceiling: 15)
     private var holdUntil: Date?
+    /// When the drive last sent bytes on any connection, for `restart`'s report.
+    private var lastArrival = Date()
     /// The first wait before a dropped connection or a server's passing error (502, a timeout) is tried again.
     nonisolated(unsafe) static var retryBase = 0.5
     private var cache: [Int: Data] = [:]
@@ -618,6 +627,7 @@ actor CloudByteStream {
                     guard flowing else { continue }
                     bytes.append(data)
                     counter.add(data.count)
+                    lastArrival = Date()
                 case .done: continue
                 }
             }
@@ -714,6 +724,7 @@ actor CloudByteStream {
                             guard partial[index]?.download == id else { task.cancel(); continue }
                             partial[index]?.bytes.append(data)
                             counter.add(data.count)
+                            lastArrival = Date()
                             wake(index)
                         case .done(let error): failure = error
                         }
@@ -879,6 +890,8 @@ actor CloudByteStream {
             next = usable(await renewal())
         }
         guard let next else {
+            // Let go of by `restart`: not a failure to wait out.
+            if Task.isCancelled { return false }
             refreshFailures += 1
             lastRefresh = (Date(), false)
             // Once per doubling, so a link that stays dead is reported, not counted out request by request.
@@ -918,6 +931,23 @@ actor CloudByteStream {
         }
         let seconds = Double(bytes) / bytesPerSecond
         bufferedAhead.withLock { $0 = seconds }
+    }
+
+    /// The player waited on this stream for a while with no bytes coming (`SilentStall`, #2109). What the stream was
+    /// doing, for the log; and every download, piece and refresh under way is let go, so the reads of the item opened
+    /// again start fresh ones rather than wait on the same. The chunks already here stay.
+    func restart() -> String {
+        let now = Date()
+        let report = "inflight=\(inflight.keys.sorted()) waiting=\(waiting.keys.sorted()) readers=\(readers) pieces=\(pieceConnections) "
+            + "renewing=\(renewing != nil) held=\(holdUntil.map { max(0, Int($0.timeIntervalSince(now))) } ?? 0)s "
+            + "failures=\(streak.count) lastBytes=\(Int(now.timeIntervalSince(lastArrival)))s"
+        for task in inflight.values { task.cancel() }
+        inflight.removeAll(); partial.removeAll(); readers.removeAll()
+        // A refresh that never answered is asked again by the next refused chunk, not taken as failed for minutes.
+        renewing?.cancel(); renewing = nil; holdUntil = nil; lastRefresh = nil
+        for index in Array(arrivals.keys) { wake(index) }
+        burst = burstable && !refusedEver ? Date() : nil
+        return report
     }
 
     func clear() {

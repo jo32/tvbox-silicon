@@ -180,7 +180,14 @@ enum QALaunch {
         // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say); with `-qaResume <seconds>`,
         // from there, as a saved position resumes. `-qaSubtitleURLs <a,b,...>` are its source's subtitle files, as a
         // cloud-drive plugin's `subs` would be (#576). `-qaPlayHeaders <JSON object>` are its source's request headers.
-        if let address = UserDefaults.standard.string(forKey: "qaPlayURL"), let url = URL(string: address) {
+        if let address = UserDefaults.standard.string(forKey: "qaPlayURL"), var url = URL(string: address) {
+            // `-qaPlayCloud <bytes>`: the file streams as a drive file of that size does (`CloudStreams`), for stalls
+            // and renewals with a local server (#2109).
+            let cloudLength = UserDefaults.standard.integer(forKey: "qaPlayCloud")
+            if cloudLength > 0 {
+                let source = CloudStreams.Source(url: url, headers: [:], length: cloudLength, name: url.lastPathComponent)
+                url = CloudStreams.register(source) { source }
+            }
             let resume = UserDefaults.standard.double(forKey: "qaResume")
             let subtitles = (UserDefaults.standard.string(forKey: "qaSubtitleURLs") ?? "").split(separator: ",").compactMap { URL(string: String($0)) }
                 .map { ExternalSubtitle(name: $0.lastPathComponent, url: $0) }
