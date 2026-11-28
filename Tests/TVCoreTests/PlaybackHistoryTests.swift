@@ -57,6 +57,20 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(context.episode(in: [otherLine, next, original])?.flag == "line")
 }
 
+@Test func aMissingSavedEpisodeSaysWhatTheSourceNoLongerHas() {
+    let context = historyContext()
+    let original = Episode(id: "9", name: "Episode 1", address: "a", flag: "line")
+    let next = Episode(id: "1", name: "Episode 2", address: "b", flag: "line")
+    let elsewhere = Episode(id: "2", name: "Episode 1", address: "c", flag: "other")
+    #expect(context.missingEpisodeReason(in: [next, original]) == nil)
+    #expect(context.missingEpisodeReason(in: []) == "empty")
+    #expect(context.missingEpisodeReason(in: [Episode(id: "3", name: "Episode 2", address: "d", flag: "other")]) == "line")
+    #expect(context.missingEpisodeReason(in: [elsewhere]) == "line-other")
+    #expect(context.missingEpisodeReason(in: [next]) == "name")
+    #expect(context.missingEpisodeReason(in: [next, elsewhere]) == "name-other")
+    #expect(context.missingEpisodeReason(in: [Episode(id: "8", name: "Episode 1", address: "e", flag: "line"), Episode(id: "10", name: "Episode 1", address: "f", flag: "line")]) == "ambiguous")
+}
+
 @Test func playerTitleShowsADuplicatedNameOnlyOnce() {
     func context(video: String, episode: String) -> PlaybackHistoryContext {
         PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "source", sourceName: "Movies",
