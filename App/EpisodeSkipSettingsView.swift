@@ -25,6 +25,9 @@ struct EpisodeSkipSettingsView: View {
     @State private var intro = ""
     @State private var outro = ""
     @State private var outroEnd = ""
+    /// The outro's "Starts at" counts back from the end: the stored value is already a distance from the end, so
+    /// showing it that way holds for every episode, however long (#2673).
+    @State private var outroFromEnd = false
     private var video: PlaybackSession? { book ? nil : session as? PlaybackSession }
     /// The service a segment was filled from online (#2653), and what it was filled with: said under the segment
     /// until either time is changed.
@@ -40,7 +43,7 @@ struct EpisodeSkipSettingsView: View {
               let outroFinish = outroEnd.isEmpty ? length : EpisodeSkipSettings.parseTime(outroEnd),
               outroBegin <= length, outroFinish <= length else { return nil }
         return EpisodeSkipSettings(enabled: enabled, introEnd: introEnd,
-                                   outroLength: outro.isEmpty ? 0 : length - outroBegin,
+                                   outroLength: outro.isEmpty ? 0 : (outroFromEnd ? outroBegin : length - outroBegin),
                                    introStart: introEnd > 0 ? introBegin : 0,
                                    outroTail: outro.isEmpty ? 0 : length - outroFinish)
     }
@@ -90,10 +93,22 @@ struct EpisodeSkipSettingsView: View {
                     if let introFrom, introFrom == Found(source: introFrom.source, start: introStart, end: intro) { foundNote(introFrom.source) }
                 }
                 Section(L10n.text("Outro")) {
-                    timeField(L10n.text("Starts at"), text: $outro, prompt: "21:30", identifier: "player.skip.outro")
+                    // From the end, the typed time is the outro's length itself; flipping the switch keeps the
+                    // same outro start by counting the other way from this episode's length.
+                    Toggle(L10n.text("Count back from the end"), isOn: Binding(
+                        get: { outroFromEnd },
+                        set: { value in
+                            let length = session.skipDuration
+                            if let typed = EpisodeSkipSettings.parseTime(outro), length > 0 {
+                                outro = EpisodeSkipSettings.formatTime(max(0, length - typed))
+                            }
+                            outroFromEnd = value
+                        }))
+                        .accessibilityIdentifier("player.skip.outroFromEnd")
+                    timeField(L10n.text("Starts at"), text: $outro, prompt: outroFromEnd ? "02:00" : "21:30", identifier: "player.skip.outro")
                     timeField(L10n.text("Ends at"), text: $outroEnd, prompt: L10n.text("End"), identifier: "player.skip.outroEnd")
                     Button(L10n.text("Use current position (%@)", EpisodeSkipSettings.formatTime(session.skipPosition))) {
-                        outro = EpisodeSkipSettings.formatTime(session.skipPosition); enabled = true
+                        outro = EpisodeSkipSettings.formatTime(session.skipPosition); outroFromEnd = false; enabled = true
                     }.disabled(session.skipDuration <= 0)
                     .accessibilityIdentifier("player.skip.markOutro")
                     if let outroFrom, outroFrom == Found(source: outroFrom.source, start: outro, end: outroEnd) { foundNote(outroFrom.source) }
@@ -105,7 +120,7 @@ struct EpisodeSkipSettingsView: View {
                 }
                 Section {
                     Button(L10n.text("Reset intro and outro"), role: .destructive) {
-                        enabled = false; introStart = ""; intro = ""; outro = ""; outroEnd = ""
+                        enabled = false; introStart = ""; intro = ""; outro = ""; outroEnd = ""; outroFromEnd = false
                     }
                 }
             }
@@ -127,7 +142,8 @@ struct EpisodeSkipSettingsView: View {
             enabled = value.enabled
             introStart = value.introEnd > 0 && value.introStart > 0 ? EpisodeSkipSettings.formatTime(value.introStart) : ""
             intro = value.introEnd > 0 ? EpisodeSkipSettings.formatTime(value.introEnd) : ""
-            outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(max(0, length - value.outroLength)) : ""
+            outro = value.outroLength > 0 ? EpisodeSkipSettings.formatTime(value.outroLength) : ""
+            outroFromEnd = value.outroLength > 0
             outroEnd = value.outroLength > 0 && value.outroTail > 0 ? EpisodeSkipSettings.formatTime(max(0, length - value.outroTail)) : ""
             video?.lookUpSkipsOnlineNow()
             fillFound()
@@ -155,6 +171,7 @@ struct EpisodeSkipSettingsView: View {
         if outro.isEmpty, outroEnd.isEmpty, length > 0, let source = found.outroSource,
            let skip = found.skips.first(where: { $0.kind == .outro }) {
             outro = EpisodeSkipSettings.formatTime(skip.start)
+            outroFromEnd = false
             outroEnd = skip.end < length - 1 ? EpisodeSkipSettings.formatTime(skip.end) : ""
             outroFrom = Found(source: source, start: outro, end: outroEnd)
         }
