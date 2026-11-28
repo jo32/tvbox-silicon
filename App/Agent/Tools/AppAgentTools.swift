@@ -5,8 +5,10 @@ import TVCore
 /// app's own pages use, reaches only what the viewer could reach on screen (sections the App Store build hides stay
 /// hidden), and answers with compact JSON that never holds a password, cookie, token or full subscription address.
 @MainActor enum AppAgentTools {
-    static func all(store: Store) -> [any AgentTool] {
-        let context = AgentToolContext(store: store)
+    static func all(store: Store) -> [any AgentTool] { all(AgentToolContext(store: store)) }
+
+    /// The tools over `context`, which keeps what earlier turns found (titles, songs, books) for later ones.
+    static func all(_ context: AgentToolContext) -> [any AgentTool] {
         var tools: [AppTool] = []
         tools += AppTools.make(context)
         tools += SettingsTools.make(context)

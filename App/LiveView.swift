@@ -446,7 +446,7 @@ private struct TVChannelGuide: View {
                         if filtered.isEmpty { Text(L10n.text("No Matching Channels")) }
                     }.padding(48)
                 }
-                .searchable(text: $query, prompt: Text(L10n.text("Search channels")))
+                .pageSearchable(text: $query, prompt: L10n.text("Search channels"))
                 .screenBackdrop()
             }.onExitCommand { showingSearch = false }
         }

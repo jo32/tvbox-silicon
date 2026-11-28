@@ -455,8 +455,8 @@ struct DiscoverMacSearchView: View {
         }
         .background { DiscoverSearchAtmosphere() }
         .navigationTitle(L10n.text("Search Catalog"))
-        .searchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: Text(L10n.text("Search")))
-        .onSubmit(of: .search) { model.remember(keyword) }
+        .pageSearchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: L10n.text("Search"))
+        .onSearchSubmit { model.remember(keyword) }
         .onChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

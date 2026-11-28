@@ -2656,3 +2656,4 @@
 "Change the script “%@”?" = "修改腳本「%@」？";
 
 "Press Again to Clear" = "再按一次以清除";
+"Couldn’t play “%@”." = "無法播放「%@」。";

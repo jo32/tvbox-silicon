@@ -2656,3 +2656,4 @@
 "Change the script “%@”?" = "スクリプト「%@」を変更しますか？";
 
 "Press Again to Clear" = "もう一度押すと消去";
+"Couldn’t play “%@”." = "「%@」を再生できませんでした。";

@@ -151,7 +151,13 @@ import TVCore
                 "video_id": videoID.map { .str($0) },
             ])
         }
-        return .capped("history", items, limit: limit)
+        let cards = entries.prefix(limit).map { entry in
+            AgentCard(id: historyID(entry), title: entry.context.videoName,
+                      subtitle: entry.context.episodeName.isEmpty ? entry.context.sourceName : entry.context.episodeName,
+                      poster: entry.context.poster, posterHeaders: entry.context.posterHeaders,
+                      progress: entry.duration > 0 && !entry.completed ? entry.progress : nil, play: ["history_id": .str(historyID(entry))])
+        }
+        return AgentCard.attach(cards, to: .capped("history", items, limit: limit))
     }
 
     // MARK: Favorites
@@ -175,7 +181,7 @@ import TVCore
         let kind = try args.choice("kind", ["video", "episode", "live", "music", "cloud"])
         let query = try args.string("query")
         let config = store.subscription
-        let items: [JSONValue] = store.favorites.items.reversed().compactMap { item in
+        let found: [(item: JSONValue, card: AgentCard?)] = store.favorites.items.reversed().compactMap { item in
             let name = title(item)
             if let query, !name.localizedCaseInsensitiveContains(query) { return nil }
             var fields: [String: JSONValue?] = ["favorite_id": .str(favoriteID(item)), "title": .str(name)]
@@ -204,9 +210,15 @@ import TVCore
                 fields["kind"] = .str("cloud")
             }
             if let kind, fields["kind"] != .str(kind) { return nil }
-            return .obj(fields)
+            // Videos and episodes get a cover card; tapping it plays the favorite.
+            let card = saved.map { video in
+                AgentCard(id: favoriteID(item), title: video.videoName,
+                          subtitle: item.kind == .video ? video.sourceName : name.replacingOccurrences(of: video.videoName + " · ", with: ""),
+                          poster: video.poster, posterHeaders: video.posterHeaders, play: ["favorite_id": .str(favoriteID(item))])
+            }
+            return (.obj(fields), card)
         }
-        return .capped("favorites", items, limit: 30)
+        return AgentCard.attach(found.prefix(30).compactMap(\.card), to: .capped("favorites", found.map(\.item), limit: 30))
     }
 
     private static func addFavorite(_ args: AgentArguments, _ context: AgentToolContext) async throws -> JSONValue {

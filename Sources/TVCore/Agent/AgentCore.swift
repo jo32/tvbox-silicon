@@ -14,10 +14,53 @@ public struct AgentMessage: Codable, Equatable, Sendable, Identifiable {
     public var toolCalls: [AgentToolCall]
     /// For a tool turn: the call it answers.
     public var toolCallID: String?
+    /// For a tool turn: what it found, drawn as cards for the viewer. Never sent to the model.
+    public var cards: [AgentCard]?
     public var date: Date
 
-    public init(id: UUID = UUID(), role: Role, text: String, toolCalls: [AgentToolCall] = [], toolCallID: String? = nil, date: Date = Date()) {
-        self.id = id; self.role = role; self.text = text; self.toolCalls = toolCalls; self.toolCallID = toolCallID; self.date = date
+    public init(id: UUID = UUID(), role: Role, text: String, toolCalls: [AgentToolCall] = [], toolCallID: String? = nil,
+                cards: [AgentCard]? = nil, date: Date = Date()) {
+        self.id = id; self.role = role; self.text = text; self.toolCalls = toolCalls; self.toolCallID = toolCallID
+        self.cards = cards; self.date = date
+    }
+}
+
+/// A title a tool found (a search result, a history entry, a favorite), drawn as a cover under the tool's line;
+/// tapping it plays it. A tool hands its cards over under `resultKey` in its result, and the conversation keeps them
+/// with the tool's turn instead of sending them to the model, so covers cost no tokens.
+public struct AgentCard: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var title: String
+    /// A short second line: the year and source, or the episode.
+    public var subtitle: String?
+    public var poster: URL?
+    public var posterHeaders: [String: String]?
+    /// How much has been watched, 0 to 1, for a title in progress.
+    public var progress: Double?
+    /// The `play` tool's arguments that play this title.
+    public var play: [String: JSONValue]
+
+    public init(id: String, title: String, subtitle: String? = nil, poster: URL? = nil, posterHeaders: [String: String]? = nil,
+                progress: Double? = nil, play: [String: JSONValue]) {
+        self.id = id; self.title = title; self.subtitle = subtitle; self.poster = poster
+        self.posterHeaders = posterHeaders?.isEmpty == false ? posterHeaders : nil; self.progress = progress; self.play = play
+    }
+
+    public static let resultKey = "_cards"
+
+    /// `result` with `cards` under `resultKey`, for the conversation to take out.
+    public static func attach(_ cards: [AgentCard], to result: JSONValue) -> JSONValue {
+        guard !cards.isEmpty, case .object(var fields) = result,
+              let data = try? JSONEncoder().encode(cards), let value = try? JSONDecoder().decode(JSONValue.self, from: data) else { return result }
+        fields[resultKey] = value
+        return .object(fields)
+    }
+
+    /// The result as the model sees it, and the cards it held.
+    public static func split(_ result: JSONValue) -> (result: JSONValue, cards: [AgentCard]) {
+        guard case .object(var fields) = result, let value = fields.removeValue(forKey: resultKey) else { return (result, []) }
+        let cards = (try? JSONEncoder().encode(value)).flatMap { try? JSONDecoder().decode([AgentCard].self, from: $0) } ?? []
+        return (.object(fields), cards)
     }
 }
 

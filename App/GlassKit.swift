@@ -20,7 +20,7 @@ extension View {
             searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(prompt))
         }
         #else
-        searchable(text: text, prompt: Text(prompt))
+        pageSearchable(text: text, prompt: prompt)
         #endif
     }
 }
@@ -238,7 +238,11 @@ extension View {
     #if !os(tvOS)
     /// `searchFocused`; before iOS 18 a search field can't be focused from code, so it keeps the viewer's focus.
     @ViewBuilder func searchFieldFocused(_ focused: FocusState<Bool>.Binding) -> some View {
+        #if os(macOS)
+        environment(\.pageSearchFocus, focused)
+        #else
         if #available(iOS 18, *) { searchFocused(focused) } else { self }
+        #endif
     }
     #endif
 
@@ -1792,6 +1796,92 @@ extension Color {
         #endif
     }
 }
+
+extension View {
+    /// A page's search field. iPhone, iPad and Apple TV: the system's (`searchable`). Mac: `PageSearchField`, an item of
+    /// the page's own toolbar. The system's always goes to the window's trailing end, whatever placement it is given,
+    /// and that is over the assistant's panel when it is open.
+    @ViewBuilder func pageSearchable(text: Binding<String>, isPresented: Binding<Bool>? = nil, placement: SearchFieldPlacement = .automatic,
+                                     prompt: String) -> some View {
+        #if os(macOS)
+        toolbar {
+            ToolbarItem(placement: .primaryAction) { PageSearchField(text: text, prompt: prompt, presented: isPresented) }
+        }
+        #elseif os(tvOS)
+        // tvOS has no `isPresented` form.
+        searchable(text: text, placement: placement, prompt: Text(prompt))
+        #else
+        if let isPresented {
+            searchable(text: text, isPresented: isPresented, placement: placement, prompt: Text(prompt))
+        } else {
+            searchable(text: text, placement: placement, prompt: Text(prompt))
+        }
+        #endif
+    }
+
+    /// Return in the page's search field: `onSubmit(of: .search)`, and on the Mac `PageSearchField`'s Return.
+    func onSearchSubmit(_ action: @escaping () -> Void) -> some View {
+        onSubmit(of: .search, action).environment(\.pageSearchSubmit, action)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var pageSearchSubmit: (() -> Void)? = nil
+    #if os(macOS)
+    @Entry var pageSearchFocus: FocusState<Bool>.Binding? = nil
+    #endif
+}
+
+#if os(macOS)
+/// The Mac's search field for a page, at the trailing end of the page's part of the title bar. Return submits
+/// (`onSearchSubmit`), Escape clears it and then leaves it, ⌘F goes to it.
+private struct PageSearchField: View {
+    @Binding var text: String
+    let prompt: String
+    /// Set while the field has the keyboard, as `searchable`'s `isPresented`; setting it false leaves the field.
+    var presented: Binding<Bool>?
+    @Environment(\.pageSearchSubmit) private var submit
+    @Environment(\.pageSearchFocus) private var pageFocus
+    @FocusState private var ownFocus: Bool
+    private var focus: FocusState<Bool>.Binding { pageFocus ?? $ownFocus }
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .focused(focus)
+                .onSubmit { submit?() }
+                .onExitCommand { if text.isEmpty { focus.wrappedValue = false } else { text = "" } }
+            if !text.isEmpty {
+                Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityLabel(L10n.text("Clear Search"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(width: 220, height: 28)
+        .modifier(PageSearchFieldPlate())
+        .background {
+            Button("") { focus.wrappedValue = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+        .onChange(of: focus.wrappedValue) { _, focused in if presented?.wrappedValue != focused { presented?.wrappedValue = focused } }
+        .onChange(of: presented?.wrappedValue) { _, shown in if let shown, shown != focus.wrappedValue { focus.wrappedValue = shown } }
+    }
+}
+
+/// macOS 26 draws the toolbar item's glass capsule around the field; before, a plain rounded plate.
+private struct PageSearchFieldPlate: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content
+        } else {
+            content.background(.quaternary, in: Capsule())
+        }
+    }
+}
+#endif
 
 #if !os(tvOS)
 extension ToolbarContent {

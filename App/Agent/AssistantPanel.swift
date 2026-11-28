@@ -5,12 +5,15 @@ import TVCore
 enum AssistantMetrics {
     #if os(tvOS)
     static let gutter: CGFloat = 0, spacing: CGFloat = 26, bubbleRadius: CGFloat = 30, bubbleInset: CGFloat = 24
+    static let cardWidth: CGFloat = 200, cardSpacing: CGFloat = 40
     static let body = Font.system(size: 29), detail = Font.system(size: 23), code = Font.system(size: 22, design: .monospaced)
     #elseif os(macOS)
     static let gutter: CGFloat = 16, spacing: CGFloat = 14, bubbleRadius: CGFloat = 16, bubbleInset: CGFloat = 12
+    static let cardWidth: CGFloat = 96, cardSpacing: CGFloat = 12
     static let body = Font.body, detail = Font.callout, code = Font.system(.caption, design: .monospaced)
     #else
     static let gutter: CGFloat = 16, spacing: CGFloat = 16, bubbleRadius: CGFloat = 20, bubbleInset: CGFloat = 14
+    static let cardWidth: CGFloat = 100, cardSpacing: CGFloat = 12
     static let body = Font.body, detail = Font.footnote, code = Font.system(.caption, design: .monospaced)
     #endif
 }
@@ -45,10 +48,14 @@ struct AssistantPanel: View {
             if assistant.isOpen {
                 ToolbarItem(placement: .automatic) {
                     // The toolbar packs items to the trailing edge: the title takes the width the two buttons leave,
-                    // so it starts where the panel does, as the header does on iPhone and iPad.
+                    // so it starts where the panel does, as the header does on iPhone and iPad. A page's search field
+                    // (`pageSearchable`) comes before it, over the page.
+                    // The item starts at the panel's edge and its words where the chat's do, so a search field before
+                    // it stays clear of the panel.
                     Label(L10n.text("Assistant"), systemImage: "sparkles").labelStyle(.titleAndIcon)
                         .font(.headline)
-                        .frame(width: max(80, width - 99), alignment: .leading)
+                        .padding(.leading, 12)
+                        .frame(width: max(92, width - 87), alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
                 }
                 .withoutGlassCapsule()
@@ -153,12 +160,12 @@ private struct AssistantHeader: View {
 private enum TranscriptItem: Identifiable {
     case user(AgentMessage)
     case text(id: String, String)
-    case tool(AgentToolCall, result: String?, state: AssistantToolRow.State)
+    case tool(AgentToolCall, result: String?, cards: [AgentCard], state: AssistantToolRow.State)
     var id: String {
         switch self {
         case .user(let message): "user \(message.id)"
         case .text(let id, _): "text \(id)"
-        case .tool(let call, _, _): "tool \(call.id)"
+        case .tool(let call, _, _, _): "tool \(call.id)"
         }
     }
 }
@@ -170,6 +177,7 @@ struct AssistantTranscript: View {
     private var items: [TranscriptItem] {
         let messages = assistant.messages
         let results = Dictionary(messages.compactMap { message in message.toolCallID.map { ($0, message.text) } }, uniquingKeysWith: { $1 })
+        let cards = Dictionary(messages.compactMap { message in message.toolCallID.map { ($0, message.cards ?? []) } }, uniquingKeysWith: { $1 })
         let running = assistant.runningTool
         let asking = assistant.pendingConfirmation?.call.id
         func state(_ call: AgentToolCall, _ result: String?) -> AssistantToolRow.State {
@@ -186,12 +194,14 @@ struct AssistantTranscript: View {
             case .user: items.append(.user(message))
             case .assistant:
                 if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.text(id: message.id.uuidString, message.text)) }
-                for call in message.toolCalls { items.append(.tool(call, result: results[call.id], state: state(call, results[call.id]))) }
+                for call in message.toolCalls {
+                    items.append(.tool(call, result: results[call.id], cards: cards[call.id] ?? [], state: state(call, results[call.id])))
+                }
             case .tool: break
             }
         }
         if let running, !items.contains(where: { $0.id == "tool \(running.id)" }) {
-            items.append(.tool(running, result: nil, state: .running))
+            items.append(.tool(running, result: nil, cards: [], state: .running))
         }
         return items
     }
@@ -214,7 +224,11 @@ struct AssistantTranscript: View {
                         switch item {
                         case .user(let message): AssistantUserBubble(text: message.text)
                         case .text(_, let text): AssistantAnswer(text: text)
-                        case .tool(let call, let result, let state): AssistantToolRow(call: call, result: result, state: state)
+                        case .tool(let call, let result, let cards, let state):
+                            VStack(alignment: .leading, spacing: AssistantMetrics.spacing * 0.6) {
+                                AssistantToolRow(call: call, result: result, state: state)
+                                if state == .done, !cards.isEmpty { AssistantCardRow(callID: call.id, cards: cards) }
+                            }
                         }
                     }
                     if !assistant.streamingText.isEmpty {
@@ -423,6 +437,89 @@ struct AssistantToolRow: View {
             Text(title).font(AssistantMetrics.detail.weight(.semibold)).foregroundStyle(.secondary)
             Text(text).font(AssistantMetrics.code).lineLimit(40).selectable()
         }
+    }
+}
+
+/// What a tool found (search results, history, favorites), as covers in a row under its line; tapping one plays it.
+private struct AssistantCardRow: View {
+    let callID: String
+    let cards: [AgentCard]
+    @Environment(AssistantController.self) private var assistant
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            strip
+            if let problem = assistant.cardProblem, problem.key.hasPrefix(callID + "/") {
+                Label(problem.message, systemImage: "exclamationmark.triangle")
+                    .font(AssistantMetrics.detail).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// The row runs to the panel's edges, and its first cover lines up with the words above.
+    @ViewBuilder private var strip: some View {
+        #if os(tvOS)
+        ScrollView(.horizontal) { covers }
+            .scrollIndicators(.hidden)
+            .contentMargins(.horizontal, AssistantMetrics.gutter, for: .scrollContent)
+            .scrollClipDisabled()
+            .padding(.horizontal, -AssistantMetrics.gutter)
+        #else
+        // A mouse wheel can't scroll sideways: on the Mac the strip can also be dragged, and has arrows at its ends
+        // (centred on the covers) while there is more to see.
+        ScrollStrip(overlayArrows: true, arrowCenter: AssistantMetrics.cardSpacing / 2 + AssistantMetrics.cardWidth * 3 / 4) {
+            covers.padding(.horizontal, AssistantMetrics.gutter)
+        }
+        .padding(.horizontal, -AssistantMetrics.gutter)
+        #endif
+    }
+
+    private var covers: some View {
+        LazyHStack(alignment: .top, spacing: AssistantMetrics.cardSpacing) {
+            ForEach(cards) { card in AssistantVideoCard(card: card, key: callID + "/" + card.id) }
+        }
+        .padding(.vertical, AssistantMetrics.cardSpacing / 2)
+    }
+}
+
+/// One title: its cover, name and source (or episode), as on Global Search. Tapping plays it; a title in progress
+/// shows how much was watched.
+private struct AssistantVideoCard: View {
+    let card: AgentCard
+    let key: String
+    @Environment(AssistantController.self) private var assistant
+    /// On the Mac the cover under the pointer gets the mouse-up that ends a drag of the row, which must not play it.
+    @Environment(\.stripDrag) private var drag
+    private var starting: Bool { assistant.startingCard == key }
+    var body: some View {
+        Button {
+            guard drag?.active != true else { return }
+            #if os(macOS)
+            assistant.play(card, key: key, closing: false)
+            #else
+            assistant.play(card, key: key, closing: true)
+            #endif
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                PosterCard(name: card.title, poster: card.poster, headers: card.posterHeaders ?? [:],
+                           remarks: card.progress.map { "\(Int(($0 * 100).rounded()))%" } ?? "")
+                    .overlay(alignment: .top) {
+                        if starting {
+                            ProgressView().appControlSize(.small)
+                                .frame(maxWidth: .infinity).aspectRatio(2.0 / 3.0, contentMode: .fit)
+                                .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                if let subtitle = card.subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
+                }
+            }
+            .frame(width: AssistantMetrics.cardWidth, alignment: .leading)
+        }
+        .cardButton()
+        .disabled(assistant.startingCard != nil && !starting)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([card.title, card.subtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityAddTraits(.isButton)
     }
 }
 

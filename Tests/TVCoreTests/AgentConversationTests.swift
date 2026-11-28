@@ -95,6 +95,26 @@ private let done = AgentEvent.finished(inputTokens: nil, outputTokens: nil)
         #expect(chat.failure == nil)
     }
 
+    @Test func cardsAreKeptForTheViewerNotTheModel() async throws {
+        let card = AgentCard(id: "v1", title: "Cats", subtitle: "2024 · A", poster: URL(string: "https://example.com/c.jpg"),
+                             posterHeaders: ["Referer": "https://example.com"], progress: 0.5, play: ["video_id": "v1"])
+        let tool = FakeTool("search_videos", .read) { _ in AgentCard.attach([card], to: ["titles": [["title": "Cats", "video_id": "v1"]]]) }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = AgentConversationStore(file: folder.appendingPathComponent("conversation.json"))
+        let client = ScriptedClient([.events([call("search_videos", "c1"), done])])
+        let chat = conversation(client, [tool], store: store)
+        chat.send("Find cats")
+        await until { !chat.isRunning }
+        #expect(chat.messages[2].cards == [card])
+        #expect(chat.messages[2].text == #"{"titles":[{"title":"Cats","video_id":"v1"}]}"#)
+        #expect(!client.lastRequest.contains { $0.text.contains(AgentCard.resultKey) || $0.text.contains("c.jpg") })
+        // Kept between launches, and a result without cards has none.
+        #expect(store.load()[2].cards == [card])
+        #expect(AgentCard.split(["ok": true]).cards.isEmpty)
+        #expect(AgentCard.attach([], to: ["ok": true]) == ["ok": true])
+    }
+
     @Test func changeAsksAndRunsWhenAllowed() async {
         let tool = FakeTool("settings_set", .change)
         let chat = conversation(ScriptedClient([.events([call("settings_set", "c1"), done])]), [tool])

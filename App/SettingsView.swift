@@ -1232,7 +1232,7 @@ struct FormSettingsView: View {
         }
         }
         .settingsForm(L10n.text("Settings"))
-        .searchable(text: $searchQuery, isPresented: $searching, prompt: Text(L10n.text("Search settings")))
+        .pageSearchable(text: $searchQuery, isPresented: $searching, prompt: L10n.text("Search settings"))
         .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
         .sheet(isPresented: $editingLive) { LiveSourcesEditor() }
         // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed

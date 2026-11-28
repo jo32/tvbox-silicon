@@ -213,7 +213,8 @@ public protocol AgentDescribedTool: AgentTool {
     }
 
     private func appendResult(_ call: AgentToolCall, _ result: JSONValue) {
-        append(AgentMessage(role: .tool, text: Self.cut(result.jsonText), toolCallID: call.id))
+        let (result, cards) = AgentCard.split(result)
+        append(AgentMessage(role: .tool, text: Self.cut(result.jsonText), toolCallID: call.id, cards: cards.isEmpty ? nil : cards))
     }
 
     private func append(_ message: AgentMessage) {

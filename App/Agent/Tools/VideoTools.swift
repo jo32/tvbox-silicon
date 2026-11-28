@@ -71,12 +71,14 @@ import TVCore
             let (site, config) = try AgentLookup.site(sourceID: sourceID, store: store)
             let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
             let page = try await AgentToolKit.withTimeout(Double(wait), "The source") { try await client.list(category: nil, query: query, page: 1) }
-            let results = page.videos.filter { !$0.isFolder }.map { video -> JSONValue in
+            let videos = page.videos.filter { !$0.isFolder }
+            let results = videos.map { video -> JSONValue in
                 let id = AgentLookup.videoID(site, origin: config.origin, video: video.id)
                 context.videoTitles[id] = video.name
                 return .obj(["video_id": .str(id), "title": .str(video.name), "year": .text(video.year), "remarks": .text(AgentToolKit.clip(video.remarks, 40))])
             }
-            return .capped("results", results, limit: 30, extra: ["query": .str(query), "source": .str(site.name)])
+            let cards = videos.prefix(30).map { card($0, id: AgentLookup.videoID(site, origin: config.origin, video: $0.id), source: site.name) }
+            return AgentCard.attach(cards, to: .capped("results", results, limit: 30, extra: ["query": .str(query), "source": .str(site.name)]))
         }
         let model = context.search
         let same = model.keyword == query && (model.busy || !model.results.isEmpty)
@@ -94,13 +96,13 @@ import TVCore
         }
         // Group copies of the same title from different sources.
         var order: [String] = []
-        var groups: [String: (title: String, year: String?, copies: [JSONValue])] = [:]
+        var groups: [String: (title: String, year: String?, copies: [JSONValue], card: AgentCard)] = [:]
         for match in model.matches {
             for video in model.videos(for: match.id) where !video.isFolder {
                 let key = video.name.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation }
                 let id = AgentLookup.videoID(match.site, origin: config.origin, video: video.id)
                 context.videoTitles[id] = video.name
-                if groups[key] == nil { order.append(key); groups[key] = (video.name, video.year, []) }
+                if groups[key] == nil { order.append(key); groups[key] = (video.name, video.year, [], card(video, id: id, source: match.site.name)) }
                 groups[key]?.copies.append(.obj(["video_id": .str(id), "source": .str(match.site.name),
                                                   "remarks": .text(AgentToolKit.clip(video.remarks, 40))]))
             }
@@ -119,12 +121,20 @@ import TVCore
             return .obj(["title": .str(group.title), "year": .text(group.year), "copies": .list(copies),
                          "more_copies": more > 0 ? .num(more) : nil])
         }
-        return .capped("titles", items, limit: 15, extra: [
+        let cards = ranked.prefix(15).compactMap { groups[$0]?.card }
+        return AgentCard.attach(cards, to: .capped("titles", items, limit: 15, extra: [
             "query": .str(query),
             "sources_answered": .num(model.completed), "sources_total": .num(model.total),
             "still_searching": model.busy ? .bool(true) : nil,
             "failed_sources": model.failures.isEmpty ? nil : .num(model.failures.count),
-        ])
+        ]))
+    }
+
+    /// A search result as the viewer sees it under the tool's line: its cover, year and source; tapping plays it.
+    private static func card(_ video: Video, id: String, source: String) -> AgentCard {
+        let subtitle = [video.year?.trimmingCharacters(in: .whitespaces), source].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return AgentCard(id: id, title: video.name, subtitle: subtitle, poster: video.poster, posterHeaders: video.posterHeaders,
+                         play: ["video_id": .str(id)])
     }
 
     // MARK: Details
