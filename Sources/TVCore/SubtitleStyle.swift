@@ -102,6 +102,9 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
     public var color = TextColor.white
     public var edge = Edge.shadow
     public var backdrop = Backdrop.none
+    /// The script the lines are shown in (#2725): a Simplified Chinese subtitle can be read in Traditional characters,
+    /// and the other way round. Converted after `lines(_:)` has broken the cues up, by `NovelScript`'s own transform.
+    public var script = NovelScript.original
 
     public init() {}
 
@@ -159,7 +162,7 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
             .filter { !$0.isEmpty }
     }
 
-    private enum CodingKeys: String, CodingKey { case x, y, size, font, bold, italic, color, edge, backdrop, positionWasChosen }
+    private enum CodingKeys: String, CodingKey { case x, y, size, font, bold, italic, color, edge, backdrop, script, positionWasChosen }
 
     /// Fields a newer or older app didn't save keep their standard values, and unknown choices fall back to them.
     public init(from decoder: any Decoder) throws {
@@ -175,5 +178,7 @@ public struct SubtitleStyle: Codable, Equatable, Sendable {
         color = (try? container.decodeIfPresent(TextColor.self, forKey: .color)) ?? standard.color
         edge = (try? container.decodeIfPresent(Edge.self, forKey: .edge)) ?? standard.edge
         backdrop = (try? container.decodeIfPresent(Backdrop.self, forKey: .backdrop)) ?? standard.backdrop
+        // Saved before #2725, so the key is missing: the subtitle keeps the script it arrived in.
+        script = (try? container.decodeIfPresent(NovelScript.self, forKey: .script)) ?? standard.script
     }
 }

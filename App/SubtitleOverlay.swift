@@ -106,13 +106,15 @@ import TVCore
 
     nonisolated func legibleOutput(_ output: AVPlayerItemLegibleOutput, didOutputAttributedStrings strings: [NSAttributedString],
                                    nativeSampleBuffers nativeSamples: [Any], forItemTime itemTime: CMTime) {
-        let lines = SubtitleStyle.lines(strings.map(\.string))
-        // The delegate queue is the main queue (`attach`).
+        let handed = SubtitleStyle.lines(strings.map(\.string))
+        // The delegate queue is the main queue (`attach`), so the style the script comes from is at hand here.
         MainActor.assumeIsolated {
             guard let item, item.outputs.contains(where: { $0 === output }), document == nil else { return }
             // An ASS track libass draws: its plain lines stay off screen. The first lines tell which track is on.
             if !lookedForStyled { lookedForStyled = true; lookForStyledTrack() }
             if styled.trackName != nil { if !self.lines.isEmpty { self.lines = [] }; return }
+            // Converted here, once (#2725): what the schedule holds and the screen shows is already in the chosen script.
+            let lines = style.script.convert(handed)
             if delay > 0 {
                 // Held until its turn. AVPlayer repeats a cue it is still showing; `schedule` keeps the last word.
                 schedule.enqueue(lines, at: itemTime.seconds)
@@ -131,7 +133,7 @@ import TVCore
                 styled.render(at: timing.source(at: time))
                 return
             }
-            let next = SubtitleStyle.lines(document.texts(at: timing.source(at: time)))
+            let next = style.script.convert(SubtitleStyle.lines(document.texts(at: timing.source(at: time))))
             if next != lines { lines = next }
             return
         }
@@ -144,6 +146,8 @@ import TVCore
         guard delay > 0, time.isFinite else { return }
         // A seek is the schedule's to tell: it clears the line and what waited for the old place.
         lastAdvanced = time
+        // No script conversion here: the schedule only holds what `legibleOutput` enqueued, already converted once
+        // (#2725). A second pass would read Traditional text as if it needed converting again.
         if let next = schedule.lines(at: time), next != lines { lines = next }
     }
 
@@ -234,7 +238,14 @@ import TVCore
         return tracks.first { $0.position == position && (title == nil || $0.name == title) }
     }
 
-    @objc private func styleChanged() { style = SubtitleStyle.load() }
+    @objc private func styleChanged() {
+        let previous = style
+        style = SubtitleStyle.load()
+        // A file's lines can be worked out again from where the player is, so a new script (#2725) applies to the line
+        // on screen at once. AVPlayer's own lines are converted as they arrive and the schedule keeps them converted,
+        // so those change with the next cue instead of being converted a second time.
+        if style.script != previous.script, document != nil, let lastAdvanced { advance(to: lastAdvanced) }
+    }
 
     @objc private func delayChanged() {
         let next = SubtitleDelay.load()
