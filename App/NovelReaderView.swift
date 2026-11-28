@@ -115,8 +115,12 @@ struct NovelPageKey: Equatable {
     func next(_ index: Int) -> Int? { index + 1 < chapters.count ? chapters[(index + 1)...].first { !$0.isVolume }?.index : nil }
     /// The current chapter's place among the readable ones, from 0.
     var readableIndex: Int { readable.firstIndex { $0.index == currentChapter } ?? 0 }
-    /// "12 / 340", counting chapters only.
-    var progressText: String { readable.isEmpty ? "" : "\(readableIndex + 1) / \(readable.count)" }
+    /// "12 / 340 · 4%", counting chapters only.
+    var progressText: String {
+        guard !readable.isEmpty else { return "" }
+        let percent = Int((Double(readableIndex + 1) / Double(readable.count) * 100).rounded())
+        return "\(readableIndex + 1) / \(readable.count) · \(percent)%"
+    }
 
     // MARK: Fetching
 
