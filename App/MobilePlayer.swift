@@ -1662,8 +1662,8 @@ private struct PictureGestures: UIViewRepresentable {
             switch pan.state {
             case .began: parent?.swipe(.began(slide))
             case .changed:
-                let moved = pan.translation(in: view)
-                parent?.swipe(.moved(CGSize(width: moved.x, height: moved.y), in: view.bounds.size, velocity: pan.velocity(in: view)))
+                let moved = pan.translation(in: view), speed = pan.velocity(in: view)
+                parent?.swipe(.moved(CGSize(width: moved.x, height: moved.y), in: view.bounds.size, velocity: CGSize(width: speed.x, height: speed.y)))
             case .ended, .cancelled, .failed: parent?.swipe(.ended)
             default: break
             }
