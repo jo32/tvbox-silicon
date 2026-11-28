@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片頭不填開始即從頭開始，片尾不填結束即到結尾。留空一段的時間表示不跳過該段，時間格式為 分:秒。";
 "Keep Controls Visible" = "始終顯示控制項";
 "Count back from the end" = "從結尾倒數";
+"Updated \"%@\"." = "已更新「%@」。";
+"Update \"%@\"" = "更新「%@」";
+"Update Source" = "更新音源";
+"This source was imported from a file, so there is no address to update it from." = "此音源是從檔案匯入的，沒有可供更新的地址。";
