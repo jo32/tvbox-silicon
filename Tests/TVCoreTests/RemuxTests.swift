@@ -105,11 +105,22 @@ import VideoToolbox
         #expect(RemuxPlan(tracks: [mapped], bounds: [0, 1_000_000]).videoRange == "SDR")
         #expect(RemuxPlan(tracks: [RemuxPlan.videoTrack(hdr10, device: device)], bounds: [0, 1_000_000]).videoRange == "PQ")
         #expect(!RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10), device: sdr).toneMap)
-        #expect(!RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10, colorTransfer: 16, doviProfile: 5), device: sdr).toneMap)
-        // Nor is Dolby Vision 5 converted later: a device that refused it would refuse it again.
-        let vision5 = RemuxPlan(tracks: [RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10, doviProfile: 5), device: sdr)],
-                                bounds: [0, 1_000_000])
-        #expect(vision5.isDolbyVision && vision5.videoRange == "PQ" && !RemuxPlan(tracks: [mapped], bounds: [0, 1_000_000]).isDolbyVision)
+        // Dolby Vision 5 is reshaped and converted to SDR as well, whether its stream says PQ or nothing: it's no
+        // longer Dolby Vision, nor HDR. Where HDR shows, it's served as it is.
+        for transfer in [16, 2] {
+            let stream = Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10, frameRate: 59.94, colorTransfer: transfer, doviProfile: 5)
+            let track = RemuxPlan.videoTrack(stream, device: small)
+            let plan = RemuxPlan(tracks: [track], bounds: [0, 1_000_000])
+            #expect(track.toneMap && track.mode == .hevc && track.dolbyVision == .drop && track.width == 1920 && track.height == 1080)
+            #expect(plan.videoRange == "SDR" && !plan.isDolbyVision && plan.masterPlaylist(codecs: [:]).contains("VIDEO-RANGE=SDR"))
+            let kept = RemuxPlan(tracks: [RemuxPlan.videoTrack(stream, device: device)], bounds: [0, 1_000_000])
+            #expect(!kept.tracks[0].toneMap && kept.tracks[0].mode == .copy && kept.isDolbyVision && kept.videoRange == "PQ")
+            // A device that refused Dolby Vision converts it, and still shows HDR10 as it is.
+            var noVision = device
+            noVision.dolbyVision = false
+            #expect(RemuxPlan.videoTrack(stream, device: noVision).toneMap && !RemuxPlan.videoTrack(hdr10, device: noVision).toneMap)
+        }
+        #expect(!RemuxPlan(tracks: [mapped], bounds: [0, 1_000_000]).isDolbyVision)
         let converted = RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "mpeg4", width: 720, height: 404, frameRate: 25, bitRate: 1_200_000), device: device)
         #expect(converted.bitRate == 1_500_000)
     }
@@ -838,6 +849,58 @@ import VideoToolbox
         #expect(first.toneMapped && first.initializations[0] == second.initializations[0])
         let played = await picture(master)
         #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video)
+    }
+
+    /// Dolby Vision 5 where HDR doesn't show is reshaped from its own colours and converted to SDR: an orange glass ball
+    /// stays orange, where shown as it is it was magenta, and the hand purple. Where HDR shows it is served as it is.
+    @Test func dolbyVision5IsReshapedIntoSDRWhereHDRDoesNotShow() async throws {
+        func open(hdr: Bool) async throws -> URL {
+            try await Remux.open(try Remux.fileSource(fixture("remux-dv5-reshape.mkv")), subtitles: [], headers: [:], session: RangeServer.session,
+                                 translator: nil, device: .init(hdr: hdr))
+        }
+        let kept = try await open(hdr: true)
+        let original = String(decoding: try await fetch(kept), as: UTF8.self)
+        Remux.stop(kept)
+        #expect(original.contains("CODECS=\"dvh1.05.") && original.contains("VIDEO-RANGE=PQ"), "\(original)")
+        let url = try await open(hdr: false)
+        defer { Remux.stop(url) }
+        #expect(!Remux.isHDR(url) && !Remux.isDolbyVision(url) && Remux.droppedDolbyVision(url) == 5)
+        #expect(!Remux.dolbyVisionConversionFailed(url, refused: false) && Remux.dolbyVisionConversionFailed(url, refused: true))
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains("CODECS=\"hvc1.") && !master.contains("dvh1") && !master.contains("VIDEO-RANGE=PQ"), "\(master)")
+        let folder = url.deletingLastPathComponent()
+        let movie = FileManager.default.temporaryDirectory.appending(path: "dv5-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: movie) }
+        try (try await fetch(folder.appending(path: "0.mp4")) + (try await fetch(folder.appending(path: "0-0.m4s")))).write(to: movie)
+        let asset = AVURLAsset(url: movie)
+        let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
+        let format = try #require(try await track.load(.formatDescriptions).first)
+        #expect(CMFormatDescriptionGetMediaSubType(format) == kCMVideoCodecType_HEVC)
+        #expect(CMFormatDescriptionGetExtension(format, extensionKey: kCMFormatDescriptionExtension_TransferFunction) as? String
+                == kCMFormatDescriptionTransferFunction_ITU_R_709_2 as String)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        reader.add(output)
+        #expect(reader.startReading())
+        let frame = try #require(output.copyNextSampleBuffer().flatMap(CMSampleBufferGetImageBuffer))
+        #expect(CVPixelBufferGetWidth(frame) == 256 && CVPixelBufferGetHeight(frame) == 144)
+        /// The average red, green and blue of a part of the picture.
+        func average(x: Int, y: Int, width: Int, height: Int) -> (r: Int, g: Int, b: Int) {
+            CVPixelBufferLockBaseAddress(frame, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(frame, .readOnly) }
+            let base = CVPixelBufferGetBaseAddress(frame)!, stride = CVPixelBufferGetBytesPerRow(frame)
+            var sum = (0, 0, 0)
+            for row in y..<(y + height) {
+                let pixels = (base + row * stride).assumingMemoryBound(to: UInt8.self)
+                for column in x..<(x + width) { sum = (sum.0 + Int(pixels[column * 4 + 2]), sum.1 + Int(pixels[column * 4 + 1]), sum.2 + Int(pixels[column * 4])) }
+            }
+            let count = width * height
+            return (sum.0 / count, sum.1 / count, sum.2 / count)
+        }
+        // Shown as it is: ball (182, 90, 152), hand (61, 41, 51). Reshaped: about (253, 113, 2) and (111, 72, 42).
+        let ball = average(x: 164, y: 72, width: 40, height: 32), hand = average(x: 16, y: 120, width: 64, height: 24)
+        #expect(ball.r > 200 && ball.g > ball.b + 40 && ball.r > ball.g + 60, "\(ball)")
+        #expect(hand.r > hand.g + 15 && hand.g > hand.b + 10, "\(hand)")
     }
 
     /// H.264 with MPEG-1 Layer II sound in MPEG-TS, as many IPTV channels send it: AVPlayer refuses it ('fmt?'), so it

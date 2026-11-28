@@ -722,13 +722,18 @@ import IOKit.pwr_mgt
         let status = transfer.httpStatus ?? item.errorLog()?.events.last?.errorStatusCode
         let summary = PlaybackFailure.describe(failure, httpStatus: status, host: host, upstream: upstream,
                                                isLoopback: loopback, refused: expired)
+        // Dolby Vision 5 refused, and its conversion to SDR failed too (or there was none to try).
         let isDolbyVisionRefusal = Remux.isDolbyVision(url) && Self.refusedContent(failure)
+            || Remux.dolbyVisionConversionFailed(url, refused: Self.refusedContent(failure))
         if !isDolbyVisionRefusal, tryCatalogFallback(after: failure, channel: channel, details: summary.details) { return }
+        #if os(tvOS)
+        HDRDisplay.reset()
+        #endif
         loading = false
         errorSymbol = isDolbyVisionRefusal ? "play.slash.fill" : summary.symbol
         errorDetails = summary.details
         error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
-            : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
+            : isDolbyVisionRefusal ? Self.dolbyVisionRefused
             : summary.message
     }
 
@@ -937,21 +942,24 @@ import IOKit.pwr_mgt
     /// An Apple TV can report HDR playback and still refuse a repackaged HDR10 file (-11868 with Core Media
     /// -17223, "cannot be played on this device"). The file opens again with its picture converted to SDR,
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
-    /// while it lasts: then this file alone converts. Dolby Vision 5 can't convert, so it isn't tried again.
+    /// while it lasts: then this file alone converts. Dolby Vision 5 converts too (`tvm_compose`); a refusal of it
+    /// leaves HDR10 files as they are, since a TV can show HDR10 without Dolby Vision.
     /// A live room's stream is the repackaged one just stopped, so the room is asked for its stream again (#941).
     private func retryHDR(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         // A repackaged HLS stream's HDR variant is refused before any segment loads: -1002 or -12927 (#345).
         let refused = Self.refusedContent(failure) || Remux.isSegmented(url) && Self.refusedVariant(failure)
-        guard Remux.isHDR(url), !Remux.isDolbyVision(url), refused else { return false }
-        let captured = Self.screenCaptured
-        guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
-        if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
+        guard Remux.isHDR(url), refused else { return false }
+        let captured = Self.screenCaptured, vision = Remux.isDolbyVision(url)
+        guard captured ? !Remux.screenCaptured : vision ? !Remux.refusesDolbyVision : !Remux.refusesHDR else { return false }
+        if captured { Remux.screenCaptured = true } else if vision { Remux.refusesDolbyVision = true } else { Remux.refusesHDR = true }
         retrying(via: "hdr-sdr")
         #if os(tvOS)
         Self.refusedMatching = HDRDisplay.matching
+        // Back to the mode chosen in Settings: the SDR picture needs no switch.
+        HDRDisplay.reset()
         #endif
         detachItem(); observation = nil
-        Diagnostics.shared.record(.warning, "player", "hdr refused captured=\(captured); converting to sdr \(failure.map(Self.describe) ?? "-")")
+        Diagnostics.shared.record(.warning, "player", "hdr refused captured=\(captured) dv=\(vision); converting to sdr \(failure.map(Self.describe) ?? "-")")
         Remux.stop(url)
         let room = liveRoom
         preparation = Task { [weak self] in
@@ -2438,7 +2446,10 @@ extension PlaybackSession {
     fileprivate func prepare(_ channel: Channel) async throws -> Prepared {
         #if os(tvOS)
         // An HDR refusal while the TV stayed in SDR says nothing once Match Dynamic Range is switched (and back).
-        if Remux.refusesHDR, Self.refusedMatching != HDRDisplay.matching { Remux.refusesHDR = false }
+        if Remux.refusesHDR || Remux.refusesDolbyVision, Self.refusedMatching != HDRDisplay.matching {
+            Remux.refusesHDR = false
+            Remux.refusesDolbyVision = false
+        }
         #endif
         var address = channel.url
         do { address = try await EmbeddedJarHost.shared.recoverProxy(address) }
@@ -2596,16 +2607,16 @@ extension PlaybackSession {
         return prepared
     }
 
-    /// Why a Dolby Vision 5 file was refused: while the screen is mirrored or recorded iOS plays no HDR stream.
+    /// Why a Dolby Vision 5 file didn't play: it was refused, and so was its conversion to SDR. While the screen is
+    /// mirrored or recorded iOS plays no HDR stream; with Match Dynamic Range an Apple TV plays it in HDR instead.
     private static var dolbyVisionRefused: String {
         #if os(tvOS)
-        // Dolby Vision 5 has no HDR10 picture to convert to SDR: only an HDR display mode shows it.
         if !HDRDisplay.matching {
-            return L10n.text("This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays.")
+            return L10n.text("This Dolby Vision video couldn't be converted to SDR. Try another line, or turn on Settings › Video and Audio › Match Content › Match Dynamic Range to play it in HDR.")
         }
         #endif
         return screenCaptured ? L10n.text("Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.")
-            : L10n.text("This device can't play this Dolby Vision video. Try another line.")
+            : L10n.text("This Dolby Vision video couldn't be converted to SDR on this device. Try another line.")
     }
 
     /// Whether the screen is mirrored or recorded right now (`Remux.screenCaptured`).

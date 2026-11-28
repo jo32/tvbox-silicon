@@ -11,6 +11,6 @@ let package = Package(
         .binaryTarget(name: "FFmpeg", path: "Vendor/FFmpeg/FFmpeg.xcframework"),
         // Scripts/build-apple-libass.sh makes the library Vendor/LibASS links to: libass, FreeType, HarfBuzz, FriBidi.
         .binaryTarget(name: "LibASS", path: "Vendor/LibASS/LibASS.xcframework"),
-        .target(name: "TVMedia", dependencies: ["FFmpeg", "LibASS"], publicHeadersPath: "include", cSettings: [.define("NDEBUG")], linkerSettings: [.linkedLibrary("z"), .linkedLibrary("iconv"), .linkedLibrary("c++"), .linkedLibrary("hvf"), .linkedFramework("CoreText"), .linkedFramework("AudioToolbox"), .linkedFramework("VideoToolbox"), .linkedFramework("CoreMedia"), .linkedFramework("CoreVideo"), .linkedFramework("CoreFoundation")]),
+        .target(name: "TVMedia", dependencies: ["FFmpeg", "LibASS"], publicHeadersPath: "include", cSettings: [.define("NDEBUG")], linkerSettings: [.linkedLibrary("z"), .linkedLibrary("iconv"), .linkedLibrary("c++"), .linkedLibrary("hvf"), .linkedFramework("CoreText"), .linkedFramework("AudioToolbox"), .linkedFramework("VideoToolbox"), .linkedFramework("CoreMedia"), .linkedFramework("CoreVideo"), .linkedFramework("CoreFoundation"), .linkedFramework("Foundation"), .linkedFramework("Metal")]),
         .testTarget(name: "TVCoreTests", dependencies: ["TVCore"], resources: [.copy("Fixtures")])]
 )

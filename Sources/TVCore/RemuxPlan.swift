@@ -55,6 +55,8 @@ struct RemuxPlan: Sendable, Equatable {
         /// Whether AVPlayer plays HDR here. Without it, it refuses every HDR variant of an HLS stream ("cannot be
         /// played on the device"), although it tone maps the same picture in a plain file.
         var hdr = true
+        /// Whether it plays Dolby Vision 5 as well; without it, that is converted to SDR.
+        var dolbyVision = true
         /// The largest picture tone mapping makes, which costs the CPU by the pixel; 0 for no limit.
         var toneMapWidth = 0, toneMapHeight = 0
         /// Whether the player draws bitmap subtitles (PGS, VobSub) itself, so they are offered as (empty) renditions.
@@ -139,8 +141,10 @@ struct RemuxPlan: Sendable, Equatable {
     static func videoTrack(_ stream: Stream, device: Device) -> Track {
         var track = Track(stream: stream)
         let plain = stream.chroma == 420 || stream.chroma == 0
-        // Dolby Vision 5 has no HDR10 picture to map; it stays as it is.
-        if !device.hdr, [16, 18].contains(stream.colorTransfer), stream.doviProfile != 5 {
+        // Dolby Vision 5 has no HDR10 picture to map: its frames are reshaped into one first (`tvm_compose`), whatever
+        // transfer the stream names (often none). It no longer counts as HDR, nor as Dolby Vision.
+        let vision5 = stream.doviProfile == 5 && (!device.hdr || !device.dolbyVision)
+        if !device.hdr && [16, 18].contains(stream.colorTransfer) || vision5 {
             track.mode = device.hevcEncoder ? .hevc : .h264
             track.toneMap = true
             var sized = stream

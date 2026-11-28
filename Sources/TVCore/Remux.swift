@@ -42,13 +42,13 @@ public enum Remux {
     }
 
     static func open(_ original: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
-                     translator: (any SubtitleTranslating)? = SubtitleTranslation.translator) async throws -> URL {
+                     translator: (any SubtitleTranslating)? = SubtitleTranslation.translator, device: RemuxPlan.Device? = nil) async throws -> URL {
         // A Blu-ray or DVD image plays its main title.
         let source: RemuxSource
         do { source = try await DiscImage.title(original) ?? original }
         catch { await original.close(); throw error }
         let loading = Task { await SubtitleFile.load(subtitles, headers: headers, session: subtitleSession) }
-        let session = RemuxSession(source: source)
+        let session = RemuxSession(source: source, device: device)
         do { try await session.open() } catch { loading.cancel(); throw error }
         session.add(await waiting(for: loading, atMost: subtitleGrace))
         if let translator { await session.addTranslations(translator) }
@@ -137,6 +137,21 @@ public enum Remux {
         set { hdrLock.withLock { hdrRefused = newValue } }
     }
 
+    /// Set once AVPlayer refused a Dolby Vision 5 stream although the device reported HDR playback (a TV with HDR10
+    /// but no Dolby Vision, say): files opened after that convert Dolby Vision 5 to SDR. HDR10 still plays as HDR.
+    public static var refusesDolbyVision: Bool {
+        get { hdrLock.withLock { dolbyVisionRefused } }
+        set { hdrLock.withLock { dolbyVisionRefused = newValue } }
+    }
+
+    /// Whether the picture behind `url` is Dolby Vision 5 converted to SDR (`tvm_compose`) and that failed: a picture
+    /// couldn't be reshaped (decoded in software, say), or AVPlayer refused the result.
+    public static func dolbyVisionConversionFailed(_ url: URL, refused: Bool) -> Bool {
+        guard let session = session(url), let track = session.plan.tracks.first, track.kind == .video,
+              track.toneMap, track.stream.doviProfile == 5 else { return false }
+        return refused || session.dolbyVisionFailed
+    }
+
     /// Whether the screen is mirrored or recorded (AirPlay mirroring, a screen recording, a Mac showing the
     /// iPhone). iOS then refuses every HDR variant of an HLS stream (-17223), though it plays them again once
     /// that stops, so files opened meanwhile convert HDR pictures to SDR. The app sets it before each file opens.
@@ -146,6 +161,7 @@ public enum Remux {
     }
     private static let hdrLock = NSLock()
     nonisolated(unsafe) private static var hdrRefused = false
+    nonisolated(unsafe) private static var dolbyVisionRefused = false
     nonisolated(unsafe) private static var captured = false
 
     /// The address of the file behind `url` once the loopback server listens again, on a new port: iOS and tvOS
