@@ -480,6 +480,8 @@ struct PlaybackView: View {
 
     private func scheduleHide() {
         hideTask?.cancel()
+        // Kept visible by Settings: the controls stay until the viewer hides them (#2486).
+        guard !PlayerControlsVisibility.isOn() else { return }
         #if DEBUG
         // Keep screenshot/interaction QA stable while XCTest waits for AVKit to idle.
         if UserDefaults.standard.bool(forKey: "qaPlayerControls") { return }
@@ -1953,6 +1955,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func poke() {
         if !visible { withAnimation(.smooth(duration: 0.25)) { visible = true } }
         task?.cancel()
+        // Kept visible by Settings: the controls stay until the viewer hides them (#2486).
+        guard !PlayerControlsVisibility.isOn() else { return }
         task = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.5))
             // `-qaPlayerControls` keeps them up, for screenshots.

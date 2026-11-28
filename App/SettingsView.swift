@@ -1829,6 +1829,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(LockButtonSide.key) private var lockSide = LockButtonSide.left.rawValue
     @AppStorage(PlaybackTags.key) private var showsTags = true
     @AppStorage(PictureInPicturePreference.key) private var allowsPictureInPicture = true
+    @AppStorage(PlayerControlsVisibility.key) private var keepsControlsVisible = false
     @AppStorage(SkipInterval.key) private var skipInterval = SkipInterval.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
@@ -1939,6 +1940,11 @@ struct PlaybackSettingsView: View {
                 }
                 .settingsSwitch()
                 .accessibilityIdentifier("settings.pictureInPicture")
+                Toggle(isOn: $keepsControlsVisible) {
+                    FormLabel(symbol: "eye.fill", tint: .blue, title: L10n.text("Keep Controls Visible"))
+                }
+                .settingsSwitch()
+                .accessibilityIdentifier("settings.keepControlsVisible")
             }
             SettingsGroup(footer: SettingsNote.playbackInfo + " " + L10n.text("Video Tags are the short labels above the progress bar in full screen, such as 4K and H265.")) {
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }

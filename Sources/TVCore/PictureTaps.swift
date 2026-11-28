@@ -124,6 +124,15 @@ public enum PictureInPicturePreference {
     }
 }
 
+/// Whether the player's controls stay up instead of hiding a few seconds in (#2486).
+public enum PlayerControlsVisibility {
+    public static let key = "player.keepControlsVisible"
+
+    public static func isOn(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: key)
+    }
+}
+
 /// The video's tags over the seek bar in full screen (HW, H265, 4K…): shown unless turned off (#1534).
 public enum PlaybackTags {
     public static let key = "player.showsTags"
