@@ -68,4 +68,19 @@ public enum SeekResume {
         guard ahead.isFinite, ahead > 0 else { return false }
         return ahead >= Self.ahead || (remaining.isFinite && ahead >= remaining - 0.25)
     }
+
+    /// When to ask AVPlayer to play again. A player that went on waiting after being asked (its network failing, say)
+    /// was asked five times a second for the rest of the window with the same seconds loaded: up to 49 times in ten
+    /// seconds on an iPhone that was running hot (#2658). Now once, then again only when something changed: the
+    /// playhead moved, a second more is loaded, or two seconds went by.
+    public struct Nudge: Sendable {
+        private var last: (position: Double, ahead: Double, at: TimeInterval)?
+        public init() {}
+
+        public mutating func shouldPlay(position: Double, ahead: Double, now: TimeInterval) -> Bool {
+            if let last, abs(position - last.position) < 0.5, ahead < last.ahead + 1, now - last.at < 2 { return false }
+            last = (position, ahead, now)
+            return true
+        }
+    }
 }

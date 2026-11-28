@@ -64,3 +64,22 @@ import Testing
     #expect(LiveRepair.upstream(LiveRepair.address(https, skipsAds: false)) == https)
     #expect(LiveRepair.upstream(https) == nil)
 }
+
+/// #2658: a player that stays waiting after being asked to play is asked again only when something changed, not five
+/// times a second.
+@Test func aWaitingPlayerIsAskedAgainOnlyWhenSomethingChanged() {
+    var nudge = SeekResume.Nudge()
+    var asked: [Double] = []
+    // Five times a second for ten seconds, the playhead held at 100 s with 6.5 s loaded.
+    for tick in 0..<50 {
+        let now = Double(tick) * 0.2
+        if nudge.shouldPlay(position: 100, ahead: 6.5, now: now) { asked.append(now) }
+    }
+    #expect(asked.count == 5)
+    #expect(asked.first == 0)
+    // A second more loaded, or the playhead moving, asks at once.
+    let more = nudge.shouldPlay(position: 100, ahead: 7.6, now: 10.1)
+    let same = nudge.shouldPlay(position: 100.2, ahead: 7.6, now: 10.3)
+    let moved = nudge.shouldPlay(position: 101, ahead: 7.6, now: 10.5)
+    #expect(more && !same && moved)
+}

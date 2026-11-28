@@ -482,6 +482,8 @@ import IOKit.pwr_mgt
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
     private var dropRecovery = PlaybackDropRecovery()
     private var reopenedAfterDrop = false
+    /// How long a drive file has waited with no bytes coming (`reopenIfSilent`, #2109).
+    @ObservationIgnored private var silentStall = SilentStall()
     /// Remembers whether playback was already paused when a reconnect started, so it stays paused (#1641).
     private var recoveryPause = PlaybackRecoveryPause()
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
@@ -914,6 +916,36 @@ import IOKit.pwr_mgt
             try? await Task.sleep(for: delay)
             guard let self, self.generation == active, !Task.isCancelled else { return }
             if position > 1 { self.pendingResume = position }
+            self.configure(channel, url: url, generation: active)
+        }
+        return true
+    }
+
+    /// A drive file AVPlayer waits on while its stream brings in nothing and nothing fails (`SilentStall`, #2109): the
+    /// stream lets go of the downloads it waited on and the episode opens again where it was, as after a dropped
+    /// connection (`resumeAfterDrop`) and counted with those. Closing the player and opening the episode again was the
+    /// only way on before.
+    private func reopenIfSilent(_ item: AVPlayerItem, received: Int64, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard url.scheme == CloudStreams.scheme, !isLive, !savedDownload else { return false }
+        let waiting = item.status == .readyToPlay && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+            && player.reasonForWaitingToPlay == .toMinimizeStalls && pendingResume == nil && !restoringPosition && !seekingSegment
+        guard silentStall.update(waiting: waiting, received: received, now: ProcessInfo.processInfo.systemUptime) else { return false }
+        let current = player.currentTime().seconds
+        let host = transfer.host ?? "-"
+        guard current.isFinite, let delay = dropRecovery.delayAfterStall(position: current) else {
+            Diagnostics.shared.record(.warning, "player", "stalled host=\(host) next to no bytes for \(Int(SilentStall.limit))s; reopened \(dropRecovery.attempts) times already")
+            return false
+        }
+        reopenedAfterDrop = true; retrying(via: "stall")
+        detachItem(); observation = nil; loading = true
+        note(L10n.text("The connection dropped. Reconnecting"))
+        let attempt = dropRecovery.attempts
+        preparation = Task { [weak self] in
+            let report = await CloudStreams.restart(url) ?? "-"
+            Diagnostics.shared.record(.warning, "player", "stalled host=\(host) at=\(Int(current))s next to no bytes for \(Int(SilentStall.limit))s attempt=\(attempt) \(report); reopening")
+            try? await Task.sleep(for: delay)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            if current > 1 { self.pendingResume = current }
             self.configure(channel, url: url, generation: active)
         }
         return true
@@ -1364,6 +1396,7 @@ import IOKit.pwr_mgt
         let active = generation
         jumpResume = Task { @MainActor [weak self] in
             let end = Date().addingTimeInterval(SeekResume.window)
+            var nudge = SeekResume.Nudge()
             while Date() < end {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled, let self, self.generation == active, let item = self.player.currentItem,
@@ -1374,7 +1407,8 @@ import IOKit.pwr_mgt
                 let now = self.player.currentTime()
                 let loaded = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
                 let ahead = loaded.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
-                guard SeekResume.shouldPlay(ahead: ahead, remaining: item.duration.seconds - now.seconds) else { continue }
+                guard SeekResume.shouldPlay(ahead: ahead, remaining: item.duration.seconds - now.seconds),
+                      nudge.shouldPlay(position: now.seconds, ahead: ahead, now: ProcessInfo.processInfo.systemUptime) else { continue }
                 Diagnostics.shared.record(.info, "player", "jump resume ahead=\(String(format: "%.1f", ahead))s")
                 self.player.playImmediately(atRate: self.player.rate)
             }
@@ -1551,7 +1585,7 @@ import IOKit.pwr_mgt
         attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false; rescues = 0
         stopRescue(); rescueAttempt = PlaybackRescue.Attempt()
-        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false; recoveryPause.clear()
+        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false; recoveryPause.clear(); silentStall.reset()
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -2153,6 +2187,7 @@ import IOKit.pwr_mgt
             if (400..<600).contains(error.errorStatusCode) { next.httpStatus = error.errorStatusCode }
             next.failure = error.errorComment ?? "\(error.errorDomain) \(error.errorStatusCode)"
         }
+        if reopenIfSilent(item, received: next.received, channel: channel, url: url, generation: activeGeneration) { return false }
         if transfer.received == 0, next.received > 0 { note(L10n.text("Receiving video from %@", Self.server(next.host))) }
         if let failure = next.failure, failure != transfer.failure { note(L10n.text("Trouble with %@ (%@), trying again", Self.server(next.host), failure)) }
         transfer = next
@@ -2168,7 +2203,17 @@ import IOKit.pwr_mgt
                 "danmakuState": catalogDanmaku.automaticState, "cached": catalogDanmaku.fromCache,
                 "introEnd": skipSettings.introEnd, "outroLength": skipSettings.outroLength,
                 "introStart": skipSettings.introStart, "outroTail": skipSettings.outroTail,
-                "requestedResumePosition": requestedResumePosition ?? 0, "restoredPosition": restoredPosition ?? 0]
+                "requestedResumePosition": requestedResumePosition ?? 0, "restoredPosition": restoredPosition ?? 0,
+                "audioTracks": mediaTracks.audio.map { group in group.options.map(group.name) } ?? [],
+                "audioSelected": mediaTracks.audio.flatMap { group in mediaTracks.selected(in: group).map(group.name) } ?? "",
+                "ungroupedAudio": audioChoices.count]
+            // `-qaAudioTrack <n>`: the nth option of the Audio menu, chosen once it is there, as the menu would but
+            // without remembering it (that writes a preference the user's own copy of the app reads).
+            let pick = UserDefaults.standard.integer(forKey: "qaAudioTrack")
+            if pick > 0, let group = mediaTracks.audio, group.options.indices.contains(pick - 1),
+               mediaTracks.selected(in: group) != group.options[pick - 1] {
+                mediaTracks.select(group.options[pick - 1], in: group)
+            }
             try? JSONSerialization.data(withJSONObject: report).write(to: URL.cachesDirectory.appending(path: "qa-playback.json"), options: .atomic)
         }
         #endif
@@ -3007,12 +3052,74 @@ final class DisplayAwake {
 #endif
 
 #if os(tvOS)
+/// Every display mode the player asks for goes through here, so that closing it gives the TV its own mode back
+/// (#2691). With Match Frame Rate on, the TV stayed at the video's 24 or 25 Hz after the player closed and the app's
+/// pages stuttered: the player view took its mode back on the window it was in, which it had already left by then, so
+/// on none. Now each manager asked on is remembered, and closing the player gives back every one of them and every
+/// window's (AVKit's own matching asks on its window by itself).
+@MainActor enum DisplayCriteria {
+    private static var requests = DisplayModeRequests<AVDisplayManager>()
+
+    /// `-qaDisplayCriteria 1`: the player applies the criteria itself (`DisplayCriteriaKeeper`) even where it can't
+    /// smooth (the Simulator), and the log says what each window asks for once it closed.
+    static var qa: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "qaDisplayCriteria")
+        #else
+        false
+        #endif
+    }
+
+    /// `owner` asks for `criteria` (nil: the mode chosen in Settings) on `manager`.
+    static func prefer(_ criteria: AVDisplayCriteria?, on manager: AVDisplayManager, by owner: AnyObject) {
+        manager.preferredDisplayCriteria = criteria
+        requests.record(manager, by: ObjectIdentifier(owner), asking: criteria != nil)
+        if qa { Diagnostics.shared.record(.info, "player", "qa display criteria \(criteria == nil ? "withdrawn" : "asked") by=\(type(of: owner)) now=\(manager.preferredDisplayCriteria != nil)") }
+    }
+
+    /// `owner` goes away: its mode is taken back, unless someone asked for another on that manager since.
+    static func withdraw(on manager: AVDisplayManager, by owner: AnyObject) {
+        guard requests.owns(manager, ObjectIdentifier(owner)) else { return }
+        prefer(nil, on: manager, by: owner)
+    }
+
+    /// Player views showing: one that opens before the last one's page has gone keeps its mode.
+    private static var players = 0
+    static func playerOpened() { players += 1 }
+    /// A player view torn down: the last one gives every mode back, whichever way its page went.
+    static func playerClosed() {
+        players = max(0, players - 1)
+        if players == 0 { release() }
+    }
+    /// The player's page went away: every mode back now, unless another player view opened over it meanwhile.
+    static func playerPageClosed() { if players <= 1 { release() } }
+
+    /// Every manager a mode was asked on, and every window's, back to the mode chosen in Settings.
+    private static func release() {
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).map(\.avDisplayManager)
+        var released = 0
+        for manager in requests.release(showing: windows) where manager.preferredDisplayCriteria != nil {
+            manager.preferredDisplayCriteria = nil
+            released += 1
+        }
+        if released > 0 { Diagnostics.shared.record(.info, "player", "display mode given back managers=\(released)") }
+        if qa {
+            let left = windows.filter { $0.preferredDisplayCriteria != nil }.count
+            Diagnostics.shared.record(.info, "player", "qa display criteria after close windows=\(windows.count) asking=\(left)")
+        }
+    }
+}
+
 /// With Match Dynamic Range on, an Apple TV kept in SDR switches to HDR for an HDR video. AVKit asks for the switch
 /// once the item has loaded, but AVPlayer refuses the HDR variant of a repackaged HLS stream (-11868/-17223) while the
 /// display is still in SDR, before it loads. So the player asks for the switch itself first, and waits for it.
 @MainActor enum HDRDisplay {
     /// The picture the display was last asked to show, until the player stops.
     private(set) static var requested: Remux.HDRPicture?
+    /// The manager it was asked on, which `reset` gives back even when the key window has changed since.
+    private static var requestedOn: AVDisplayManager?
+    /// Who asks, for `DisplayCriteria`.
+    private static let owner = NSObject()
 
     private static var manager: AVDisplayManager? {
         UIApplication.shared.connectedScenes.compactMap { scene -> UIWindow? in
@@ -3031,8 +3138,8 @@ final class DisplayAwake {
     /// switched, or when it doesn't begin to (already in that mode).
     static func switchTo(_ picture: Remux.HDRPicture) async {
         guard let manager, manager.isDisplayCriteriaMatchingEnabled, let format = format(picture) else { return }
-        requested = picture
-        manager.preferredDisplayCriteria = AVDisplayCriteria(refreshRate: Float(picture.frameRate), formatDescription: format)
+        requested = picture; requestedOn = manager
+        DisplayCriteria.prefer(AVDisplayCriteria(refreshRate: Float(picture.frameRate), formatDescription: format), on: manager, by: owner)
         let start = Date()
         var began = false
         while Date().timeIntervalSince(start) < 10 {
@@ -3047,7 +3154,8 @@ final class DisplayAwake {
     static func reset() {
         guard requested != nil else { return }
         requested = nil
-        manager?.preferredDisplayCriteria = nil
+        if let asked = requestedOn ?? manager { DisplayCriteria.withdraw(on: asked, by: owner) }
+        requestedOn = nil
     }
 
     private static func format(_ picture: Remux.HDRPicture) -> CMFormatDescription? {

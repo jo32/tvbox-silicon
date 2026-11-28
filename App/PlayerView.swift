@@ -246,6 +246,15 @@ struct PlaybackView: View {
         }
         #endif
         .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart(opening: false) }
+        #if os(tvOS) && DEBUG
+        // `-qaClosePlayer <seconds>`: the player closes after that long, as the remote's Back does (#2691 QA).
+        .task {
+            let delay = UserDefaults.standard.double(forKey: "qaClosePlayer")
+            guard delay > 0 else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            if !Task.isCancelled { dismiss() }
+        }
+        #endif
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         // Start in Full Screen (#2097): a player that opened as its own screen turns as soon as its picture appears,
@@ -279,6 +288,10 @@ struct PlaybackView: View {
             PlayerOrientation.release(forcePortrait: !WatchPage.isLargeDisplay)
             #else
             session.stop()
+            #if os(tvOS)
+            // Back to the TV's own mode, on every window a mode was asked on (#2691).
+            DisplayCriteria.playerPageClosed()
+            #endif
             #endif
         }
         #if os(iOS)
@@ -1071,8 +1084,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = TitleSafePlayerController()
+        DisplayCriteria.playerOpened()
         // Decided before the controller is presented: AVKit refuses the change during playback.
-        if VideoEnhancement.canSmooth, let enhancer { context.coordinator.criteria = DisplayCriteriaKeeper(controller: controller, player: player, enhancer: enhancer) }
+        if VideoEnhancement.canSmooth || DisplayCriteria.qa, let enhancer {
+            context.coordinator.criteria = DisplayCriteriaKeeper(controller: controller, player: player, enhancer: enhancer)
+        }
         controller.player = player
         controller.delegate = context.coordinator
         context.coordinator.subtitles = subtitles
@@ -1294,6 +1310,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
         coordinator.readyObservation = nil
         coordinator.criteria?.reset()
+        DisplayCriteria.playerClosed()
     }
 
     /// Off and the files, then the chosen one's timing, frame rate and encoding. A file comes from the source (a drive's

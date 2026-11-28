@@ -327,6 +327,29 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// Issue #2109: a read waiting on a refresh that never answers waited with it, and the player at 0 bytes/s. A
+    /// restart lets both go, and the next read refreshes again and gets the bytes.
+    @Test func restartLetsGoOfAReadThatWaitsForever() async throws {
+        let size = CloudByteStream.chunkSize + 10
+        let (url, bytes) = try await served("hung.mp4", size: size)
+        let expired = url.deletingLastPathComponent().appending(path: "hung-expired.mp4")
+        let calls = CloudCounter()
+        let stream = CloudByteStream(source: .init(url: expired, headers: [:], length: size, name: "hung.mp4"), session: RangeServer.session, parallel: 1) {
+            calls.add(1)
+            // The first refresh hangs (a plugin's proxy that never answers).
+            if calls.value == 1 { try? await Task.sleep(for: .seconds(3600)); return nil }
+            return .init(url: url, headers: [:], length: size, name: "hung.mp4")
+        }
+        let waiting = Task { try await stream.read(at: size - 4, count: 4) }
+        while calls.value == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        let report = await stream.restart()
+        #expect(report.contains("renewing=true"))
+        _ = try? await waiting.value
+        #expect(try await stream.read(at: size - 4, count: 4) == bytes[(size - 4)...])
+        #expect(calls.value == 2)
+        await stream.clear()
+    }
+
     /// Issue #485: iOS took back the suspended app's sockets, so a bundle's proxy refuses connections on its old port.
     /// The stream asks where the proxy listens now and reads on from there, instead of failing every read.
     @Test func aRefusedLoopbackProxyMovesToItsNewPort() async throws {
