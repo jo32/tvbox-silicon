@@ -64,6 +64,8 @@ struct NovelPageKey: Equatable {
     private(set) var loadingNext = false
     /// The line at the top of the screen.
     var anchor: String?
+    /// Index of each line in `lines` by its id, so anchor lookups stay O(1) as chapters accumulate; not observed.
+    @ObservationIgnored private var lineIndex: [String: Int] = [:]
     /// Heights measured as lines draw, for turning a screen at a time; not observed.
     @ObservationIgnored var heights: [String: CGFloat] = [:]
     @ObservationIgnored private var saved = Date.distantPast
@@ -73,11 +75,22 @@ struct NovelPageKey: Equatable {
         chapters = reading.chapters
     }
 
+    private func setLines(_ newLines: [NovelLine]) {
+        lines = newLines
+        lineIndex = Dictionary(newLines.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func appendLines(_ added: [NovelLine]) {
+        let base = lines.count
+        for (offset, line) in added.enumerated() { lineIndex[line.id] = base + offset }
+        lines += added
+    }
+
     private var pagesLayout: Bool { NovelStore.shared.pageTurn == .pages }
     var currentChapter: Int { pagesLayout ? (place?.chapter ?? 0) : scrollChapter }
     private var scrollChapter: Int {
-        guard let anchor, let line = lines.first(where: { $0.id == anchor }) else { return loaded.first ?? place?.chapter ?? 0 }
-        return line.chapter
+        guard let anchor, let at = lineIndex[anchor], lines.indices.contains(at) else { return loaded.first ?? place?.chapter ?? 0 }
+        return lines[at].chapter
     }
     var currentTitle: String { title(of: currentChapter) }
     /// A chapter's title as the reader shows it, in the picked script.
@@ -131,14 +144,20 @@ struct NovelPageKey: Equatable {
         for (index, source) in fetched { contents[index] = script.convert(source) }
         paged = [:]; pagedKey = nil
         guard !loaded.isEmpty else { return }
+        var existing: [Int: [NovelLine]] = [:]
+        for line in lines { existing[line.chapter, default: []].append(line) }
         var rebuilt: [NovelLine] = []
         for chapter in loaded {
-            guard let content = contents[chapter] else { continue }
-            let made = Self.lines(content, chapter: chapter)
-            rebuilt += made; counts[chapter] = made.count
+            if let content = contents[chapter] {
+                let made = Self.lines(content, chapter: chapter)
+                rebuilt += made; counts[chapter] = made.count
+            } else if let kept = existing[chapter] {
+                // Chapters evicted from the in-memory cache stay in the column so nothing above the viewport shifts.
+                rebuilt += kept
+            }
         }
-        lines = rebuilt
-        if let anchor, !rebuilt.contains(where: { $0.id == anchor }) { self.anchor = rebuilt.first?.id }
+        setLines(rebuilt)
+        if let anchor, lineIndex[anchor] == nil { self.anchor = rebuilt.first?.id }
     }
 
     /// Fetches the chapter the reader stands on when its text is gone, so a page never waits on nothing.
@@ -161,7 +180,7 @@ struct NovelPageKey: Equatable {
             let length = NovelTypeStyle.length(content)
             place = NovelPlace(chapter: index, location: position > 0 ? Int(Double(length) * min(1, position)) : 0)
             let made = Self.lines(content, chapter: index)
-            lines = made; loaded = [index]; counts = [index: made.count]
+            setLines(made); loaded = [index]; counts = [index: made.count]; heights = [:]
             let target = min(made.count - 1, max(0, Int((Double(made.count) * position).rounded(.down))))
             anchor = position > 0 ? made[target].id : made.first?.id
             save(force: true)
@@ -230,10 +249,15 @@ struct NovelPageKey: Equatable {
         switch turn {
         case .pages:
             let chapter = scrollChapter
-            guard let content = contents[chapter] else { return }
             var fraction = 0.0
-            if let anchor, let line = lines.first(where: { $0.id == anchor }) { fraction = Double(line.offset) / Double(max(1, counts[chapter] ?? 1)) }
-            place = NovelPlace(chapter: chapter, location: Int(Double(NovelTypeStyle.length(content)) * fraction))
+            if let anchor, let at = lineIndex[anchor], lines.indices.contains(at) {
+                fraction = Double(lines[at].offset) / Double(max(1, counts[chapter] ?? 1))
+            }
+            if let content = contents[chapter] {
+                place = NovelPlace(chapter: chapter, location: Int(Double(NovelTypeStyle.length(content)) * fraction))
+            } else {
+                Task { await open(chapter, position: fraction) }
+            }
         case .scroll:
             guard let place, let content = contents[place.chapter] else { return }
             let fraction = Double(place.location) / Double(max(1, NovelTypeStyle.length(content)))
@@ -252,11 +276,9 @@ struct NovelPageKey: Equatable {
             let content = try await load(index)
             guard loaded.last == last else { return }
             let made = Self.lines(content, chapter: index)
-            lines += made; loaded.append(index); counts[index] = made.count
-            // Far behind the reader: drop the oldest chapters so the column stays light.
-            if loaded.count > 4, let first = loaded.first {
-                lines.removeAll { $0.chapter == first }; loaded.removeFirst(); counts[first] = nil
-            }
+            // Keep older chapters in the column: removing a chapter above the viewport shifts every later line up by
+            // its height without correcting the scroll offset, jumping the reader ahead a chapter or more (#2437, cf. #879).
+            appendLines(made); loaded.append(index); counts[index] = made.count
             fetchNeighbours(of: index)
         } catch is CancellationError {
         } catch {
@@ -268,7 +290,7 @@ struct NovelPageKey: Equatable {
 
     /// Called as the top line changes: saves the place now and then, and reads on near a chapter's end.
     func moved() {
-        guard let anchor, let at = lines.firstIndex(where: { $0.id == anchor }) else { return }
+        guard let anchor, let at = lineIndex[anchor] else { return }
         if lines.count - at < 40, hasNext { Task { await loadNext() } }
         save()
     }
@@ -281,7 +303,9 @@ struct NovelPageKey: Equatable {
             let length = max(1, NovelTypeStyle.length(content))
             NovelStore.shared.record(book, chapter: chapters[place.chapter], count: chapters.count, position: Double(place.location) / Double(length))
         } else {
-            guard let anchor, let line = lines.first(where: { $0.id == anchor }), chapters.indices.contains(line.chapter) else { return }
+            guard let anchor, let at = lineIndex[anchor], lines.indices.contains(at) else { return }
+            let line = lines[at]
+            guard chapters.indices.contains(line.chapter) else { return }
             saved = Date()
             let count = max(1, counts[line.chapter] ?? 1)
             NovelStore.shared.record(book, chapter: chapters[line.chapter], count: chapters.count, position: Double(line.offset) / Double(count))
@@ -299,7 +323,7 @@ struct NovelPageKey: Equatable {
             let words = body.substring(with: NSRange(location: start, length: min(120, body.length - start)))
             return (place.chapter, Double(place.location) / Double(max(1, NovelTypeStyle.length(content))), Self.excerpt(words))
         }
-        guard let anchor, let at = lines.firstIndex(where: { $0.id == anchor }), chapters.indices.contains(lines[at].chapter) else { return nil }
+        guard let anchor, let at = lineIndex[anchor], lines.indices.contains(at), chapters.indices.contains(lines[at].chapter) else { return nil }
         let line = lines[at]
         // A heading says nothing of the place: the first words under it.
         let words = line.heading ? lines[(at + 1)...].first { !$0.heading && $0.chapter == line.chapter }?.text ?? line.text : line.text
@@ -328,7 +352,7 @@ struct NovelPageKey: Equatable {
 
     /// The line one screen further on (`forward`) or back from the top line, from the heights measured so far.
     func turn(forward: Bool, viewport: CGFloat, lineHeight: CGFloat) -> String? {
-        guard let anchor, let at = lines.firstIndex(where: { $0.id == anchor }) else { return lines.first?.id }
+        guard let anchor, let at = lineIndex[anchor], lines.indices.contains(at) else { return lines.first?.id }
         let room = max(lineHeight * 2, viewport - lineHeight * 1.5)
         if forward {
             var used: CGFloat = 0, index = at
