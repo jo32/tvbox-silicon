@@ -2203,8 +2203,11 @@ struct SubscriptionDetailView: View {
             guard store.subscriptions.contains(where: { $0.address == address }) else { return }
             commitDraftIfChanged()
         }
-        .confirmationDialog(L10n.text("Remove"), isPresented: $confirmsRemoval) {
+        // An alert rather than a dialog: a dialog attached to the page root lands as a floating bubble far from
+        // the Remove button on iOS 26 (#2753), as the subscriptions list already found for its own removals.
+        .alert(L10n.text("Remove “%@”", current.title), isPresented: $confirmsRemoval) {
             Button(L10n.text("Remove"), role: .destructive) { store.removeSubscription(current); dismiss() }
+            Button(L10n.text("Cancel"), role: .cancel) {}
         }
         #if DEBUG
         // `-qaPage subscription:<n> -qaAddressDraft <address> [-qaAddressCommit 1]`: an address typed, and used, without a keyboard.
