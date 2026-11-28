@@ -60,6 +60,18 @@ import Testing
     #expect(PictureSeek.target(from: 100, moved: 10, width: 0, duration: 120) == 100)
 }
 
+@Test func aFastSwipeStretchesTheSeekSpanAndASlowOneKeepsIt() {
+    // Slow and still: the three-minute span, as before.
+    #expect(PictureSeek.span(for: 0) == 180)
+    #expect(PictureSeek.span(for: 300) == 180)
+    #expect(PictureSeek.span(for: -300) == 180)
+    // Twice as fast as the stretch point: twice the span.
+    #expect(PictureSeek.span(for: 1200) == 360)
+    // A full-width fast swipe crosses six minutes of a 45-minute video.
+    #expect(PictureSeek.target(from: 600, moved: 900, width: 900, duration: 2700, span: PictureSeek.span(for: 1200)) == 960)
+    #expect(PictureSeek.secondsPerPoint(width: 900, duration: 2700, span: PictureSeek.span(for: 1200)) == 0.4)
+}
+
 @Test func slidingUpOrDownSetsALevelAwayFromTheEdges() {
     #expect(PictureLevel.value(from: 0.5, moved: -300, height: 800) == 1)
     #expect(PictureLevel.value(from: 0.5, moved: 150, height: 800) == 0.25)

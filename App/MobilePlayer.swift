@@ -441,10 +441,11 @@ struct MobilePlayerView: View {
             level = (volume, start, start)
             leveling = true
             hideChrome()
-        case .moved(let moved, let size):
+        case .moved(let moved, let size, let velocity):
             if let swipeStart {
-                clock.scrub(to: PictureSeek.target(from: swipeStart, moved: moved.width, width: size.width, duration: clock.duration),
-                            secondsPerPoint: PictureSeek.secondsPerPoint(width: size.width, duration: clock.duration))
+                let span = PictureSeek.span(for: velocity.width)
+                clock.scrub(to: PictureSeek.target(from: swipeStart, moved: moved.width, width: size.width, duration: clock.duration, span: span),
+                            secondsPerPoint: PictureSeek.secondsPerPoint(width: size.width, duration: clock.duration, span: span))
             } else if leveling, var level {
                 level.value = PictureLevel.value(from: level.start, moved: moved.height, height: size.height)
                 self.level = level
@@ -1611,7 +1612,7 @@ private struct PictureGestures: UIViewRepresentable {
     enum Hold { case began, moved(CGSize), ended }
     /// Sideways seeks; up or down sets the brightness on the left half and the volume on the right.
     enum Slide { case seek, brightness, volume }
-    enum Swipe { case began(Slide), moved(CGSize, in: CGSize), ended }
+    enum Swipe { case began(Slide), moved(CGSize, in: CGSize, velocity: CGSize), ended }
     /// Where the tap landed across the picture, and the picture's width.
     let tap: (CGFloat, CGFloat) -> Void
     let hold: (Hold) -> Void
@@ -1666,8 +1667,8 @@ private struct PictureGestures: UIViewRepresentable {
             switch pan.state {
             case .began: parent?.swipe(.began(slide))
             case .changed:
-                let moved = pan.translation(in: view)
-                parent?.swipe(.moved(CGSize(width: moved.x, height: moved.y), in: view.bounds.size))
+                let moved = pan.translation(in: view), speed = pan.velocity(in: view)
+                parent?.swipe(.moved(CGSize(width: moved.x, height: moved.y), in: view.bounds.size, velocity: CGSize(width: speed.x, height: speed.y)))
             case .ended, .cancelled, .failed: parent?.swipe(.ended)
             default: break
             }
