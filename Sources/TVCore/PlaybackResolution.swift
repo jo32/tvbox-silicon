@@ -57,3 +57,22 @@ public struct PlaybackPlan: Sendable {
         self.subtitles = subtitles
     }
 }
+
+/// The quality last picked for a source, so playback stops asking every time (#2609). Keyed by the source, since
+/// one source's "1080P" is another's "原画". Only remembered once it actually plays, so a quality that fails to
+/// resolve never becomes the default.
+public enum RememberedQuality {
+    private static func key(for site: String) -> String { "playback.quality." + site }
+
+    public static func remembered(for site: String, defaults: UserDefaults = .standard) -> String? {
+        defaults.string(forKey: key(for: site))
+    }
+
+    public static func remember(_ name: String, for site: String, defaults: UserDefaults = .standard) {
+        defaults.set(name, forKey: key(for: site))
+    }
+
+    public static func forget(for site: String, defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: key(for: site))
+    }
+}

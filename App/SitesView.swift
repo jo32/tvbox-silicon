@@ -3174,7 +3174,22 @@ struct VideoDetailView: View {
             let plan = try await client.preparePlayback(episode)
             try Task.checkCancellation()
             if plan.choices.count > 1 {
-                pendingPlan = plan; pendingEpisode = episode; choosingQuality = true
+                if let choice = plan.choices.first(where: { $0.name == RememberedQuality.remembered(for: client.site.key) ?? "" }) {
+                    // The last quality picked for this source still plays: use it without asking (#2609).
+                    do {
+                        let playback = store.subscription.map { client.applying($0) } ?? client
+                        let resolved = try await playback.resolvePlayback(plan, choice: choice)
+                        try Task.checkCancellation()
+                        store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback, resumePosition: resume)
+                    } catch {
+                        if error is CancellationError { throw error }
+                        // That quality no longer plays: forget it and ask which to use instead.
+                        RememberedQuality.forget(for: client.site.key)
+                        pendingPlan = plan; pendingEpisode = episode; choosingQuality = true
+                    }
+                } else {
+                    pendingPlan = plan; pendingEpisode = episode; choosingQuality = true
+                }
             } else {
                 let playback = store.subscription.map { client.applying($0) } ?? client
                 let resolved = try await playback.resolvePlayback(plan, choice: plan.choices[0])
@@ -3192,6 +3207,7 @@ struct VideoDetailView: View {
             try Task.checkCancellation()
             store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback,
                                                  resumePosition: resumePosition(for: episode))
+            RememberedQuality.remember(choice.name, for: client.site.key)
         } catch { fail(episode, error) }
     }
     private func retryAfterSignIn() {
