@@ -543,18 +543,15 @@ struct MobilePlayerView: View {
     /// How far a run of double taps skipped, on its side.
     @ViewBuilder private var skippedLabel: some View {
         if let skipped {
-            // Glass like the other gesture labels, with the skip buttons' symbol; it bounces on each further tap.
-            VStack(spacing: 4) {
-                Image(systemName: SkipInterval.symbol(forward: skipped.forward, seconds: skipInterval))
-                    .font(.system(size: 30, weight: .medium))
-                    .symbolEffect(.bounce, value: skipped.total)
-                Text((skipped.forward ? "+" : "\u{2212}") + L10n.text("%lld s", Int(skipped.total)))
-                    .font(.footnote.weight(.semibold).monospacedDigit())
-                    .contentTransition(.numericText(value: skipped.total))
-            }
-            .foregroundStyle(.white)
-            .frame(width: 96, height: 96)
-            .glassSurface(.regular, in: Circle())
+            // A small circle like the lock button, with the skip symbol carrying the seconds (#2751). A big disc
+            // plus a separate "+10 s" caption covered too much of the picture on iPhone.
+            Image(systemName: SkipInterval.symbol(forward: skipped.forward, seconds: skipInterval))
+                .font(.playerGlyph)
+                .frame(width: 24, height: 24)
+                .symbolEffect(.bounce, value: skipped.total)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .glassSurface(.regular, in: Circle())
             .environment(\.colorScheme, .dark)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: skipped.forward ? .trailing : .leading)
             .padding(.horizontal, 48)
