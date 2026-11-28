@@ -8,7 +8,7 @@ import UIKit
 
 extension View {
     /// The app's root: where the panel shows. iPhone: over everything, from the right edge. iPad: a trailing panel
-    /// beside the page. Mac (on the detail column's stack): an inspector. Apple TV: a full-screen page.
+    /// beside the page. Mac (on the window's split view): an inspector. Apple TV: a full-screen page.
     func assistantHost() -> some View { modifier(AssistantHost()) }
     /// A section's root page: the button that opens the assistant (every page on the Mac; Watch Now and Discover elsewhere), and on iPhone and iPad the edge swipe.
     func assistantEntry(_ section: AppSection) -> some View { modifier(AssistantEntry(section: section)) }
@@ -82,8 +82,7 @@ extension View {
         }
     }
 
-    /// A page pushed on the Mac's detail stack: the toolbar's sparkles, and the panel beside it. The inspector on the
-    /// stack (`assistantHost`) is only drawn beside its root page, so an open panel vanished when a page was opened.
+    /// A page pushed on the Mac's detail stack: the toolbar's sparkles, as on the section's own page.
     func assistantPushedPage() -> some View { modifier(AssistantPushedPage()) }
 }
 
@@ -97,7 +96,6 @@ private struct AssistantPushedPage: ViewModifier {
                     ToolbarItem(placement: .primaryAction) { AssistantToolbarButton() }
                 }
             }
-            .assistantInspector(enabled: enabled, assistant: assistant)
     }
 }
 #endif

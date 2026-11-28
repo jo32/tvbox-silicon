@@ -57,7 +57,7 @@ struct AssistantPanel: View {
                     Label(L10n.text("Assistant"), systemImage: "sparkles").labelStyle(.titleAndIcon)
                         .font(.headline)
                         .padding(.leading, 12)
-                        .frame(width: max(92, width - 87), alignment: .leading)
+                        .frame(width: max(92, width - 112), alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
                 }
                 .withoutGlassCapsule()

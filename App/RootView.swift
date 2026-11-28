@@ -124,8 +124,10 @@ struct RootView: View {
                     // A page the assistant opened, for the section on screen.
                     .agentPages(accepts: { $0 == store.section }) { detailPath.append($0) }
                     .overlay { ThemedTitleBand() }
-                    .assistantHost()
             }
+            // The assistant's inspector belongs to the window, beside every page: on the detail stack it was only
+            // drawn beside the root page, and with it open the stack stopped showing pages pushed past the second.
+            .assistantHost()
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .onChange(of: store.hidesSidebar) { _, hide in
                 if hide { columnsBefore = columns }
