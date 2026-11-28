@@ -195,6 +195,14 @@ public enum CloudStreams {
         if bytes.first == 0x47 { return "public.mpeg-2-transport-stream" }
         // Songs played from Cloud Files, known by their signature too.
         if let audio = audioType(bytes) { return audio }
+        // A drive CDN's verification page or JSON error body is not a video: say so instead of handing it to
+        // AVPlayer as mp4, which fails with CoreMedia error -4 (#2728). Same prefixes as PlaybackRescue.sniff.
+        var textBytes = bytes
+        if textBytes.starts(with: [0xEF, 0xBB, 0xBF]) { textBytes.removeFirst(3) }
+        let text = String(decoding: textBytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if text.hasPrefix("<!doctype") || text.hasPrefix("<html") || text.hasPrefix("<head") || text.hasPrefix("<?xml") || text.hasPrefix("{") {
+            throw TVError.unsupported(L10n.text("The link returned a web page, not a video."))
+        }
         switch (name as NSString).pathExtension.lowercased() {
         case "mov": return AVFileType.mov.rawValue
         case "m4v": return AVFileType.m4v.rawValue
