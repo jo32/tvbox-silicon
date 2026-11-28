@@ -51,6 +51,22 @@ public actor CastRelay {
         return address
     }
 
+    /// How an AirPlay receiver gets a stream AVPlayer plays: AVPlayer hands it the address, and it fetches that itself.
+    public enum Reach: Sendable, Equatable {
+        /// A network address, or a file AVPlayer sends itself.
+        case direct
+        /// An address on this device's loopback (a repackaged file, a download, a plugin's proxy): only through here.
+        case relay
+        /// One of the app's own schemes, which only its resource loaders read: the receiver gets the sound alone.
+        case unreachable
+    }
+
+    public static func airPlayReach(_ url: URL) -> Reach {
+        if url.isFileURL { return .direct }
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return .unreachable }
+        return PlayOn.isPortable(url) ? .direct : .relay
+    }
+
     /// Forgets every route; the next cast starts afresh.
     public func reset() {
         headerContexts = [:]; headerBytes = 0; routeKey = SymmetricKey(size: .bits256); nonceKey = SymmetricKey(size: .bits256)

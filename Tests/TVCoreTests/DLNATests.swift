@@ -479,3 +479,51 @@ func castRelayDoesNotIssuePlaylistRoutesAcrossReset(declaredPlaylist: Bool) asyn
     let (body, response) = try await URLSession.shared.data(from: again)
     #expect((response as? HTTPURLResponse)?.statusCode == 200 && body.count == 16)
 }
+
+/// AirPlay hands a receiver the address AVPlayer plays (#1941, #2034): a network address or a file reaches it as it is,
+/// one on this device's loopback only through the relay, one of the app's own schemes not at all.
+@Test func castRelayTellsWhatAnAirPlayReceiverReaches() {
+    #expect(CastRelay.airPlayReach(URL(string: "https://cdn.example/v/index.m3u8")!) == .direct)
+    #expect(CastRelay.airPlayReach(URL(string: "http://192.168.1.20:8080/movie.mp4")!) == .direct)
+    #expect(CastRelay.airPlayReach(URL(fileURLWithPath: "/tmp/movie.mp4")) == .direct)
+    #expect(CastRelay.airPlayReach(URL(string: "http://127.0.0.1:52011/abc/index.m3u8")!) == .relay)
+    #expect(CastRelay.airPlayReach(URL(string: "http://localhost:9978/proxy?do=m3u8")!) == .relay)
+    #expect(CastRelay.airPlayReach(URL(string: "http://[::1]:9978/movie.mp4")!) == .relay)
+    #expect(CastRelay.airPlayReach(URL(string: "tvbox-dash://abc/master.m3u8")!) == .unreachable)
+    #expect(CastRelay.airPlayReach(URL(string: "tvbox-cloud://abc")!) == .unreachable)
+}
+
+/// A download played from this device's loopback, as AirPlay gets it through the relay: the playlist comes back with
+/// its init section and segments on the relay's network address, and each of them reads as on disk.
+@Test func castRelayServesALoopbackDownloadToTheNetwork() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "relay-airplay-\(UUID().uuidString)")
+    let folder = root.appending(path: "episode")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let initSection = Data((0..<2_000).map { UInt8($0 % 199) }), segment = Data((0..<150_000).map { UInt8($0 % 233) })
+    try initSection.write(to: folder.appending(path: "init.mp4"))
+    try segment.write(to: folder.appending(path: "seg0.m4s"))
+    try Data("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:6\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:6.0,\nseg0.m4s\n#EXT-X-ENDLIST\n".utf8)
+        .write(to: folder.appending(path: "index.m3u8"))
+    let loopback = try await LocalMediaServer.shared.address(of: folder.appending(path: "index.m3u8"), root: root)
+    #expect(CastRelay.airPlayReach(loopback) == .relay)
+
+    let relay = CastRelay()
+    let address = try await relay.address(for: loopback, headers: [:], playlist: true, towards: nil)
+    #expect(address.host() != "127.0.0.1" && address.lastPathComponent == "index.m3u8")
+    #expect(CastRelay.airPlayReach(address) == .direct)
+    let (playlist, response) = try await URLSession.shared.data(from: address)
+    #expect((response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") == "application/vnd.apple.mpegurl")
+    let text = String(decoding: playlist, as: UTF8.self)
+    #expect(!text.contains("127.0.0.1"))
+    let map = try #require(text.components(separatedBy: "\n").first { $0.hasPrefix("#EXT-X-MAP:URI=") })
+    let mapPath = String(map.dropFirst("#EXT-X-MAP:URI=\"".count).dropLast())
+    let (initBytes, _) = try await URLSession.shared.data(from: try #require(URL(string: mapPath, relativeTo: address)))
+    #expect(initBytes == initSection)
+    let segmentPath = try #require(text.components(separatedBy: "\n").first { $0.hasSuffix("/seg0.m4s") })
+    var request = URLRequest(url: try #require(URL(string: segmentPath, relativeTo: address)))
+    request.setValue("bytes=100-1099", forHTTPHeaderField: "Range")
+    let (part, partial) = try await URLSession.shared.data(for: request)
+    #expect((partial as? HTTPURLResponse)?.statusCode == 206)
+    #expect(part == segment[100..<1100])
+}

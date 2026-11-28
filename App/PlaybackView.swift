@@ -459,6 +459,17 @@ import IOKit.pwr_mgt
     /// The episode plays from a download on this device, which no server or connection holds up.
     private var savedDownload = false
     private var automatic: URL?
+    #if os(iOS)
+    /// What `attach` opened last, to open again from `CastRelay` once AirPlay is chosen (`followAirPlay`).
+    @ObservationIgnored private var attached: (channel: Channel, url: URL, generation: UUID)?
+    /// The relay's address for that stream, which the next `attach` of it fetches from; and the stream it serves now.
+    @ObservationIgnored private var relayAddress: (url: URL, address: URL)?
+    @ObservationIgnored private var relayedForAirPlay: URL?
+    @ObservationIgnored private var airPlayRelay: Task<Void, Never>?
+    @ObservationIgnored private var routeObserver: NSObjectProtocol?
+    @ObservationIgnored private var externalObservation: NSKeyValueObservation?
+    @ObservationIgnored private var loggedRoute: String?
+    #endif
     /// The drive plays its transcoded copy, which has none of the file's subtitles (#1343).
     var playsDriveCopy: Bool { automatic.map(CloudStreams.isDriveCopy) ?? false }
     /// The live room playing (at the quality chosen), when it opens again with a fresh address (`LiveReopen`), and
@@ -1314,6 +1325,37 @@ import IOKit.pwr_mgt
             },
         ]
         #endif
+        #if os(iOS)
+        // AirPlay chosen while a video plays (`followAirPlay`), and in the log where the picture went: a report of AirPlay
+        // with sound alone said nothing of it (#1941).
+        routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.player.currentItem != nil else { return }
+                let outputs = AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+                if outputs != self.loggedRoute {
+                    self.loggedRoute = outputs
+                    let reach = self.attached.map { "\(CastRelay.airPlayReach($0.url))" } ?? "-"
+                    Diagnostics.shared.record(.info, "player", "route outputs=\(outputs) external=\(self.player.isExternalPlaybackActive) "
+                        + "allowed=\(self.player.allowsExternalPlayback) reach=\(reach)")
+                }
+                self.followAirPlay()
+            }
+        }
+        externalObservation = player.observe(\.isExternalPlaybackActive, options: [.new]) { player, _ in
+            let active = player.isExternalPlaybackActive
+            Task { @MainActor in Diagnostics.shared.record(.info, "player", "external playback active=\(active)") }
+        }
+        #if DEBUG
+        let qaRoute = UserDefaults.standard.double(forKey: "qaAirPlayRoute")
+        if qaRoute > 1 {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(qaRoute))
+                Self.qaAirPlayChosen = true
+                NotificationCenter.default.post(name: AVAudioSession.routeChangeNotification, object: nil)
+            }
+        }
+        #endif
+        #endif
         // How warm the device gets while something plays, in the log, so a report of heat says what was on (#1428).
         thermalObserver = NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.recordThermalState() }
@@ -1647,10 +1689,16 @@ import IOKit.pwr_mgt
 
     private func attach(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
         cancelSleepFade()
-        let item = makeItem(channel, url: url)
+        #if os(iOS)
+        let relayed = relayAddress.flatMap { $0.url == url ? $0.address : nil }
+        relayAddress = nil
+        attached = (channel, url, activeGeneration); relayedForAirPlay = relayed == nil ? nil : url
+        #else
+        let relayed: URL? = nil
+        #endif
+        let item = makeItem(channel, url: url, fetchingFrom: relayed)
         watch(item, channel: channel, url: url, generation: activeGeneration)
-        // A repackaged file, or a rescued link, is served on this device's loopback, which an AirPlay receiver can't reach.
-        player.allowsExternalPlayback = !Remux.isRemuxed(url) && !PlaybackRescue.owns(url)
+        player.allowsExternalPlayback = Self.allowsExternalPlayback(url, relayed: relayed != nil)
         player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
         #if DEBUG
@@ -1666,7 +1714,62 @@ import IOKit.pwr_mgt
         let qaSeek = UserDefaults.standard.double(forKey: "qaSeek")
         if qaSeek > 0 { player.seek(to: CMTime(seconds: qaSeek, preferredTimescale: 600)) }
         #endif
+        #if os(iOS)
+        followAirPlay()
+        #endif
     }
+
+    /// Whether AVPlayer may hand the stream to an AirPlay receiver, which then fetches its address itself. Not one on
+    /// this device's loopback, which the receiver can't reach, unless it comes through `CastRelay`; not one of the
+    /// app's own schemes either. AirPlay then takes the sound alone, and a mirrored screen still shows the picture.
+    static func allowsExternalPlayback(_ url: URL, relayed: Bool) -> Bool {
+        relayed || CastRelay.airPlayReach(url) == .direct
+    }
+
+    #if os(iOS)
+    /// AirPlay chosen while a stream served on this device's loopback plays (a repackaged file, a download, a plugin's
+    /// proxy), or such a stream opened while AirPlay is on. The receiver can't reach that address, so it had only the
+    /// sound (#1941, #2034). The stream opens again where it was from `CastRelay`, which serves it to the local network,
+    /// and the receiver takes the picture too. Not while the screen is mirrored: the mirror shows the picture here.
+    private func followAirPlay() {
+        guard airPlayRelay == nil, let attached, attached.generation == generation, player.currentItem === item,
+              relayedForAirPlay != attached.url, CastRelay.airPlayReach(attached.url) == .relay,
+              Self.airPlayRoute, !Self.screenCaptured else { return }
+        let (channel, url, active) = attached
+        let playlist = url.pathExtension.lowercased() == "m3u8" || Remux.isSegmented(url)
+        airPlayRelay = Task { [weak self] in
+            let address = try? await CastRelay.shared.address(for: url, headers: channel.headers, playlist: playlist, towards: nil)
+            guard let self, !Task.isCancelled else { return }
+            self.airPlayRelay = nil
+            guard let address, self.generation == active, self.attached?.url == url, self.relayedForAirPlay != url,
+                  Self.airPlayRoute else { return }
+            let position = self.player.currentTime().seconds
+            Diagnostics.shared.record(.info, "player", "airplay through relay host=\(url.host() ?? "-") at=\(position.isFinite ? Int(position) : -1)s")
+            // Where it was, and paused if the viewer had paused it (not an item still opening): as a reconnect does.
+            let paused = self.item?.status == .readyToPlay && self.pendingResume == nil && self.player.timeControlStatus == .paused
+            if self.pendingResume == nil, !self.isLive, position.isFinite, position > 1 {
+                self.pendingResume = position; self.exactResume = true
+            }
+            self.recoveryPause.noteReconnect(currentlyPaused: paused, fromFailure: false, at: ProcessInfo.processInfo.systemUptime)
+            self.relayAddress = (url, address)
+            self.detachItem(); self.observation = nil
+            self.configure(channel, url: url, generation: active)
+        }
+    }
+
+    #if DEBUG
+    private static var qaAirPlayChosen = false
+    #endif
+    /// The sound goes to an AirPlay receiver: an Apple TV, a TV or projector that takes AirPlay, or a speaker.
+    private static var airPlayRoute: Bool {
+        #if DEBUG
+        // `-qaAirPlayRoute 1`: plays as if AirPlay were chosen, which the simulator can't do; `-qaAirPlayRoute <seconds>`
+        // (more than 1): as if it were chosen that long after the player was set up.
+        if UserDefaults.standard.double(forKey: "qaAirPlayRoute") == 1 || qaAirPlayChosen { return true }
+        #endif
+        return AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .airPlay }
+    }
+    #endif
 
     /// Request headers for an asset. iPhone, iPad and Apple TV ignore a `User-Agent` among the header
     /// fields and send their own, which hosts that expect a browser refuse (HTTP 403); the user-agent key
@@ -1677,12 +1780,13 @@ import IOKit.pwr_mgt
         return options
     }
 
-    /// The item for a prepared stream, with the request headers and buffer its source needs.
-    private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
+    /// The item for a prepared stream, with the request headers and buffer its source needs. `relayed`: the address
+    /// `CastRelay` serves the same stream from, for an AirPlay receiver (`followAirPlay`).
+    private func makeItem(_ channel: Channel, url: URL, fetchingFrom relayed: URL? = nil) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
         let asset = CloudStreams.asset(for: url) ?? CENCStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
-            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers)
+            ?? AVURLAsset(url: relayed ?? url, options: Self.assetOptions(headers: channel.headers)
                 .merging(MediaTypeHint.mimeType(for: url).map { [AVURLAssetOverrideMIMETypeKey: $0] } ?? [:]) { $1 })
         let item = AVPlayerItem(asset: asset)
         if url.scheme == CloudStreams.scheme {
@@ -2259,6 +2363,10 @@ import IOKit.pwr_mgt
         }
         generation = UUID()
         recoveryPause.clear()
+        #if os(iOS)
+        airPlayRelay?.cancel(); airPlayRelay = nil
+        attached = nil; relayAddress = nil; relayedForAirPlay = nil
+        #endif
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         lineWatch?.cancel(); lineWatch = nil
@@ -2800,9 +2908,14 @@ extension PlaybackSession {
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)
         loadPartExtras(channel, generation: activeGeneration)
-        player.allowsExternalPlayback = !Remux.isRemuxed(upcoming.prepared.url)
+        player.allowsExternalPlayback = Self.allowsExternalPlayback(upcoming.prepared.url, relayed: false)
         qualities = DashStreams.qualities(for: upcoming.prepared.url)
         watch(upcoming.item, channel: channel, url: upcoming.prepared.url, generation: activeGeneration)
+        #if os(iOS)
+        airPlayRelay?.cancel(); airPlayRelay = nil
+        attached = (channel, upcoming.prepared.url, activeGeneration); relayedForAirPlay = nil
+        followAirPlay()
+        #endif
         if DanmakuSource.has(channel.url) {
             Task { [weak self] in
                 guard let comments = await DanmakuSource.comments(for: channel.url), let self, self.generation == activeGeneration else { return }
