@@ -64,6 +64,24 @@ typealias MusicTrack = TVCore.MusicTrack
     var volume: Double = UserDefaults.standard.object(forKey: "musicVolume") == nil ? 1 : UserDefaults.standard.double(forKey: "musicVolume") {
         didSet { cancelSleepFade(); player.volume = Float(volume); UserDefaults.standard.set(volume, forKey: "musicVolume") }
     }
+    /// How fast audiobook chapters play; songs always play at 1× (#2540). Remembered across launches.
+    private(set) var audiobookSpeed: Double = {
+        let saved = UserDefaults.standard.double(forKey: "musicAudiobookSpeed")
+        return saved > 0 ? saved : 1
+    }()
+    /// Whether the track playing is an audiobook's chapter, the only thing with a speed (#2540).
+    var isAudiobook: Bool { track?.source.map { NovelListening.isAudiobook($0.context) } ?? false }
+
+    /// The speed audiobook chapters play at. `play()` takes `defaultRate`, so a new chapter picks it up;
+    /// a chapter already playing switches at once. Songs are never affected: the picker only shows
+    /// for audiobooks, and a new track resets the rate in `loadCurrent`.
+    func setAudiobookSpeed(_ speed: Double) {
+        audiobookSpeed = speed
+        UserDefaults.standard.set(speed, forKey: "musicAudiobookSpeed")
+        guard isAudiobook else { return }
+        player.defaultRate = Float(speed)
+        if player.rate != 0 { player.rate = Float(speed) }
+    }
     var preferences = MusicPreferences.load() {
         didSet { if preferences != oldValue { preferences.save() } }
     }
@@ -468,6 +486,9 @@ typealias MusicTrack = TVCore.MusicTrack
     private func loadCurrent(at resumeAt: Double?) {
         cancelSleepFade()
         guard let track else { return }
+        // An audiobook's chapters play at the chosen speed, songs at 1× (#2540): play() takes
+        // defaultRate, so set it before the new item is set.
+        player.defaultRate = isAudiobook ? Float(audiobookSpeed) : 1
         let run = UUID(); generation = run
         cued = false
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()

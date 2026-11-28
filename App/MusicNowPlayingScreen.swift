@@ -92,6 +92,12 @@ struct MusicNowPlayingScreen: View {
     }()
     static let zoomSource = "music.nowPlaying"
 
+    /// The speeds an audiobook offers, as the video player's (#2540).
+    private static let audiobookSpeeds: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+    private static func speedLabel(_ speed: Double) -> String {
+        speed.formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+
     /// The sheet's drag indicator, drawn where the full-screen form has none: a swipe down still closes it.
     private var grabber: some View {
         Capsule().fill(.white.opacity(0.35)).frame(width: 36, height: 5).padding(.top, 8).accessibilityHidden(true)
@@ -138,6 +144,15 @@ struct MusicNowPlayingScreen: View {
                 }
                 // A book's intro and outro, for all its chapters (#1486); never a song's.
                 if music.canSkip { SkipTimesMenuButton(session: music) { showsSkip = true } }
+                // An audiobook's chapters play faster or slower (#2540); songs have no speed.
+                if music.isAudiobook {
+                    Menu(L10n.text("Playback Speed")) {
+                        Picker(L10n.text("Playback Speed"), selection: Binding(get: { music.audiobookSpeed }, set: { music.setAudiobookSpeed($0) })) {
+                            ForEach(Self.audiobookSpeeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
+                        }
+                        .pickerStyle(.inline)
+                    }
+                }
                 if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
                 SleepTimerMenu(item: music.sleepItem)
                 Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
