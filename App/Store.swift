@@ -1356,6 +1356,8 @@ import TVCore
             return
         }
         let previousPlayback = playing
+        // What the source's episodes lacked when the saved one wasn't among them, for the failure report.
+        var missing: String?
         do {
             // Plugin/API sources resolve an episode again. Direct-file APIs must refresh
             // their detail first so an expiring media address never becomes a resume shortcut.
@@ -1370,6 +1372,7 @@ import TVCore
                 matched = entry.context.episode(in: video.episodes)
             }
             guard var episode = matched else {
+                missing = entry.context.missingEpisodeReason(in: video.episodes)
                 throw TVError.unsupported(L10n.text("The saved episode is no longer available from this source. Choose an episode again."))
             }
             let channel: Channel
@@ -1387,7 +1390,7 @@ import TVCore
                                      episode: episode, client: client, resumePosition: entry.resumePosition)
         } catch {
             guard !(error is CancellationError), !Task.isCancelled else { return }
-            Diagnostics.shared.failure("catalog", "resume source=\(entry.context.sourceKey)", error)
+            Diagnostics.shared.failure("catalog", "resume source=\(entry.context.sourceKey)" + (missing.map { " missing=\($0)" } ?? ""), error)
             self.error = L10n.text("Unable to resume playback: %@", error.localizedDescription)
         }
     }

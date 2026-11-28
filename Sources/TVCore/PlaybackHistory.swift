@@ -69,6 +69,19 @@ public struct PlaybackHistoryContext: Codable, Hashable, Sendable {
         if let exact = matches.first(where: { $0.id == episodeID }) { return exact }
         return matches.count == 1 ? matches.first : nil
     }
+
+    /// Why `episode(in:)` finds nothing, for the resume failure report. It names no episode or line, only what went
+    /// missing: "empty" (no episodes at all), "line" (the saved line is gone), "name" (the line is there without the
+    /// episode), either with "-other" when another line still has an episode of that name, or "ambiguous" (the line
+    /// has that name more than once, none with the saved id). Nil when it is found.
+    public func missingEpisodeReason(in episodes: [Episode]) -> String? {
+        guard episode(in: episodes) == nil else { return nil }
+        guard !episodes.isEmpty else { return "empty" }
+        let line = episodes.filter { $0.flag == episodeFlag }
+        if line.filter({ $0.name == episodeName }).count > 1 { return "ambiguous" }
+        let elsewhere = episodes.contains { $0.flag != episodeFlag && $0.name == episodeName }
+        return (line.isEmpty ? "line" : "name") + (elsewhere ? "-other" : "")
+    }
 }
 
 public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
