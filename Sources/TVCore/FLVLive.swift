@@ -443,7 +443,7 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
             let ended = lock.withLock { () -> Bool in
                 guard !closed, !finished else { return false }
                 finished = true
-                ended = TVError.unsupported(L10n.text("The live stream ended."))
+                self.ended = TVError.unsupported(L10n.text("The live stream ended."))
                 return true
             }
             if ended { Diagnostics.shared.record(.warning, "remux", "\(kind) live not renewed: \(fresh == nil ? "no address" : "not HTTP")") }
