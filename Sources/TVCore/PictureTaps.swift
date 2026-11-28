@@ -146,13 +146,23 @@ public enum BatteryPercentage {
 public enum PictureSeek {
     public static let span = 180.0
 
-    public static func target(from start: Double, moved x: Double, width: Double, duration: Double) -> Double {
+    /// How fast the finger moves, in points per second, before the span starts stretching.
+    public static let spanVelocity = 600.0
+
+    /// A slow slide keeps the three-minute span for fine control; a fast flick stretches it, so one swipe can
+    /// cross more of a long video (#2580).
+    public static func span(for velocity: Double) -> Double {
+        guard velocity.isFinite else { return span }
+        return span * max(1, abs(velocity) / spanVelocity)
+    }
+
+    public static func target(from start: Double, moved x: Double, width: Double, duration: Double, span: Double = span) -> Double {
         guard width > 0, duration > 0, duration.isFinite, start.isFinite, x.isFinite else { return start }
         return min(max(0, start + x / width * min(duration, span)), duration)
     }
 
     /// How much time one point of the slide moves.
-    public static func secondsPerPoint(width: Double, duration: Double) -> Double {
+    public static func secondsPerPoint(width: Double, duration: Double, span: Double = span) -> Double {
         guard width > 0, duration > 0, duration.isFinite else { return 0 }
         return min(duration, span) / width
     }
