@@ -264,6 +264,16 @@ import UniformTypeIdentifiers
         comments = result.comments; track = result.track; source = result.source
         fromCache = false; manuallySelected = true; selectedOverridesSource = true; currentResolver = resolver
         cacheCurrent(resolver: resolver, ticket: ticket)
+        if let context = automaticContext, let pageURL = URL(string: page.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            // A pasted link is a hand pick too: remember it, as the search-and-pick path does, so the show's
+            // next episodes follow it instead of needing the link pasted again (#2689).
+            let provider = DanmakuProvider(source: result.source)
+            resolver.remember(DanmakuMapping(provider: provider == .automatic ? result.source : provider.rawValue,
+                title: context.videoName, year: context.year,
+                tracks: [DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber(context.episodeName), title: context.episodeName, page: pageURL, source: result.source)],
+                source: result.source),
+                for: context, ticket: ticket, picked: true)
+        }
         offset = 0; revision = UUID(); automaticState = "loaded"; enabled = true
     }
 
