@@ -173,6 +173,10 @@ struct PlaybackView: View {
         .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
+        // Keep the app's bottom tab bar off the player. A watch page hides it on its own, but a player
+        // opened straight into its own screen (a cover from Home, Discover or search) had no such
+        // setting, so on iOS 17 the tab bar showed over the video once it went full screen.
+        .toolbar(.hidden, for: .tabBar)
         // The home indicator fades with the controls while the picture fills the screen (#650); a swipe up
         // brings it back first, as in other video apps. A watch page's player leaves it to the page.
         .persistentSystemOverlays(playerLayout != .inline && !chromeVisible ? .hidden : .automatic)
