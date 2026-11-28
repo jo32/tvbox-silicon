@@ -19,7 +19,7 @@ import TVCore
     private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
     /// The followed series' schedules (the Following Calendar shelf), by TMDB id: the kept copies at once, then fresh ones.
     private(set) var following: [Int: AirSchedule] = [:]
-    static let feeds: [TMDBCatalog.Feed] = [.featured, .trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
+    static let feeds: [TMDBCatalog.Feed] = [.featured, .trending, .nowPlaying, .onTheAir, .variety, .chinese, .television, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
 
     func load(refresh: Bool = false) async {
@@ -678,7 +678,7 @@ struct DiscoverView: View {
     }
 
     @ViewBuilder private func collections(width: CGFloat) -> some View {
-        let feeds: [TMDBCatalog.Feed] = [.variety, .chinese]
+        let feeds: [TMDBCatalog.Feed] = [.variety, .chinese, .television]
         if feeds.contains(where: { !model.items($0).isEmpty }) {
             #if os(tvOS)
             ScrollView(.horizontal) {
@@ -1620,7 +1620,12 @@ private extension TMDBCatalog.Feed {
         }
     }
     var collectionTitle: String {
-        self == .variety ? L10n.text("Popular Variety Shows") : L10n.text("Popular Chinese Dramas")
+        switch self {
+        case .variety: L10n.text("Popular Variety Shows")
+        case .chinese: L10n.text("Popular Chinese Dramas")
+        case .television: L10n.text("Popular TV Shows")
+        default: title
+        }
     }
 }
 
