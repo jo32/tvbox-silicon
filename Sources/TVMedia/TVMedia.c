@@ -107,11 +107,51 @@ static int input_interrupt(void *opaque) {
     return input->interrupted ? input->interrupted(input->context) : 0;
 }
 
+/// Dolby's level for a picture of this size and rate: the lowest whose pixel rate and width it fits (FFmpeg's table).
+static int dolby_vision_level(int width, int height, AVRational rate) {
+    static const struct { int64_t pixels; int width; } levels[] = {
+        {0, 0}, {1280 * 720 * 24, 1280}, {1280 * 720 * 30, 1280}, {1920 * 1080 * 24, 1920}, {1920 * 1080 * 30, 2560},
+        {1920 * 1080 * 60, 3840}, {3840 * 2160 * 24, 3840}, {3840 * 2160 * 30, 3840}, {3840 * 2160 * 48, 3840},
+        {3840 * 2160 * 60, 3840}, {3840 * 2160 * 120, 3840}, {3840 * 2160 * 120, 7680}, {7680LL * 4320 * 60, 7680},
+        {7680LL * 4320 * 120, 7680}};
+    double fps = rate.num > 0 && rate.den > 0 ? av_q2d(rate) : 24;
+    int64_t pixels = (int64_t)(width * (double)height * fps);
+    for (int level = 1; level < 13; level++)
+        if (pixels <= levels[level].pixels && width <= levels[level].width) return level;
+    return 13;
+}
+
+/// A Dolby Vision 5 picture whose container left out its configuration (an MKV written from a transport stream, or by
+/// tools that don't know Dolby Vision) still carries Dolby's metadata in every frame. Without the configuration it is
+/// copied as plain HEVC, and AVPlayer shows Dolby's own colour coding as if it were YCbCr: green and purple. Profile 5
+/// is known by that coding when the picture names it (IPT-C2), else by the first frame's metadata, as FFmpeg's decoder
+/// tells it (profile 0 metadata on a full-range picture); the configuration is then added as the container would have.
+static void restore_dolby_vision(AVStream *st, const AVFrame *frame) {
+    AVCodecParameters *par = st->codecpar;
+    if (par->codec_id != AV_CODEC_ID_HEVC || av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF))
+        return;
+    if (par->color_space != AVCOL_SPC_IPT_C2) {
+        const AVFrameSideData *data = frame ? av_frame_get_side_data(frame, AV_FRAME_DATA_DOVI_METADATA) : NULL;
+        if (!data) return;
+        const AVDOVIRpuDataHeader *header = av_dovi_get_header((const AVDOVIMetadata *)data->data);
+        if (header->vdr_rpu_profile != 0 || !header->bl_video_full_range_flag) return;
+    }
+    size_t size;
+    AVDOVIDecoderConfigurationRecord *record = av_dovi_alloc(&size);
+    if (!record) return;
+    record->dv_version_major = 1;
+    record->dv_profile = 5;
+    record->dv_level = dolby_vision_level(par->width, par->height, st->avg_frame_rate.num ? st->avg_frame_rate : st->r_frame_rate);
+    record->rpu_present_flag = 1; record->bl_present_flag = 1;
+    if (!av_packet_side_data_add(&par->coded_side_data, &par->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF, record, size, 0)) av_free(record);
+}
+
 /// A picture whose container doesn't say how its colours are coded (an x265 encode in MKV, often) says it in
 /// its frames: whether it is HDR10 or HLG must be known before the plan is made.
 static void probe_colors(AVFormatContext *format) {
     for (unsigned index = 0; index < format->nb_streams; index++) {
         AVCodecParameters *par = format->streams[index]->codecpar;
+        if (par->codec_type == AVMEDIA_TYPE_VIDEO) restore_dolby_vision(format->streams[index], NULL);
         if (par->codec_type != AVMEDIA_TYPE_VIDEO || par->color_trc != AVCOL_TRC_UNSPECIFIED) continue;
         if (par->codec_id != AV_CODEC_ID_HEVC && par->codec_id != AV_CODEC_ID_H264 && par->codec_id != AV_CODEC_ID_AV1) return;
         const AVCodec *codec = avcodec_find_decoder(par->codec_id);
@@ -126,6 +166,7 @@ static void probe_colors(AVFormatContext *format) {
                 if (avcodec_receive_frame(decoder, frame) < 0) continue;
                 par->color_trc = frame->color_trc; par->color_primaries = frame->color_primaries;
                 par->color_space = frame->colorspace;
+                restore_dolby_vision(format->streams[index], frame);
                 break;
             }
         }
