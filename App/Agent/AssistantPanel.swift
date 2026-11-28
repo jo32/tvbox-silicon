@@ -683,6 +683,15 @@ struct AssistantComposer: View {
             .font(AssistantMetrics.body)
             .onSubmit { assistant.send() }
             .disabled(!assistant.isReady)
+            .focused($focused)
+            // The page opens on the text field. prefersDefaultFocus alone left focus on the first row of the
+            // left column (Clear Conversation) when the page came up as a full-screen cover.
+            .task {
+                try? await Task.sleep(for: .milliseconds(300))
+                focused = true
+            }
+            .onChange(of: assistant.composerFocus) { focused = true }
+            .accessibilityIdentifier("assistant.field")
         #else
         TextField(L10n.text("Ask the assistant"), text: text, axis: .vertical)
             .lineLimit(1...6)
