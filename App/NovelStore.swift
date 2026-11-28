@@ -239,6 +239,14 @@ import TVCore
         saveShelf()
     }
 
+    /// A fresh table of contents says how many chapters there are: keep the shelf's "x of y" current (#2742),
+    /// without moving the book or touching where reading stopped.
+    func syncChapterCount(_ count: Int, for book: NovelBook) {
+        guard let index = shelfIndex(book), shelf[index].chapterCount != count else { return }
+        shelf[index].chapterCount = count
+        saveShelf()
+    }
+
     /// Reads the shelf's book from another source from now on, keeping the place and the bookmarks by chapter title.
     func switchSource(of old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) {
         if NovelLibrary.switchSource(&shelf, from: old, to: book, chapters: chapters) { saveShelf() }
