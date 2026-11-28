@@ -434,7 +434,9 @@ struct AccountView: View {
             StatusPill(text: "+\(points.formatted())", tint: Color(red: 0.75, green: 0.5, blue: 1))
         }
         #if os(tvOS)
-        label
+        // A page with nothing focusable strands the remote and Back leaves the app: make the row
+        // focusable, as the Licenses and How Points Work pages do (TVReadingRowStyle).
+        Button {} label: { label }.buttonStyle(TVReadingRowStyle())
         #else
         if let url = URL(string: "https://github.com/jo32/tvbox-silicon/pull/\(pull.number)") {
             Link(destination: url) { label.contentShape(Rectangle()) }.buttonStyle(.plain)
@@ -453,7 +455,9 @@ struct AccountView: View {
             StatusPill(text: statusText(issue.status), tint: statusTint(issue.status))
         }
         #if os(tvOS)
-        label
+        // A page with nothing focusable strands the remote and Back leaves the app: make the row
+        // focusable, as the Licenses and How Points Work pages do (TVReadingRowStyle).
+        Button {} label: { label }.buttonStyle(TVReadingRowStyle())
         #else
         if let url = URL(string: "https://github.com/jo32/tvbox-silicon/issues/\(issue.number)") {
             Link(destination: url) { label.contentShape(Rectangle()) }.buttonStyle(.plain)
