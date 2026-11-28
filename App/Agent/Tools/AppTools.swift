@@ -125,9 +125,10 @@ import TVCore
         let entries = snapshot.entries.filter { entry in
             (rank[entry.level.rawValue] ?? 1) >= wanted && (category.map { entry.category.lowercased().contains($0) } ?? true)
         }
-        let time = Date.FormatStyle().hour(.twoDigits(amPM: .omitted)).minute().second()
+        let time = DateFormatter()
+        time.locale = Locale(identifier: "en_US_POSIX"); time.dateFormat = "HH:mm:ss"
         let lines = entries.suffix(limit).map { entry in
-            JSONValue.str("\(entry.date.formatted(time)) \(entry.level.rawValue) \(entry.category): \(AgentToolKit.clip(entry.message, 300))")
+            JSONValue.str("\(time.string(from: entry.date)) \(entry.level.rawValue) \(entry.category): \(AgentToolKit.clip(entry.message, 300))")
         }
         return .obj(["lines": .list(lines), "earlier": entries.count > limit ? .num(entries.count - limit) : nil])
     }

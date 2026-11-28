@@ -165,7 +165,7 @@ import TVCore
     // MARK: Play
 
     private static func playSummary(_ args: AgentArguments, _ context: AgentToolContext) -> (summary: String, detail: String?) {
-        if let id = try? args.string("video_id"), let title = context.videoTitles[id] {
+        if let title = context.title(ofVideo: try? args.string("video_id")) {
             let episode = args.values["episode"]?.string
             return (L10n.text("Play “%@”?", title), episode.map { L10n.text("Episode: %@", $0) })
         }
@@ -260,7 +260,8 @@ import TVCore
         case "resume":
             if let session, session.paused { session.togglePlayback() }
         case "seek", "skip":
-            guard let session, session.hasTimeline else { throw AgentToolError("This video can't seek (a live stream).") }
+            guard let session, !session.isLive else { throw AgentToolError("A live stream can't seek.") }
+            guard session.hasTimeline else { throw AgentToolError("The video is still loading; try again in a moment.") }
             guard let seconds = try args.seconds("seconds") else { throw AgentToolError("Give `seconds`.") }
             if action == "seek" {
                 let target = session.duration > 0 ? min(max(0, seconds), session.duration - 1) : max(0, seconds)
@@ -297,7 +298,9 @@ import TVCore
         if let session {
             fields["paused"] = .bool(session.paused)
             fields["live"] = .bool(session.isLive)
-            fields["position"] = .num(session.position)
+            // The player's own clock: the session's position waits for the next tick while paused.
+            let now = session.player.currentTime().seconds
+            fields["position"] = .num(now.isFinite ? now : session.position)
             fields["duration"] = session.duration > 0 ? .num(session.duration) : nil
             fields["speed"] = .num(Double(session.player.defaultRate))
             let tracks = session.mediaTracks

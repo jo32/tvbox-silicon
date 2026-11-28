@@ -29,6 +29,11 @@ import TVCore
             var report: [JSONValue] = []
             emit("tools \(tools.count): \(tools.map(\.spec.name).joined(separator: ","))")
             for (name, arguments) in steps {
+                // `{"tool":"wait","args":{"seconds":3}}` lets the player or a page settle between steps.
+                if name == "wait" {
+                    try? await Task.sleep(for: .seconds(arguments["seconds"]?.int ?? 2))
+                    continue
+                }
                 guard let tool = tools.first(where: { $0.spec.name == name }) else {
                     emit("\(name) -> unknown tool"); report.append(.obj(["tool": .str(name), "error": .str("unknown tool")])); continue
                 }

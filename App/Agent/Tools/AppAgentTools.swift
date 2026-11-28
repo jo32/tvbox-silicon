@@ -43,6 +43,18 @@ import TVCore
     /// Whether `section` is one the viewer can open now.
     func isAvailable(_ section: AppSection) -> Bool { AgentNavigator.sections(store).contains(section) }
 
+    /// A video's title for a confirmation card: from a tool that saw it, or the viewer's history or favorites.
+    func title(ofVideo id: String?) -> String? {
+        guard let id else { return nil }
+        if let title = videoTitles[id] { return title }
+        guard let parts = try? AgentToolKit.decodeID(id, prefix: "v", count: 3) else { return nil }
+        if let entry = store.playbackHistory.entries.first(where: { $0.context.sourceKey == parts[1] && $0.context.videoID == parts[2] }) {
+            return entry.context.videoName
+        }
+        for case .video(let video) in store.favorites.items where video.sourceKey == parts[1] && video.videoID == parts[2] { return video.videoName }
+        return nil
+    }
+
     func require(_ section: AppSection) throws {
         guard isAvailable(section) else {
             throw AgentToolError("\(section.rawValue) isn't available in this app right now.")

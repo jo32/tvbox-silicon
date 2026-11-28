@@ -45,7 +45,7 @@ import TVCore
                 """, Schema.object([
                     "video_id": Schema.string("A video id."),
                 ], required: ["video_id"]), summary: { args in
-                    let title = (try? args.string("video_id")).flatMap { context.videoTitles[$0] } ?? ""
+                    guard let title = context.title(ofVideo: try? args.string("video_id")) else { return (L10n.text("Allow the assistant to use %@?", "favorites_add"), nil) }
                     return (L10n.text("Add “%@” to Favorites?", title), nil)
                 }) { args in try await addFavorite(args, context) },
 
@@ -83,7 +83,7 @@ import TVCore
                     "episodes": .obj(["type": .str("array"), "items": .object(["type": .array([.str("integer"), .str("string")])]),
                                       "description": .str("Episodes by 1-based number or name; at most 50.")]),
                 ], required: ["video_id"]), summary: { args in
-                    let title = (try? args.string("video_id")).flatMap { context.videoTitles[$0] } ?? ""
+                    let title = context.title(ofVideo: try? args.string("video_id")) ?? "?"
                     let count = args.values["episodes"]?.array?.count ?? 1
                     return (L10n.text("Download “%@”?", title), L10n.text("Episodes: %@", String(count)))
                 }) { args in try await startDownloads(args, context) },
