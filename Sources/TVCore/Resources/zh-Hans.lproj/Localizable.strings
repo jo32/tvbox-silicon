@@ -2654,3 +2654,5 @@
 "Turn off the subscription “%@”?" = "关闭订阅“%@”？";
 "Turn on the subscription “%@”?" = "开启订阅“%@”？";
 "Change the script “%@”?" = "修改脚本“%@”？";
+
+"Press Again to Clear" = "再按一次以清除";

@@ -80,6 +80,11 @@ public struct AgentToolError: Error, Equatable, Sendable, LocalizedError {
         tools[name] = tool
     }
     public var specs: [AgentToolSpec] { order.compactMap { tools[$0]?.spec } }
+    /// Swaps in a new set, e.g. after a subscription made a section appear.
+    public func replace(with tools: [any AgentTool]) {
+        self.tools = [:]; order = []
+        tools.forEach(add)
+    }
 }
 
 /// What a model client streams back for one request.

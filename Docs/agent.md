@@ -31,7 +31,7 @@ never is (passwords, cookies, keys, tokens), and that the provider's own terms a
   SSE, `tools`/`tool_calls` deltas. Both: `GET {base}/models`. No retries hidden from the viewer; cancellation stops.
 - `AgentConversation`: the loop. At most 12 tool rounds per message. A `change` tool asks when "Ask before
   changes" is on; a `destructive` one always asks. Tool results go back to the model as JSON text, cut to ~8 KB.
-  The conversation is saved (Application Support/Assistant, last 50 messages) and restored.
+  The conversation is saved (Application Support/<bundle id>/Assistant, last 50 messages) and restored.
 - `AgentSettings` / Keychain: API keys per base URL; ChatGPT tokens. Never synced to iCloud, never logged.
 - `ChatGPTSignIn`: OpenAI's "Sign in with ChatGPT" for open-source apps (developers.openai.com/siwc):
   `client_id=dynamic_agent_client` on first sign-in (save the issued `oaiapp_` id), `agent_name_hint=Yingxia`,

@@ -146,7 +146,10 @@ import Testing
     let pages = ["App/SettingsView.swift", "App/DanmakuSettingsView.swift", "App/SubtitleSourcesView.swift"]
     // Not values the assistant sets: pages' own state, servers and addresses, and choices made in the player's menus.
     let leftAlone: Set<String> = ["DanmakuService.preferredSourceKey", "DanmakuService.serverKey", "DanmakuService.serversKey",
-                                  "PlaybackSpeed.key", "ColorThemes.key", "ColorThemes.customKey"]
+                                  "PlaybackSpeed.key", "ColorThemes.key", "ColorThemes.customKey",
+                                  // The assistant's own switches: it must never turn itself off or stop asking first.
+                                  "AgentSettings.enabledKey", "AgentSettings.asksKey", "AgentSettings.chatGPTSignInKey"]
+    #expect(!catalog.contains("AgentSettings.") && !catalog.contains("\"assistant."), "The assistant can't change its own settings")
     let storage = try NSRegularExpression(pattern: #"@AppStorage\(([A-Za-z."_]+)"#)
     var missing: [String] = []
     for page in pages {

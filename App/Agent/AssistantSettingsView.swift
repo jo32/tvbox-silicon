@@ -157,9 +157,11 @@ struct AssistantSettingsView: View {
         page
             .task { await model.loadModels() }
             .onDisappear { assistant.prepare() }
+            #if !os(tvOS)
             .confirmationDialog(L10n.text("Clear the conversation?"), isPresented: $confirmsClear) {
                 Button(L10n.text("Clear Conversation"), role: .destructive) { assistant.clear() }
             }
+            #endif
     }
 
     #if os(tvOS)
@@ -185,7 +187,7 @@ struct AssistantSettingsView: View {
                 TVSettingsToggle(title: L10n.text("Ask Before Changes"), isOn: $asks)
             }
             TVSettingsSection(footer: AssistantSettingsModel.privacyNote) {
-                TVSettingsAction(title: L10n.text("Clear Conversation"), destructive: true) { confirmsClear = true }
+                AssistantTVClearRow()
             }
         }
     }

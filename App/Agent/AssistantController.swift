@@ -182,6 +182,8 @@ import UIKit
         if demo != nil { demo?.messages.append(AgentMessage(role: .user, text: words)); return }
         #endif
         prepare()
+        // Sections can appear or hide between messages (a subscription added, the App Store gate): offer what's there now.
+        if let store, let conversation, !conversation.isRunning { conversation.toolbox.replace(with: AppAgentTools.all(store: store)) }
         guard model.isEmpty else { conversation?.send(words); return }
         Task {
             await resolveModel()

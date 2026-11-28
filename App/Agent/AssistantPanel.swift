@@ -426,21 +426,19 @@ private struct AssistantDiff: View {
     let text: String
     var body: some View {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).prefix(60)
-        ScrollView(.horizontal) {
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    Text(line.isEmpty ? " " : String(line))
-                        .foregroundStyle(color(line))
-                        .padding(.horizontal, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(fill(line))
-                }
+        // Long lines wrap: a sideways scroll hid the end of the change, which is what the viewer is asked about.
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line.isEmpty ? " " : String(line))
+                    .foregroundStyle(color(line))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(fill(line))
             }
-            .font(AssistantMetrics.code)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.vertical, 6)
         }
-        .scrollIndicators(.hidden)
+        .font(AssistantMetrics.code)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityLabel(text)

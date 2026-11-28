@@ -2654,3 +2654,5 @@
 "Turn off the subscription “%@”?" = "配信設定「%@」をオフにしますか？";
 "Turn on the subscription “%@”?" = "配信設定「%@」をオンにしますか？";
 "Change the script “%@”?" = "スクリプト「%@」を変更しますか？";
+
+"Press Again to Clear" = "もう一度押すと消去";

@@ -271,8 +271,27 @@ private struct AssistantEdgeSwipe: UIViewRepresentable {
 #if os(tvOS)
 /// The assistant on Apple TV: the mark and its actions on the left, as Settings' pages are, and the conversation with
 /// its text field on the right. The text field takes dictation from the remote's microphone.
+/// Clear Conversation on Apple TV: the first press asks (the row says so for a few seconds), the second clears. A
+/// dialog would be the usual way, but SwiftUI dialogs on pushed tvOS pages never finish presenting (#272).
+struct AssistantTVClearRow: View {
+    @Environment(AssistantController.self) private var assistant
+    @State private var armed = false
+    var body: some View {
+        TVSettingsAction(title: L10n.text(armed ? "Press Again to Clear" : "Clear Conversation"), destructive: true) {
+            if armed { armed = false; assistant.clear() } else { armed = true }
+        }
+        .disabled(assistant.messages.isEmpty)
+        .task(id: armed) {
+            guard armed else { return }
+            try? await Task.sleep(for: .seconds(4))
+            armed = false
+        }
+    }
+}
+
 struct AssistantTVPage: View {
     @Environment(AssistantController.self) private var assistant
+    @Namespace private var scope
     var body: some View {
         @Bindable var assistant = assistant
         NavigationStack {
@@ -287,8 +306,7 @@ struct AssistantTVPage: View {
                     }
                     .accessibilityElement(children: .combine)
                     VStack(alignment: .leading, spacing: 4) {
-                        TVSettingsAction(title: L10n.text("Clear Conversation"), destructive: true) { assistant.clear() }
-                            .disabled(assistant.messages.isEmpty)
+                        AssistantTVClearRow()
                         TVSettingsLink(title: L10n.text("Assistant Settings")) { AssistantSettingsView() }
                     }
                     .frame(width: 520)
@@ -298,10 +316,12 @@ struct AssistantTVPage: View {
                 VStack(spacing: 0) {
                     AssistantTranscript()
                     AssistantComposer().padding(.top, 12).focusSection()
+                        .prefersDefaultFocus(true, in: scope)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .focusSection()
             }
+            .focusScope(scope)
             .padding(.horizontal, Layout.gutter)
             .padding(.vertical, 40)
             .screenBackdrop()
