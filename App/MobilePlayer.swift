@@ -544,16 +544,12 @@ struct MobilePlayerView: View {
     @ViewBuilder private var skippedLabel: some View {
         if let skipped {
             // Glass like the other gesture labels, with the skip buttons' symbol; it bounces on each further tap.
-            VStack(spacing: 4) {
-                Image(systemName: SkipInterval.symbol(forward: skipped.forward, seconds: skipInterval))
-                    .font(.system(size: 30, weight: .medium))
-                    .symbolEffect(.bounce, value: skipped.total)
-                Text((skipped.forward ? "+" : "\u{2212}") + L10n.text("%lld s", Int(skipped.total)))
-                    .font(.footnote.weight(.semibold).monospacedDigit())
-                    .contentTransition(.numericText(value: skipped.total))
-            }
+            // Small like the lock button: the 96pt circle plus seconds text covered too much of the picture (#2751).
+            Image(systemName: SkipInterval.symbol(forward: skipped.forward, seconds: skipInterval))
+                .font(.system(size: 24, weight: .medium))
+                .symbolEffect(.bounce, value: skipped.total)
             .foregroundStyle(.white)
-            .frame(width: 96, height: 96)
+            .frame(width: 56, height: 56)
             .glassSurface(.regular, in: Circle())
             .environment(\.colorScheme, .dark)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: skipped.forward ? .trailing : .leading)
