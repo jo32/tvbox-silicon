@@ -1064,22 +1064,36 @@ private struct DiscoverSourcePicker: View {
 
     var body: some View {
         #if os(tvOS)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack {
-                    Text(L10n.text("Change Source")).font(.title2.bold())
-                    Spacer()
-                    Button(L10n.text("Done")) { dismiss() }.glassPill()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack {
+                        Text(L10n.text("Change Source")).font(.title2.bold())
+                        Spacer()
+                        Button(L10n.text("Done")) { dismiss() }.glassPill()
+                    }
+                    LazyVStack(spacing: 14) { options }
                 }
-                LazyVStack(spacing: 14) { options }
+                .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 48)
             }
-            .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 48)
+            .task {
+                if let selected, sources.matches.contains(where: { $0.id == selected.id }) {
+                    proxy.scrollTo(selected.id, anchor: .center)
+                }
+            }
         }
         .background { Color.black.ignoresSafeArea() }
         .preferredColorScheme(.dark)
         #else
         NavigationStack {
-            List { options }
+            ScrollViewReader { proxy in
+                List { options }
+                    .task {
+                        if let selected, sources.matches.contains(where: { $0.id == selected.id }) {
+                            proxy.scrollTo(selected.id, anchor: .center)
+                        }
+                    }
+            }
             .navigationTitle(L10n.text("Change Source"))
             #if os(iOS)
             .listStyle(.insetGrouped)
@@ -1112,6 +1126,7 @@ private struct DiscoverSourcePicker: View {
             #else
             .buttonStyle(.plain)
             #endif
+            .id(match.id)
             .accessibilityAddTraits(checked ? .isSelected : [])
             .accessibilityIdentifier("discover.sources.option")
         }
