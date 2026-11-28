@@ -93,6 +93,15 @@ import Observation
         return candidates.contains { result in (nextPage[result.id] ?? 2) <= (result.page?.pageCount ?? 1) }
     }
 
+    /// The keyword a source is asked for (#1364): simplified, the script the sources match against, so a Traditional
+    /// name finds what their catalogues hold. `keyword` itself keeps what the viewer typed — it also fills the search
+    /// field and the history, and decides whether a repeated search is the same one. `GlobalSearch` converts the
+    /// keyword it is handed, so the first page and every later page reach a source through this. Pure, so the
+    /// off-main `GlobalSearch` can use it too.
+    nonisolated static func sourceKeyword(_ keyword: String) -> String {
+        NovelScript.simplified.convert(keyword.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     /// Fetches the next page of a source (nil: of every matching source that has one) and appends
     /// what is new; a source that answers nothing new is done.
     public func loadMore(_ source: String?, config: Subscription) {
@@ -101,7 +110,7 @@ import Observation
             .filter { (nextPage[$0.id] ?? 2) <= ($0.page?.pageCount ?? 1) }
         guard !targets.isEmpty else { return }
         loadingMore = true
-        let run = runID, pageToken = pageGeneration, keyword = keyword, http = http
+        let run = runID, pageToken = pageGeneration, keyword = Self.sourceKeyword(keyword), http = http
         moreTask = Task {
             // Pagination is one queue, not a second burst of six plugin requests.
             for result in targets.prefix(6) {

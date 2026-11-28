@@ -55,10 +55,10 @@ public enum GlobalSearch {
                               http: HTTPClient = HTTPClient(), concurrency: Int = 4,
                               onStart: @escaping @Sendable (Site) async -> Void = { _ in },
                               onResult: @escaping @Sendable (SearchSourceResult) async -> Void) async {
-        // #1364: sources match against simplified-Chinese catalogues, so a Traditional keyword misses titles
-        // they would have returned. Convert here, not in SearchModel, whose value also fills the search field
-        // and the history.
-        let keyword = NovelScript.simplified.convert(query.trimmingCharacters(in: .whitespacesAndNewlines))
+        // #1364: sources match against simplified-Chinese catalogues, so a Traditional keyword misses titles they
+        // would have returned. Convert here, not in SearchModel, whose value also fills the search field and the
+        // history; later pages (`loadMore`) use the same keyword.
+        let keyword = SearchModel.sourceKeyword(query)
         guard !keyword.isEmpty else { return }
         var seen = Set<String>()
         let eligible = sites.filter { $0.searchable && $0.canBrowse(jarURL: jarURL) && seen.insert($0.id).inserted }
