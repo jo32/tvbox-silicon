@@ -1039,9 +1039,6 @@ struct NovelReaderView: View {
                 .disabled(switching)
                 .accessibilityLabel(L10n.text("Change Source"))
                 .accessibilityIdentifier("novel.reader.source")
-                Button { showContents = true } label: { Image(systemName: "list.bullet") }
-                    .buttonStyle(NovelRoundButtonStyle(size: 40))
-                    .accessibilityLabel(L10n.text("Contents"))
             }
             #if os(macOS)
             // Up in the title bar, as in the manga reader: under the 52 pt title bar the buttons sat far below the top edge.
