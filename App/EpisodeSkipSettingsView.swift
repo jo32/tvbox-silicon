@@ -168,7 +168,9 @@ struct EpisodeSkipSettingsView: View {
     /// still off, the times skipped nothing, and nothing said why (#865).
     private func timeField(_ title: String, text: Binding<String>, prompt: String, identifier: String) -> some View {
         LabeledContent(title) {
-            TextField(title, text: Binding(get: { text.wrappedValue }, set: { value in
+            // No title here: LabeledContent already shows `title`. Repeating it made a second,
+            // clipped label on the macOS panel edge (#2747); the prompt is the field's placeholder.
+            TextField("", text: Binding(get: { text.wrappedValue }, set: { value in
                 text.wrappedValue = value
                 if !value.isEmpty { enabled = true }
             }), prompt: Text(prompt))
