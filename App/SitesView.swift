@@ -2209,6 +2209,8 @@ struct VideoDetailView: View {
     var resume: PlaybackHistoryEntry? = nil
     /// Discover's title page shows only the episodes, in its own rows (`embedded`).
     var embed: DetailEmbed? = nil
+    /// Discover's title page: the details failed to load, so the page may try the next match (#2366).
+    var onDetailFailed: (() -> Void)? = nil
     #if !os(tvOS)
     /// The episode row's All sheet.
     @State private var showsAllEpisodes = false
@@ -2642,6 +2644,7 @@ struct VideoDetailView: View {
             guard !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "detail \(client.reportContext)", error)
             self.error = ErrorPresentation.reason(for: error)
+            onDetailFailed?()
             #if os(tvOS)
             // The loading placeholder that held focus is gone: Retry in the hero takes it.
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }

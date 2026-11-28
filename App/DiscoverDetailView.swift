@@ -815,6 +815,17 @@ private struct DiscoverSeasonPicker: View {
         chosen = candidate
     }
 
+    /// The chosen match's details failed to load: drop it and let `settle()` pick the next one (#2366).
+    /// "Then it stays" is intentional for the success path — this only runs on a detail-load failure, and only
+    /// while another match is left to try; the last one keeps its error card and Retry.
+    func dropFailed(_ candidate: SourceTitleMatch.Candidate) {
+        guard chosen?.id == candidate.id, matches.count > 1 else { return }
+        found.removeAll { $0.id == candidate.id }
+        matches.removeAll { $0.id == candidate.id }
+        chosen = nil
+        settle()
+    }
+
     /// TMDB's other names for the title arrived with its details: widen the match and re-match the
     /// answers already in, so a source listing it under another name is found (#2608). A match
     /// already showing stays showing; new matches go under Change Source.
@@ -891,7 +902,8 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                 VideoDetailView(video: chosen.video, client: CatalogClient(site: chosen.site, origin: config.origin, jarURL: config.spiderURL),
                                 embed: DetailEmbed(work: item, season: number, seasonControl: seasonControl(number),
                                                    catalogFallback: { AnyView(catalogEpisodes(number)) },
-                                                   changeSource: { changing = true }, appColorScheme: appColorScheme))
+                                                   changeSource: { changing = true }, appColorScheme: appColorScheme),
+                                onDetailFailed: { [sources, chosen] in sources.dropFailed(chosen) })
                     .id(chosen.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
