@@ -166,9 +166,7 @@ struct DiscoverPersonView: View {
                         .font(.system(size: 11)).lineLimit(1).opacity(0.7)
                     Text(work.roles.joined(separator: " · ")).font(.system(size: 11)).lineLimit(2).opacity(0.85)
                     Spacer(minLength: 0)
-                    if let rating = work.item.rating {
-                        HStack(spacing: 4) { TMDBBadge(); Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 11)) }
-                    }
+                    CatalogRatings(item: work.item).font(.system(size: 11))
                 }.frame(maxWidth: .infinity, alignment: .leading).frame(height: 105, alignment: .top)
             }.padding(10).background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 15))
                 .overlay { RoundedRectangle(cornerRadius: 15).strokeBorder(.white.opacity(0.09), lineWidth: 0.5) }
@@ -294,9 +292,7 @@ extension DiscoverPersonView {
                 if !work.roles.isEmpty {
                     Text(work.roles.joined(separator: " · ")).font(.system(size: 21)).lineLimit(1).opacity(0.6)
                 }
-                if let rating = work.item.rating {
-                    HStack(spacing: 6) { TMDBBadge(); Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 21)) }
-                }
+                CatalogRatings(item: work.item).font(.system(size: 21))
             }.cardCaption()
         }.frame(width: 250, alignment: .leading)
     }

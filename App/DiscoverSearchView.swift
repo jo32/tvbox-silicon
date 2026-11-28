@@ -256,17 +256,7 @@ struct DiscoverSearchRow: View {
                 Text(item.name).font(.system(size: 17, weight: .bold)).lineLimit(1)
                 Text(([L10n.text(item.mediaType == .tv ? "Series" : "Movies"), item.year.map(String.init), item.genreNames.isEmpty ? nil : item.genreNames.replacingOccurrences(of: " / ", with: " · ")]).compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
-                if let rating = item.rating {
-                    HStack(spacing: 5) {
-                        HStack(spacing: 1) {
-                            ForEach(0..<5) { index in
-                                Image(systemName: rating / 2 >= Double(index + 1) ? "star.fill" : rating / 2 > Double(index) ? "star.leadinghalf.filled" : "star")
-                                    .font(.system(size: 11)).frame(width: 12).foregroundStyle(rating / 2 > Double(index) ? Color.yellow : .secondary)
-                            }
-                        }
-                        Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 13)).foregroundStyle(.yellow)
-                    }.frame(height: 18).accessibilityElement(children: .ignore).accessibilityLabel("TMDB \(rating.formatted(.number.precision(.fractionLength(1))))")
-                }
+                CatalogRatings(item: item, starSize: 11).font(.system(size: 13)).frame(minHeight: 18)
                 Text(item.overview.isEmpty ? " " : item.overview).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(2).lineSpacing(2)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 4)
         }.padding(8).frame(height: 136)
@@ -416,6 +406,20 @@ struct DiscoverSearchGroup {
     private func saveOpened() { Profiles.shared.currentDefaults.set(try? JSONEncoder().encode(opened), forKey: "discover.search.opened") }
 }
 #if os(macOS)
+private struct DiscoverMacResultsGrid: View {
+    let items: [TMDBCatalog.Item]
+    let columns: [GridItem]
+    let open: (TMDBCatalog.Item) -> Void
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(items, id: \.key) { item in
+                Button { open(item) } label: { DiscoverSearchRow(item: item) }
+                    .buttonStyle(.plain).accessibilityIdentifier("discover.search.result.\(item.key)")
+            }
+        }
+    }
+}
+
 /// The Mac's catalog search, a page in the window rather than the iPhone's full-screen sheet: the search field sits in
 /// the toolbar, each filter opens in a popover, and results fill grids.
 struct DiscoverMacSearchView: View {
@@ -537,12 +541,8 @@ struct DiscoverMacSearchView: View {
                     }
                 }
             } else {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(all ? group.items : Array(group.items.prefix(preview)), id: \.key) { item in
-                        Button { open(item) } label: { DiscoverSearchRow(item: item) }
-                            .buttonStyle(.plain).accessibilityIdentifier("discover.search.result.\(item.key)")
-                    }
-                }
+                DiscoverMacResultsGrid(items: all ? group.items : Array(group.items.prefix(preview)),
+                                       columns: columns, open: open)
                 if all, group.hasMore {
                     Button { Task { await model.more(kind, request: request) } } label: {
                         Group { if group.loadingMore { ProgressView().appControlSize(.small) } else { Text(L10n.text(group.failedMore ? "Try Again" : "Load More")) } }

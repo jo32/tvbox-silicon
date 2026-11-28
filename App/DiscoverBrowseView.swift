@@ -32,7 +32,7 @@ struct DiscoverBrowseView: View {
     }
     var body: some View {
         #if os(tvOS)
-        DiscoverTVGrid(title: title, items: items, identifier: "discover.browse.item", reachedEnd: { await load(reset: false) }) {
+        DiscoverTVGrid(title: title, items: items, identifier: "discover.browse.item", showsRating: true, reachedEnd: { await load(reset: false) }) {
             if filter.company.isEmpty {
                 chip(L10n.text("Content Type"), value: filter.kind == .tv ? "tv" : "movie", active: false,
                      options: [("movie", L10n.text("Movies")), ("tv", L10n.text("Series"))]) { filter.kind = $0 == "tv" ? .tv : .movie }

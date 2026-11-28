@@ -2,8 +2,7 @@ import SwiftUI
 import TVCore
 
 /// Following series from Discover (追剧, #1186): a Follow button on a series' page, its season's air calendar, and
-/// the Following Calendar shelf and page listing when the followed series' next episodes air. Only TMDB's air dates,
-/// through the Worker: no sources, no Douban.
+/// the Following Calendar shelf and page listing when the followed series' next episodes air.
 enum DiscoverFollowing {
     static var today: String { AirSchedule.day(Date()) }
 
@@ -330,16 +329,10 @@ struct DiscoverAirCalendarCard: View {
                     Text(show.overview).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5)).lineLimit(2)
                 }
                 Spacer(minLength: 4)
-                HStack(spacing: 6) {
-                    if let rating = show.rating, rating > 0 {
-                        Text("TMDB").font(.system(size: 11, weight: .heavy)).foregroundStyle(.cyan)
-                        Text(String(format: "%.1f", rating)).font(.system(size: 13, weight: .semibold, design: .rounded))
-                        Text("·").foregroundStyle(.white.opacity(0.35))
-                    }
-                    Text(L10n.text("%@ of %@ aired", String(schedule.aired(today: today)), String(schedule.total)))
-                        .font(.system(size: 12, design: .rounded)).foregroundStyle(.white.opacity(0.6))
-                }
-                .monospacedDigit().lineLimit(1)
+                CatalogRatings(item: show).font(.system(size: 13, design: .rounded))
+                Text(L10n.text("%@ of %@ aired", String(schedule.aired(today: today)), String(schedule.total)))
+                    .font(.system(size: 12, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                    .monospacedDigit().lineLimit(1)
             }
             .frame(maxWidth: .infinity, minHeight: 135, alignment: .topLeading)
         }

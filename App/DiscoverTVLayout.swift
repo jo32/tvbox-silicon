@@ -72,12 +72,7 @@ struct DiscoverTVHeroPager: View {
                     Text(detail?.overview ?? item.overview)
                         .font(.system(size: 24)).lineSpacing(4).lineLimit(2)
                         .frame(width: 600, alignment: .leading).foregroundStyle(.white.opacity(0.85))
-                    if let rating = item.rating {
-                        HStack(spacing: 8) {
-                            Text("TMDB").font(.system(size: 19, weight: .bold)).foregroundStyle(.cyan)
-                            Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 23))
-                        }
-                    }
+                    CatalogRatings(item: item).font(.system(size: 23)).frame(minHeight: 28)
                 }
                 .padding(.horizontal, DiscoverLayout.gutter).padding(.bottom, 64)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -152,6 +147,7 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         let image: URL?
         /// The detail in the accent colour (the next title to air).
         var highlight = false
+        var ratingItem: TMDBCatalog.Item?
     }
     let entries: [Entry]
     let identifier: String
@@ -305,6 +301,7 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         private var url: URL?
         private var size = CGSize.zero
         private var task: Task<Void, Never>?
+        private var ratingTask: Task<Void, Never>?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -335,6 +332,11 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+        override func prepareForReuse() {
+            super.prepareForReuse()
+            ratingTask?.cancel()
+        }
+
         // The captions move down with the poster's focus growth (about 12%, half of it below), as on the Home screen.
         override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
             super.didUpdateFocus(in: context, with: coordinator)
@@ -343,11 +345,23 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         }
 
         func show(_ entry: Entry, size: CGSize, identifier: String) {
+            ratingTask?.cancel()
             accessibilityIdentifier = identifier
             accessibilityLabel = [entry.title, entry.detail].filter { !$0.isEmpty }.joined(separator: "、")
             title.text = entry.title
             detail.text = entry.detail
             detail.textColor = entry.highlight ? UIColor(Brand.accent) : UIColor(white: 1, alpha: 0.55)
+            detail.adjustsFontSizeToFitWidth = entry.ratingItem != nil
+            detail.minimumScaleFactor = 0.7
+            if let ratingItem = entry.ratingItem {
+                ratingTask = Task { [weak self] in
+                    guard let score = await CatalogRatingTitle(ratingItem).doubanScore(),
+                          !Task.isCancelled, let self else { return }
+                    let caption = [entry.detail, score.caption].filter { !$0.isEmpty }.joined(separator: " · ")
+                    self.detail.text = caption
+                    self.accessibilityLabel = [entry.title, caption].joined(separator: "、")
+                }
+            }
             posterHeight.constant = size.height
             let url = entry.image
             guard url != self.url || size != self.size || poster.image == nil else { return }
@@ -713,18 +727,7 @@ private struct DiscoverTVSearchCard: View {
                       item.genreNames.isEmpty ? nil : item.genreNames.replacingOccurrences(of: " / ", with: " · ")]
                     .compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 23)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                if let rating = item.rating {
-                    HStack(spacing: 8) {
-                        HStack(spacing: 2) {
-                            ForEach(0..<5) { index in
-                                Image(systemName: rating / 2 >= Double(index + 1) ? "star.fill" : rating / 2 > Double(index) ? "star.leadinghalf.filled" : "star")
-                                    .font(.system(size: 20)).foregroundStyle(rating / 2 > Double(index) ? Color.yellow : .white.opacity(0.4))
-                            }
-                        }
-                        Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 23)).foregroundStyle(.yellow)
-                    }.accessibilityElement(children: .ignore)
-                        .accessibilityLabel("TMDB \(rating.formatted(.number.precision(.fractionLength(1))))")
-                }
+                CatalogRatings(item: item, starSize: 20).font(.system(size: 23)).frame(minHeight: 28)
                 Text(item.overview).font(.system(size: 22)).foregroundStyle(.white.opacity(0.6)).lineLimit(2).lineSpacing(3)
             }.padding(.top, 12)
             Spacer(minLength: 0)
