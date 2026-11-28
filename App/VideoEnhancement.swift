@@ -246,6 +246,9 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     private weak var enhancer: VideoEnhancer?
     private var observation: NSKeyValueObservation?
     private var applying: Task<Void, Never>?
+    /// The display manager the criteria were applied to: by the time the player is dismantled, the
+    /// controller's view has already left its window, so resolving it then silently does nothing (#2691).
+    private weak var manager: AVDisplayManager?
 
     init(controller: AVPlayerViewController, player: AVPlayer, enhancer: VideoEnhancer) {
         self.controller = controller
@@ -261,7 +264,10 @@ private protocol EnhancementEngine: AnyObject, Sendable {
     func reset() {
         applying?.cancel()
         observation = nil
-        controller?.view.window?.avDisplayManager.preferredDisplayCriteria = nil
+        // The stored manager, not the controller's window: at teardown the view is detached, and the old
+        // optional chain no-op'd, leaving the TV at the video's rate (24 Hz for film) after exiting.
+        manager?.preferredDisplayCriteria = nil
+        manager = nil
     }
 
     private func apply() {
@@ -279,6 +285,7 @@ private protocol EnhancementEngine: AnyObject, Sendable {
             for _ in 0..<20 {
                 guard !Task.isCancelled, let self else { return }
                 if let manager = self.controller?.view.window?.avDisplayManager {
+                    self.manager = manager
                     manager.preferredDisplayCriteria = criteria
                     return
                 }
