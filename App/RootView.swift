@@ -83,8 +83,10 @@ struct RootView: View {
             .filter { !store.hiddenSections.contains($0) }
         #if os(tvOS)
         // Where the remote already goes to change section, so the song is one move away from anywhere.
-        // Before tvOS 27 the sidebar has no header for the Now Playing card.
-        if store.music.track != nil, !MusicSidebarNowPlaying.inSidebarHeader { return [.nowPlaying] + sections }
+        // Only in the sidebar (tvOS 26; tvOS 27 uses the sidebar header): on tvOS 17 and 18's classic top tab
+        // bar, prepending a tab when a song starts shifts every tab right by one slot and leaves the Music tab
+        // blank and blurred with nothing focusable inside it (#2583). Music's own pages keep a Now Playing button.
+        if #available(tvOS 26, *), store.music.track != nil, !MusicSidebarNowPlaying.inSidebarHeader { return [.nowPlaying] + sections }
         #endif
         return sections
         #endif
@@ -216,7 +218,7 @@ struct RootView: View {
                 store.section = previous == .nowPlaying ? .music : previous
                 store.music.presentsPlayer = true
             }
-            // tvOS 17 and 18: a section in More opens there, whether a button or the Now Playing tab moved it in.
+            // tvOS 17 and 18: a section in More opens there, whether a button or a newly shown section moved it in.
             .onChange(of: store.section) { _, section in openInMore(section) }
             .onChange(of: tvMore) { _, more in
                 if more.isEmpty && store.section == .more { store.section = moreStack.path.isEmpty ? .home : moreSection }
