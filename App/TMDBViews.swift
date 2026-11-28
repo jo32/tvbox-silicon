@@ -4,10 +4,57 @@ import TVCore
 
 extension DoubanRating.Score {
     var label: String {
-        season == 1 ? L10n.text("Douban Season 1") : L10n.text("Douban")
+        if let season { return L10n.text("Douban Season %@", String(season)) }
+        return L10n.text("Douban")
     }
 
     var caption: String { "\(label) \(value.formatted(.number.precision(.fractionLength(1))))" }
+}
+
+struct DoubanSubjectEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    let current: String?
+    var accepts: (DoubanRating.Match) -> Bool = { _ in true }
+    let save: (DoubanRating.Match) -> Void
+    @State private var input = ""
+    @State private var lookupID: String?
+    @State private var match: DoubanRating.Match?
+    @State private var failed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.text("Match Douban Title")).font(.headline)
+            TextField(L10n.text("Douban link or ID"), text: $input)
+                .onChange(of: input) { _, _ in match = nil; failed = false; lookupID = nil }
+            if let match {
+                Text(match.title).font(.headline)
+                if let score = match.score { Text(score.caption).foregroundStyle(.secondary) }
+            } else if failed {
+                Text(L10n.text("Could not find a matching Douban title.")).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button(L10n.text("Cancel")) { dismiss() }
+                if let match {
+                    Button(L10n.text("Save")) { save(match); dismiss() }
+                } else {
+                    Button(L10n.text("Search")) { lookupID = DoubanRating.subjectID(input) }
+                        .disabled(DoubanRating.subjectID(input) == nil || lookupID != nil)
+                    if lookupID != nil { ProgressView() }
+                }
+            }
+        }
+        .padding(24)
+        .frame(idealWidth: 440)
+        .onAppear { input = current ?? "" }
+        .task(id: lookupID) {
+            guard let id = lookupID else { return }
+            let result = try? await DoubanRating.subject(id)
+            guard !Task.isCancelled else { return }
+            match = result.flatMap { accepts($0) ? $0 : nil }
+            failed = match == nil
+            lookupID = nil
+        }
+    }
 }
 
 struct CatalogRatingTitle: Hashable, Sendable {
@@ -16,13 +63,17 @@ struct CatalogRatingTitle: Hashable, Sendable {
     let name: String
     let originalName: String
     let year: Int?
+    let season: Int?
 
-    init(_ item: TMDBCatalog.Item) {
-        (id, type, name, originalName, year) = (item.id, item.mediaType, item.name, item.originalName, item.year)
+    init(_ item: TMDBCatalog.Item, season: Int? = nil, seasonYear: Int? = nil) {
+        (id, type, name, originalName) = (item.id, item.mediaType, item.name, item.originalName)
+        self.season = season
+        year = season == nil ? item.year : seasonYear
     }
 
     init(_ details: TMDBMatch.Details) {
         (id, type, name, originalName, year) = (details.id, details.mediaType, details.name, details.originalName, details.year)
+        season = nil
     }
 
     func doubanScore() async -> DoubanRating.Score? {
@@ -48,9 +99,14 @@ private actor CatalogRatingLookups {
         }
         guard !Task.isCancelled else { resumeNext(); return nil }
         if let existing = active[title] { resumeNext(); return await existing.value }
-        let task = Task {
-            await DoubanRating.score(tmdbID: title.id, mediaType: title.type, name: title.name,
-                                     originalName: title.originalName, year: title.year)
+        let task = Task<DoubanRating.Score?, Never> {
+            if let season = title.season {
+                guard let year = title.year else { return nil }
+                return await DoubanRating.seasonScore(tmdbID: title.id, name: title.name, originalName: title.originalName,
+                                                      season: season, year: year)
+            }
+            return await DoubanRating.score(tmdbID: title.id, mediaType: title.type, name: title.name,
+                                            originalName: title.originalName, year: title.year)
         }
         active[title] = task
         let score = await task.value
@@ -866,6 +922,8 @@ struct TMDBBanner<Actions: View>: View {
     let backdrop: URL
     /// The words of the source's title outside TMDB's name, such as 第二季.
     let unmatched: String
+    var suppliedDouban: DoubanRating.Score? = nil
+    var fetchesDouban = true
     @ViewBuilder let actions: Actions
     @State private var logoAspect: CGFloat?
     @State private var rating: (CatalogRatingTitle, DoubanRating.Score)?
@@ -882,7 +940,8 @@ struct TMDBBanner<Actions: View>: View {
                                startPoint: .leading, endPoint: .trailing)
                 VStack(alignment: .leading, spacing: TMDBBannerMetrics.spacing) {
                     title(width: width)
-                    let facts = [details.facts(douban: rating?.0 == work ? rating?.1 : nil), unmatched]
+                    let score = fetchesDouban && rating?.0 == work ? rating?.1 : suppliedDouban
+                    let facts = [details.facts(douban: score), unmatched]
                         .filter { !$0.isEmpty }.joined(separator: " · ")
                     if !facts.isEmpty { Text(facts).font(TMDBBannerMetrics.factsFont).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
                     if !details.tagline.isEmpty {
@@ -898,6 +957,7 @@ struct TMDBBanner<Actions: View>: View {
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
         .clipShape(RoundedRectangle(cornerRadius: TMDBBannerMetrics.corner, style: .continuous))
         .task(id: work) {
+            guard fetchesDouban else { return }
             let score = await work.doubanScore()
             if !Task.isCancelled { rating = score.map { (work, $0) } }
         }

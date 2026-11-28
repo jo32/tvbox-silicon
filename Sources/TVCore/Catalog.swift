@@ -143,12 +143,14 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public let action: String?
     /// Directors, then actors, as the source credits them; nil when it gave none.
     public let credits: [VideoCredit]?
+    /// Optional film or TV subject supplied by the source.
+    public let doubanID: String?
     public init(id: String, name: String, poster: URL? = nil, posterHeaders: [String: String] = [:], year: String? = nil,
                 remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil, action: String? = nil,
-                credits: [VideoCredit]? = nil) {
+                credits: [VideoCredit]? = nil, doubanID: String? = nil) {
         self.id = id; self.name = name; self.poster = poster; self.posterHeaders = posterHeaders
         self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes; self.category = category
-        self.action = action; self.credits = credits
+        self.action = action; self.credits = credits; self.doubanID = doubanID
     }
     /// A folder of a drive source (AList, 小雅 and other cloud-drive spiders tag it `vod_tag: "folder"`). As in
     /// TVBox it opens as a listing of its own (the category request with the folder's id), not as details.
@@ -158,7 +160,8 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public func keepingPoster(_ poster: URL?, headers: [String: String]? = nil) -> Video {
         guard self.poster == nil, let poster else { return self }
         return Video(id: id, name: name, poster: poster, posterHeaders: headers ?? [:], year: year,
-                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category, action: action, credits: credits)
+                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category, action: action,
+                     credits: credits, doubanID: doubanID)
     }
     public init?(json: [String: JSONValue], origin: URL) {
         guard let id = json["vod_id"]?.string, !id.isEmpty else { return nil }
@@ -173,6 +176,8 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         action = json["action"]?.string.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         let credited = VideoCredit.parse(json["vod_director"]?.string ?? "", role: .director) + VideoCredit.parse(json["vod_actor"]?.string ?? "", role: .actor)
         credits = credited.isEmpty ? nil : credited
+        doubanID = ["vod_douban_id", "douban_id", "vod_douban_url", "douban_url"].lazy
+            .compactMap { json[$0]?.string.flatMap(DoubanRating.subjectID) }.first
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
         var groups: [[Episode]] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {

@@ -1824,7 +1824,7 @@
 "Turn Off" = "關閉";
 "Turn On" = "開啟";
 "Douban" = "豆瓣";
-"Douban Season 1" = "豆瓣第一季";
+"Douban Season %@" = "豆瓣第%@季";
 "System Language" = "系統語言";
 "Restart Now" = "立即重新啟動";
 "Restart Yingxia to use the new language." = "重新啟動映匣後即可使用新語言。";
@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "片頭不填開始即從頭開始，片尾不填結束即到結尾。留空一段的時間表示不跳過該段，時間格式為 分:秒。";
 "Keep Controls Visible" = "始終顯示控制項";
 "Count back from the end" = "從結尾倒數";
+
+"Match Douban Title" = "配對豆瓣條目";
+"Douban link or ID" = "豆瓣連結或 ID";
+"Could not find a matching Douban title." = "找不到相符的豆瓣條目。";

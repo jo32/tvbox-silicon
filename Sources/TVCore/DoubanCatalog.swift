@@ -19,9 +19,16 @@ public enum DoubanCatalog {
         public let mediaType: TMDBMatch.MediaType
         /// "2026 / 中国大陆 / 剧情 / <director> / <cast>"
         public let subtitle: String
-        public init(id: String, title: String, year: Int?, rating: Double?, cover: URL?, mediaType: TMDBMatch.MediaType, subtitle: String = "") {
+        public let votes: Int?
+        public init(id: String, title: String, year: Int?, rating: Double?, cover: URL?, mediaType: TMDBMatch.MediaType,
+                    subtitle: String = "", votes: Int? = nil) {
             self.id = id; self.title = title; self.year = year; self.rating = rating; self.cover = cover
-            self.mediaType = mediaType; self.subtitle = subtitle
+            self.mediaType = mediaType; self.subtitle = subtitle; self.votes = votes
+        }
+
+        public var season: Int? { mediaType == .tv ? SeasonTitles.parse(title).season : nil }
+        public var score: DoubanRating.Score? {
+            rating.map { DoubanRating.Score(value: $0, count: votes ?? 0, season: season) }
         }
     }
 
@@ -49,11 +56,12 @@ public enum DoubanCatalog {
             // Series and variety lists give `pic`, the film list `cover`.
             let pic = row["pic"] as? [String: Any], cover = row["cover"] as? [String: Any]
             let address = (pic?["large"] as? String) ?? (pic?["normal"] as? String) ?? (cover?["url"] as? String)
-            let score = ((row["rating"] as? [String: Any])?["value"] as? NSNumber)?.doubleValue
+            let rating = row["rating"] as? [String: Any]
+            let score = (rating?["value"] as? NSNumber)?.doubleValue
             let year = (row["year"] as? String).flatMap { Int($0) } ?? (row["year"] as? NSNumber)?.intValue
             return Item(id: id, title: title, year: year, rating: score.flatMap { $0 > 0 ? $0 : nil },
                         cover: address.flatMap { URL(string: $0) }, mediaType: kind == "movie" ? .movie : .tv,
-                        subtitle: row["card_subtitle"] as? String ?? "")
+                        subtitle: row["card_subtitle"] as? String ?? "", votes: (rating?["count"] as? NSNumber)?.intValue)
         }
     }
 
@@ -79,10 +87,7 @@ public enum DoubanCatalog {
             return abs(year - other) <= 1
         }
         let named = kind.filter { CatalogDanmakuMatcher.normalized($0.name) == key || $0.originalName.map(CatalogDanmakuMatcher.normalized) == key }
-        if let exact = named.first(where: yearFits) { return exact }
-        // Douban and TMDB often spell a title differently (punctuation, a subtitle): the best result of that kind
-        // and year is still the work, when Douban gave a year to check it by.
-        guard !season, item.year != nil else { return nil }
-        return kind.first { $0.year != nil && yearFits($0) }
+        let exact = named.filter(yearFits)
+        return exact.count == 1 ? exact.first : nil
     }
 }

@@ -17,6 +17,7 @@ import Testing
     let items = try DoubanCatalog.parse(data)
     #expect(items.map(\.title) == ["逃出布迪秀", "小城良方", "后会友期"])
     #expect(items[0].mediaType == .movie && items[0].year == 2026 && items[0].rating == 7.4)
+    #expect(items[0].score == DoubanRating.Score(value: 7.4, count: 28478))
     #expect(items[0].cover?.absoluteString == "https://img3.doubanio.com/view/photo/m_ratio_poster/public/p2934286660.jpg")
     #expect(items[1].mediaType == .tv && items[1].cover?.lastPathComponent == "p2936709341.jpg")
     #expect(items[2].rating == nil)
@@ -40,6 +41,7 @@ import Testing
     // A later season matches the series, whatever year it began.
     let season = DoubanCatalog.Item(id: "3", title: "现在就出发 第四季", year: 2026, rating: nil, cover: nil, mediaType: .tv)
     #expect(DoubanCatalog.searchTitle(season) == "现在就出发")
+    #expect(season.season == 4)
     #expect(DoubanCatalog.match(season, in: [try result(.tv, 230000, "现在就出发", 2023)])?.id == 230000)
     let yearly = DoubanCatalog.Item(id: "5", title: "我家那闺女2026", year: 2026, rating: nil, cover: nil, mediaType: .tv)
     #expect(DoubanCatalog.match(yearly, in: [try result(.tv, 88000, "我家那闺女", 2019)])?.id == 88000)
@@ -49,6 +51,7 @@ import Testing
     let spelled = DoubanCatalog.Item(id: "4", title: "FX战士久留美", year: 2026, rating: nil, cover: nil, mediaType: .tv)
     #expect(DoubanCatalog.match(spelled, in: [try result(.movie, 9, "FX战士久留美", 2026), try result(.tv, 10, "FX 战士久留美", 2026)])?.id == 10)
     #expect(DoubanCatalog.match(spelled, in: [try result(.tv, 11, "别的剧", 2019)]) == nil)
+    #expect(DoubanCatalog.match(spelled, in: [try result(.tv, 11, "别的剧", 2026)]) == nil)
 }
 
 @Test func doubanCoversAreAskedForWithADoubanReferer() {

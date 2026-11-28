@@ -1824,7 +1824,7 @@
 "Turn Off" = "オフにする";
 "Turn On" = "オンにする";
 "Douban" = "豆瓣";
-"Douban Season 1" = "豆瓣 シーズン1";
+"Douban Season %@" = "豆瓣 シーズン%@";
 "System Language" = "システム言語";
 "Restart Now" = "今すぐ再起動";
 "Restart Yingxia to use the new language." = "新しい言語は映匣を再起動すると反映されます。";
@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "開始が空欄のオープニングは動画の最初から、終了が空欄のエンディングは最後までです。両方空欄ならスキップしません。形式：分:秒。";
 "Keep Controls Visible" = "コントロールを常に表示";
 "Count back from the end" = "終わりから数える";
+
+"Match Douban Title" = "豆瓣作品を指定";
+"Douban link or ID" = "豆瓣のリンクまたはID";
+"Could not find a matching Douban title." = "一致する豆瓣作品が見つかりませんでした。";

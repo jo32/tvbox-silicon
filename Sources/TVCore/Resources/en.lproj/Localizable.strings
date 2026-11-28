@@ -1824,7 +1824,7 @@
 "Turn Off" = "Turn Off";
 "Turn On" = "Turn On";
 "Douban" = "Douban";
-"Douban Season 1" = "Douban Season 1";
+"Douban Season %@" = "Douban Season %@";
 "System Language" = "System Language";
 "Restart Now" = "Restart Now";
 "Restart Yingxia to use the new language." = "Restart Yingxia to use the new language.";
@@ -2468,3 +2468,7 @@
 "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds." = "With no start, the intro starts the video; with no end, the outro ends it. Leave a segment's times empty to keep it. Format: minutes:seconds.";
 "Keep Controls Visible" = "Keep Controls Visible";
 "Count back from the end" = "Count back from the end";
+
+"Match Douban Title" = "Match Douban Title";
+"Douban link or ID" = "Douban link or ID";
+"Could not find a matching Douban title." = "Could not find a matching Douban title.";
