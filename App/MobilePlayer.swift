@@ -786,7 +786,7 @@ struct MobilePlayerView: View {
             // An iPhone held upright has the time and battery at the end of the title's row, where the status bar was:
             // in the buttons' capsule they'd push Back down beside the title.
             HStack(spacing: 12) {
-                Text(channel.name).font(.headline).lineLimit(1)
+                Text(channel.historyContext?.displayName ?? channel.name).font(.headline).lineLimit(1)
                 if titleStatus { Spacer(minLength: 0); PlayerStatusBadge(grouped: false) }
             }
             .shadow(color: .black.opacity(0.6), radius: 4)
