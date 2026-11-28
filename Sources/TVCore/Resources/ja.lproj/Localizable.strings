@@ -2484,6 +2484,7 @@
 "Request" = "リクエスト";
 "Result" = "結果";
 "Allow" = "許可";
+"Not allowed: %@" = "許可されませんでした：%@";
 "Don't Allow" = "許可しない";
 "Open Usage Page" = "使用状況を開く";
 "Find the playback speed setting" = "再生速度の設定はどこ？";

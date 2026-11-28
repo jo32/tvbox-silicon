@@ -103,7 +103,7 @@ private struct AssistantHeader: View {
 private enum TranscriptItem: Identifiable {
     case user(AgentMessage)
     case text(id: String, String)
-    case tool(AgentToolCall, result: String?, running: Bool)
+    case tool(AgentToolCall, result: String?, state: AssistantToolRow.State)
     var id: String {
         switch self {
         case .user(let message): "user \(message.id)"
@@ -121,18 +121,27 @@ struct AssistantTranscript: View {
         let messages = assistant.messages
         let results = Dictionary(messages.compactMap { message in message.toolCallID.map { ($0, message.text) } }, uniquingKeysWith: { $1 })
         let running = assistant.runningTool
+        let asking = assistant.pendingConfirmation?.call.id
+        func state(_ call: AgentToolCall, _ result: String?) -> AssistantToolRow.State {
+            if running?.id == call.id { return .running }
+            if asking == call.id { return .asking }
+            guard let result else { return .done }
+            if result.hasPrefix(#"{"declined""#) { return .declined }
+            if result.hasPrefix(#"{"error""#) { return .failed }
+            return .done
+        }
         var items: [TranscriptItem] = []
         for message in messages {
             switch message.role {
             case .user: items.append(.user(message))
             case .assistant:
                 if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.text(id: message.id.uuidString, message.text)) }
-                for call in message.toolCalls { items.append(.tool(call, result: results[call.id], running: running?.id == call.id)) }
+                for call in message.toolCalls { items.append(.tool(call, result: results[call.id], state: state(call, results[call.id]))) }
             case .tool: break
             }
         }
         if let running, !items.contains(where: { $0.id == "tool \(running.id)" }) {
-            items.append(.tool(running, result: nil, running: true))
+            items.append(.tool(running, result: nil, state: .running))
         }
         return items
     }
@@ -155,7 +164,7 @@ struct AssistantTranscript: View {
                         switch item {
                         case .user(let message): AssistantUserBubble(text: message.text)
                         case .text(_, let text): AssistantAnswer(text: text)
-                        case .tool(let call, let result, let running): AssistantToolRow(call: call, result: result, running: running)
+                        case .tool(let call, let result, let state): AssistantToolRow(call: call, result: result, state: state)
                         }
                     }
                     if !assistant.streamingText.isEmpty {
@@ -302,21 +311,39 @@ private struct AssistantThinking: View {
 }
 
 /// A tool the assistant used: a line saying what it did, opening to the call's arguments and result.
-private struct AssistantToolRow: View {
+struct AssistantToolRow: View {
+    /// Running now; waiting for the viewer's answer on the card below; refused by the viewer; failed; or done.
+    enum State { case running, asking, declined, failed, done }
     let call: AgentToolCall
     let result: String?
-    let running: Bool
-    @State private var expanded = false
-    var body: some View {
+    let state: State
+    @SwiftUI.State private var expanded = false
+    private var running: Bool { state == .running }
+    private var line: String {
         let activity = AssistantActivity(call)
+        switch state {
+        case .running, .asking: return activity.running
+        case .declined: return L10n.text("Not allowed: %@", activity.running.trimmingCharacters(in: CharacterSet(charactersIn: "…")))
+        case .failed, .done: return activity.done
+        }
+    }
+    private var symbol: String {
+        switch state {
+        case .asking: "hand.raised"
+        case .declined: "hand.raised.slash"
+        case .failed: "exclamationmark.triangle"
+        case .running, .done: AssistantActivity(call).symbol
+        }
+    }
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { withAnimation(.snappy(duration: 0.2)) { expanded.toggle() } } label: {
                 HStack(spacing: 8) {
                     Group {
-                        if running { ProgressView().appControlSize(.mini) } else { Image(systemName: activity.symbol) }
+                        if running { ProgressView().appControlSize(.mini) } else { Image(systemName: symbol) }
                     }
                     .frame(width: 18)
-                    Text(running ? activity.running : activity.done).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(line).lineLimit(2).multilineTextAlignment(.leading)
                     Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0)).foregroundStyle(.tertiary)
                     Spacer(minLength: 0)
@@ -326,7 +353,7 @@ private struct AssistantToolRow: View {
                 .contentShape(Rectangle())
             }
             .glassRow()
-            .accessibilityLabel(running ? activity.running : activity.done)
+            .accessibilityLabel(line)
             .accessibilityHint(L10n.text(expanded ? "Hides the details" : "Shows the details"))
             if expanded {
                 VStack(alignment: .leading, spacing: 6) {

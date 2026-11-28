@@ -105,7 +105,6 @@ private struct AssistantHost: ViewModifier {
         let shown = assistant.pull ?? (assistant.isOpen ? 1 : 0)
         content
             .onAppear { assistant.attach(store) }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             // iPad: the page narrows beside the open panel once the finger lets go.
             .padding(.trailing, enabled && docked && assistant.isOpen && assistant.pull == nil ? panelWidth : 0)
             .background { if enabled && docked && assistant.isOpen { Backdrop() } }
@@ -113,7 +112,10 @@ private struct AssistantHost: ViewModifier {
                 if enabled, assistant.hasOpened, panelWidth > 0 {
                     AssistantPanel()
                         .frame(width: panelWidth)
-                        .overlay(alignment: .leading) { if docked { Divider().ignoresSafeArea() } }
+                        .overlay(alignment: .leading) {
+                            // A vertical hairline: a bare Divider here would run across the panel.
+                            if docked { Rectangle().fill(Color(uiColor: .separator)).frame(width: 0.5).ignoresSafeArea() }
+                        }
                         .shadow(color: .black.opacity(docked || shown < 1 ? 0.18 * shown : 0), radius: 18)
                         .offset(x: (1 - shown) * (panelWidth + 24))
                         .allowsHitTesting(shown > 0.01)
@@ -133,6 +135,9 @@ private struct AssistantHost: ViewModifier {
                                        })
                 }
             }
+            // The whole width, measured outside the dock's padding: inside it, docking would narrow the page below
+            // the docking width and undock again, forever.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         #elseif os(macOS)
         content
             .onAppear { assistant.attach(store) }

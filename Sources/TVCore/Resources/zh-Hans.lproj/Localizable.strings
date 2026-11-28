@@ -2484,6 +2484,7 @@
 "Request" = "请求";
 "Result" = "结果";
 "Allow" = "允许";
+"Not allowed: %@" = "未允许：%@";
 "Don't Allow" = "不允许";
 "Open Usage Page" = "查看用量";
 "Find the playback speed setting" = "播放速度在哪里设置？";

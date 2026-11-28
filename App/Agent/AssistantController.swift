@@ -43,9 +43,22 @@ import UIKit
     init() {
         #if DEBUG
         demo = AssistantDemo.launch
-        if demo != nil || UserDefaults.standard.string(forKey: "qaAssistant") == "open" { isOpen = true; hasOpened = true }
+        // `-qaAssistantClosed YES` keeps the demo for a test to open.
+        if (demo != nil && !UserDefaults.standard.bool(forKey: "qaAssistantClosed")) || ["open", "settings"].contains(UserDefaults.standard.string(forKey: "qaAssistant")) {
+            // `-qaAssistant settings`: Settings › Assistant over the panel.
+            showsSettings = UserDefaults.standard.string(forKey: "qaAssistant") == "settings"
+            #if os(macOS)
+            // An inspector presented before the window is up stays closed: open it once the page appears.
+            opensAtLaunch = true
+            #else
+            isOpen = true; hasOpened = true
+            #endif
+        }
         #endif
     }
+    #if DEBUG && os(macOS)
+    @ObservationIgnored private var opensAtLaunch = false
+    #endif
 
     /// Called from the root view: the tools reach the app through the store.
     func attach(_ store: Store) {
@@ -53,6 +66,12 @@ import UIKit
         self.store = store
         builtFor = nil
         if hasOpened { prepare() }
+        #if DEBUG && os(macOS)
+        if opensAtLaunch {
+            opensAtLaunch = false
+            Task { try? await Task.sleep(for: .milliseconds(600)); isOpen = true }
+        }
+        #endif
     }
 
     func toggle() { setOpen(!isOpen) }

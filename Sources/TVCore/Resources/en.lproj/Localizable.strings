@@ -2484,6 +2484,7 @@
 "Request" = "Request";
 "Result" = "Result";
 "Allow" = "Allow";
+"Not allowed: %@" = "Not allowed: %@";
 "Don't Allow" = "Don't Allow";
 "Open Usage Page" = "Open Usage Page";
 "Find the playback speed setting" = "Find the playback speed setting";
